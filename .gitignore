@@ -12,3 +12,5 @@ release/
 scripts/.native-cache/
 .DS_Store
 Thumbs.db
+
+package-lock.json

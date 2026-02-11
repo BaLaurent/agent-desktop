@@ -60,10 +60,21 @@ export function enrichEnvironment(): void {
     path.join(home, 'bin'),
     path.join(home, '.npm-global', 'bin'),
     '/usr/local/bin',
-    '/snap/bin',
     '/usr/bin',
     '/bin',
   ]
+
+  // macOS (Apple Silicon): Homebrew installs to /opt/homebrew instead of /usr/local
+  if (process.platform === 'darwin') {
+    extraDirs.push(
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      path.join(home, '.volta', 'bin'),
+    )
+  } else {
+    // Linux-only paths
+    extraDirs.push('/snap/bin')
+  }
 
   const currentPath = process.env.PATH || ''
   const currentDirs = new Set(currentPath.split(path.delimiter).filter(Boolean))
