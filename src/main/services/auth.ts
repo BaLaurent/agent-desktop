@@ -19,9 +19,12 @@ function credentialsAvailable(credentialsPath: string): boolean {
 
   if (process.platform === 'darwin') {
     try {
-      // Claude Code stores credentials as a generic-password in the macOS Keychain.
-      // Any exit-code 0 means at least one matching entry exists.
-      execSync('security find-generic-password -s "claude" 2>/dev/null', { stdio: 'ignore' })
+      // Claude Code v2+ stores credentials in the macOS Keychain.
+      // Service name: "Claude Code-credentials", account: current OS username.
+      const username = process.env.USER || os.userInfo().username
+      execSync(`security find-generic-password -a "${username}" -s "Claude Code-credentials"`, {
+        stdio: 'ignore',
+      })
       return true
     } catch {
       // Not in keychain either — fall through to false
