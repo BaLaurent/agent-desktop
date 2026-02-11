@@ -58,7 +58,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeConversationId: null,
 
   loadMessages: async (conversationId: number) => {
-    set({ isLoading: true, error: null })
+    set((s) => ({ isLoading: true, error: s.error ?? null }))
     try {
       const convo = await window.agent.conversations.get(conversationId)
       set({ messages: convo.messages, isLoading: false })

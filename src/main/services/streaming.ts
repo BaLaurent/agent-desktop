@@ -1,6 +1,10 @@
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { buildCwdRestrictionHooks } from './cwdHooks'
+import { findBinaryInPath } from '../utils/env'
 import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall } from '../../shared/types'
 
 // Per-conversation abort controllers: Map<conversationId, AbortController>
@@ -131,6 +135,10 @@ export async function streamMessage(
       ? rawPermMode as ValidPermissionMode
       : 'bypassPermissions'
 
+    // Resolve node executable explicitly so the SDK can spawn cli.js even when
+    // the app is launched from Finder/Dock (minimal PATH, no shell init scripts).
+    const nodeExecutable = findBinaryInPath('node') ?? 'node'
+
     const queryOptions: Record<string, unknown> = {
       model: aiSettings?.model || undefined,
       systemPrompt: systemPrompt || undefined,
@@ -141,6 +149,7 @@ export async function streamMessage(
       includePartialMessages: true,
       permissionMode: permMode,
       abortController,
+      executable: nodeExecutable,
     }
 
     // Buffer for chunks received while awaiting tool approval
@@ -392,6 +401,11 @@ export async function streamMessage(
     } else {
       const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
       console.error('[streaming] Error:', err)
+      try {
+        const logPath = path.join(os.homedir(), 'Desktop', 'agent-debug.log')
+        const entry = `[${new Date().toISOString()}] ${errorMsg}\n${err instanceof Error ? err.stack : ''}\n\n`
+        fs.appendFileSync(logPath, entry)
+      } catch { /* ignore log errors */ }
       sendChunk('error', errorMsg, convExtra)
     }
   } finally {
