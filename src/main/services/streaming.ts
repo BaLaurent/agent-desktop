@@ -391,6 +391,7 @@ export async function streamMessage(
       sendChunk('done', undefined, convExtra)
     } else {
       const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
+      console.error('[streaming] Error:', err)
       sendChunk('error', errorMsg, convExtra)
     }
   } finally {
