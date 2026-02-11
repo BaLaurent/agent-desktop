@@ -10,5 +10,6 @@ release/
 .env.local
 *.log
 scripts/.native-cache/
+présentation/
 .DS_Store
 Thumbs.db

@@ -22,6 +22,15 @@ linux:
   desktop:
     MimeType: x-scheme-handler/agent
   synopsis: Open-source Linux desktop client for Claude AI
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
