@@ -18,7 +18,7 @@ export function Titlebar({ onOpenSettings }: TitlebarProps) {
     >
       {/* App title */}
       <div className="flex items-center gap-2u px-4u">
-        <span className="text-[var(--color-primary)] font-bold text-base">
+        <span className="text-body font-bold text-base">
           Agent Desktop
         </span>
       </div>
