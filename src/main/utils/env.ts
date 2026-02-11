@@ -1,6 +1,7 @@
 import * as os from 'os'
 import * as path from 'path'
 import * as fs from 'fs'
+import { execSync } from 'child_process'
 
 /** Check if running inside an AppImage */
 export function isAppImage(): boolean {
@@ -35,6 +36,49 @@ export function findBinaryInPath(name: string): string | null {
 }
 
 /**
+ * Resolve nvm's default node version bin directory.
+ * Reads ~/.nvm/alias/default, follows one level of alias indirection,
+ * and returns the matching bin path (or null if nvm is not installed).
+ */
+function resolveNvmNodeBin(nvmDir: string): string | null {
+  const versionsDir = path.join(nvmDir, 'versions', 'node')
+  try {
+    // Read the default alias (e.g. "v20.19.4" or "lts/iron")
+    let version = fs.readFileSync(path.join(nvmDir, 'alias', 'default'), 'utf8').trim()
+
+    // If it's an alias (e.g. "lts/iron"), follow one level
+    if (!version.startsWith('v')) {
+      version = fs.readFileSync(path.join(nvmDir, 'alias', version), 'utf8').trim()
+    }
+
+    if (version.startsWith('v')) {
+      const bin = path.join(versionsDir, version, 'bin')
+      fs.accessSync(bin, fs.constants.R_OK)
+      return bin
+    }
+  } catch {
+    // nvm not installed or alias unresolvable — try latest installed version
+    try {
+      const versions = fs.readdirSync(versionsDir).filter(v => v.startsWith('v'))
+      if (versions.length === 0) return null
+      // Semver sort descending, pick latest
+      versions.sort((a, b) => {
+        const pa = a.slice(1).split('.').map(Number)
+        const pb = b.slice(1).split('.').map(Number)
+        for (let i = 0; i < 3; i++) {
+          if (pa[i] !== pb[i]) return pb[i] - pa[i]
+        }
+        return 0
+      })
+      return path.join(versionsDir, versions[0], 'bin')
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
  * Enrich process.env for AppImage and non-standard environments.
  * Additive only — never overwrites existing values.
  * Call once at startup, before app.whenReady().
@@ -60,10 +104,28 @@ export function enrichEnvironment(): void {
     path.join(home, 'bin'),
     path.join(home, '.npm-global', 'bin'),
     '/usr/local/bin',
-    '/snap/bin',
     '/usr/bin',
     '/bin',
   ]
+
+  // macOS (Apple Silicon): Homebrew installs to /opt/homebrew instead of /usr/local
+  if (process.platform === 'darwin') {
+    extraDirs.push(
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      path.join(home, '.volta', 'bin'),
+    )
+  } else {
+    // Linux-only paths
+    extraDirs.push('/snap/bin')
+  }
+
+  // nvm: resolve and add the default node version's bin directory.
+  // When launched from Finder/Dock, shell init scripts don't run so nvm's
+  // node is never added to PATH. We replicate what `nvm use default` would do.
+  const nvmDir = process.env.NVM_DIR || path.join(home, '.nvm')
+  const nvmNodeBin = resolveNvmNodeBin(nvmDir)
+  if (nvmNodeBin) extraDirs.push(nvmNodeBin)
 
   const currentPath = process.env.PATH || ''
   const currentDirs = new Set(currentPath.split(path.delimiter).filter(Boolean))
@@ -84,6 +146,28 @@ export function enrichEnvironment(): void {
   if (added.length > 0) {
     process.env.PATH = currentPath + path.delimiter + added.join(path.delimiter)
     console.log('[env] Appended to PATH:', added.join(', '))
+  }
+
+  // macOS: inject OAuth token from Keychain into process.env so the Claude Code
+  // CLI subprocess can authenticate without doing its own Keychain lookup.
+  // When launched from Finder/Dock, CLAUDE_CODE_OAUTH_TOKEN is not inherited from
+  // the shell — the CLI falls back to Keychain access which fails in that context.
+  if (process.platform === 'darwin' && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    try {
+      const username = process.env.USER || os.userInfo().username
+      const credJson = execSync(
+        `security find-generic-password -a "${username}" -s "Claude Code-credentials" -w`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      ).trim()
+      const creds = JSON.parse(credJson)
+      const accessToken = creds?.claudeAiOauth?.accessToken
+      if (accessToken) {
+        process.env.CLAUDE_CODE_OAUTH_TOKEN = accessToken
+        console.log('[env] Set CLAUDE_CODE_OAUTH_TOKEN from macOS Keychain')
+      }
+    } catch {
+      // Keychain not accessible or no credentials — will be caught at auth check
+    }
   }
 
   // AppImage cleanup: remove bundled library paths so child processes

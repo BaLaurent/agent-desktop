@@ -8,6 +8,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
     "dist:win": "electron-builder --win",
     "postinstall": "node scripts/rebuild-native.js",

@@ -1,6 +1,6 @@
 # Agent Desktop
 
-Open-source Linux desktop client for Claude AI. Uses your existing Claude subscription via OAuth.
+Open-source desktop client for Claude AI (Linux, macOS, Windows). Uses your existing Claude subscription via OAuth.
 
 ## Screenshots
 
@@ -21,22 +21,36 @@ Open-source Linux desktop client for Claude AI. Uses your existing Claude subscr
 
 ## Installation
 
-### AppImage
+### Prerequisites
 
-1. Download the `.AppImage` file from the [Releases](https://github.com/agent-desktop/agent-desktop/releases) page
-2. Make it executable: `chmod +x Agent-Desktop-*.AppImage`
-3. Run it: `./Agent-Desktop-*.AppImage`
+- An active Claude subscription — run `claude login` in your terminal first
+- The [Claude Code CLI](https://claude.ai/claude-code) must be installed (`npm install -g @anthropic-ai/claude-code`)
 
-### Debian / Ubuntu (.deb)
+### Linux
 
+1. Download the `.AppImage` or `.deb` from the [Releases](https://github.com/agent-desktop/agent-desktop/releases) page
+
+**AppImage:**
+```bash
+chmod +x Agent-Desktop-*.AppImage
+./Agent-Desktop-*.AppImage
+```
+
+**Debian / Ubuntu:**
 ```bash
 sudo dpkg -i agent-desktop_*.deb
 ```
 
-### Prerequisites
+### macOS (Apple Silicon)
 
-- Linux (x64)
-- An active Claude subscription — run `claude login` in your terminal first
+1. Download the `.dmg` from the [Releases](https://github.com/agent-desktop/agent-desktop/releases) page
+2. Open the `.dmg` and drag **Agent Desktop** to your Applications folder
+3. On first launch: right-click the app → **Open** (required for unsigned apps)
+
+### Windows
+
+1. Download the `.exe` installer from the [Releases](https://github.com/agent-desktop/agent-desktop/releases) page
+2. Run the installer
 
 ## Development Setup
 
@@ -52,6 +66,8 @@ npm run dev
 ```bash
 npm run build        # compile TypeScript (output: out/)
 npm run dist:linux   # package AppImage + deb (output: release/)
+npm run dist:mac     # package .dmg for macOS arm64 (output: release/)
+npm run dist:win     # package .exe installer + portable for Windows x64 (output: release/)
 ```
 
 ## Technology Stack

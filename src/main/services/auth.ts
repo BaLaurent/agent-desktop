@@ -1,11 +1,38 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+import { execSync } from 'child_process'
 import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'
 import type { AuthStatus, AuthDiagnostics } from '../../shared/types'
 import { loadAgentSDK } from './anthropic'
 import { findBinaryInPath, isAppImage } from '../utils/env'
+
+/**
+ * Check whether Claude credentials are available.
+ * On macOS (darwin), newer Claude Code versions (v2+) store credentials in the
+ * system Keychain rather than a plaintext file — check both.
+ * On Linux/Windows, only the file is used.
+ */
+function credentialsAvailable(credentialsPath: string): boolean {
+  if (fs.existsSync(credentialsPath)) return true
+
+  if (process.platform === 'darwin') {
+    try {
+      // Claude Code v2+ stores credentials in the macOS Keychain.
+      // Service name: "Claude Code-credentials", account: current OS username.
+      const username = process.env.USER || os.userInfo().username
+      execSync(`security find-generic-password -a "${username}" -s "Claude Code-credentials"`, {
+        stdio: 'ignore',
+      })
+      return true
+    } catch {
+      // Not in keychain either — fall through to false
+    }
+  }
+
+  return false
+}
 
 function runDiagnostics(sdkError?: string): AuthDiagnostics {
   const home = os.homedir()
@@ -16,7 +43,7 @@ function runDiagnostics(sdkError?: string): AuthDiagnostics {
   return {
     claudeBinaryFound: claudeBinaryPath !== null,
     claudeBinaryPath,
-    credentialsFileExists: fs.existsSync(credentialsPath),
+    credentialsFileExists: credentialsAvailable(credentialsPath),
     configDir,
     isAppImage: isAppImage(),
     home,
@@ -26,16 +53,20 @@ function runDiagnostics(sdkError?: string): AuthDiagnostics {
 }
 
 async function getStatus(): Promise<AuthStatus> {
-  // Pre-check: if credentials file doesn't exist, skip the SDK call entirely
+  // Pre-check: if credentials are not found (file or macOS Keychain), skip the SDK call
   const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
   const credentialsPath = path.join(configDir, '.credentials.json')
 
-  if (!fs.existsSync(credentialsPath)) {
+  if (!credentialsAvailable(credentialsPath)) {
+    const hint =
+      process.platform === 'darwin'
+        ? 'Run `claude login` in your terminal first.'
+        : `Credentials not found at ${credentialsPath}. Run \`claude login\` in your terminal first.`
     const diagnostics = runDiagnostics('Credentials file not found')
     return {
       authenticated: false,
       user: null,
-      error: `Credentials not found at ${credentialsPath}. Run \`claude login\` in your terminal first.`,
+      error: hint,
       diagnostics,
     }
   }

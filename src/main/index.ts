@@ -9,10 +9,12 @@ import { registerPreviewScheme, registerPreviewProtocol } from './services/proto
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
 
-// GPU flags — must be set before app.whenReady()
-app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
-app.commandLine.appendSwitch('use-gl', 'egl')
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL')
+// GPU flags — Linux only (Ozone/EGL/VAAPI are not available on macOS)
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+  app.commandLine.appendSwitch('use-gl', 'egl')
+  app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL')
+}
 
 // Enrich PATH/HOME for AppImage and non-standard environments — before app.ready
 import { enrichEnvironment } from './utils/env'

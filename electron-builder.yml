@@ -9,6 +9,14 @@ files:
   - package.json
 extraMetadata:
   main: ./out/main/index.js
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  category: public.app-category.productivity
+  icon: build/icon.icns
+
 linux:
   target:
     - target: AppImage
