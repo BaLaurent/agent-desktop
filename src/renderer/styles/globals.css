@@ -1,0 +1,111 @@
+@import './themes.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Status accent blocks — left border + tinted bg */
+  .status-block-success {
+    border-left: 3px solid var(--color-success);
+    background-color: color-mix(in srgb, var(--color-success) 8%, transparent);
+  }
+  .status-block-error {
+    border-left: 3px solid var(--color-error);
+    background-color: color-mix(in srgb, var(--color-error) 8%, transparent);
+  }
+  .status-block-warning {
+    border-left: 3px solid var(--color-warning);
+    background-color: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  }
+  .status-block-primary {
+    border-left: 3px solid var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  }
+
+  /* Subtle result backgrounds */
+  .result-bg-success {
+    background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+  }
+  .result-bg-error {
+    background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+
+  /* Subtle chip badges */
+  .chip-success {
+    background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+    color: var(--color-success);
+  }
+  .chip-error {
+    background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
+    color: var(--color-error);
+  }
+
+  /* Subtle tinted background */
+  .bg-primary-tint {
+    background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+}
+
+@layer base {
+  html {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  body {
+    @apply m-0 p-0 overflow-hidden;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  code, pre {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-text-muted) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-text-muted);
+    border-radius: 3px;
+  }
+}
+
+@keyframes tool-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.sidebar-drop-active {
+  background-color: var(--color-deep) !important;
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.sidebar-dragging {
+  opacity: 0.4;
+}
+
+.explorer-dragging {
+  opacity: 0.4;
+}
+
+.explorer-drop-active {
+  background-color: var(--color-deep) !important;
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}

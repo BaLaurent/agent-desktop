@@ -1,0 +1,27 @@
+appId: com.agent.desktop
+productName: Agent Desktop
+directories:
+  buildResources: build
+  output: release
+asar: false
+files:
+  - out
+  - package.json
+extraMetadata:
+  main: ./out/main/index.js
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: Utility
+  maintainer: Agent Desktop Contributors
+  desktop:
+    MimeType: x-scheme-handler/agent
+  synopsis: Open-source Linux desktop client for Claude AI
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

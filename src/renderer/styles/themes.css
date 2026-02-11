@@ -1,0 +1,16 @@
+/* Default theme (dark) — custom themes override via inline CSS variables */
+:root {
+  --color-bg: #1a1a2e;
+  --color-surface: #16213e;
+  --color-deep: #0f3460;
+  --color-primary: #e94560;
+  --color-text: #eaeaea;
+  --color-text-muted: #a0a0a0;
+  --color-accent: #533483;
+  --color-success: #00d26a;
+  --color-error: #ff4757;
+  --color-warning: #ffc107;
+  --color-tool: #00bcd4;
+  --color-text-contrast: #fff;
+  --color-overlay: rgba(0, 0, 0, 0.5);
+}

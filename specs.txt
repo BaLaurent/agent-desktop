@@ -1,0 +1,643 @@
+<project_specification>
+  <project_name>Clawd Desktop</project_name>
+
+  <overview>
+    Clawd Desktop is an open-source Linux alternative to the official Claude Desktop application.
+    Built with Electron and the Anthropic Agent SDK, it provides a native desktop experience for
+    interacting with Claude AI, featuring conversation management, file attachments, artifacts,
+    MCP (Model Context Protocol) integration, custom tools, and knowledge base support.
+    It uses OAuth authentication (same as Claude Code) instead of API keys.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React 18+</framework>
+      <styling>Tailwind CSS</styling>
+      <state_management>Zustand</state_management>
+      <markdown>react-markdown with remark-gfm, rehype-highlight</markdown>
+      <code_highlighting>highlight.js or Prism</code_highlighting>
+      <diagrams>mermaid</diagrams>
+      <bundler>Vite (for Electron renderer)</bundler>
+    </frontend>
+    <backend>
+      <runtime>Node.js 20+ (Electron main process)</runtime>
+      <electron>Electron 28+</electron>
+      <database>SQLite (better-sqlite3 or sql.js)</database>
+      <ai_sdk>@anthropic-ai/sdk (Agent SDK with OAuth)</ai_sdk>
+      <mcp>@modelcontextprotocol/sdk</mcp>
+    </backend>
+    <communication>
+      <ipc>Electron IPC via contextBridge (secure preload)</ipc>
+      <streaming>Server-sent events pattern for Claude responses</streaming>
+    </communication>
+    <packaging>
+      <builder>electron-builder</builder>
+      <targets>AppImage, deb</targets>
+    </packaging>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      - Node.js 20+ and npm/pnpm
+      - Linux distribution (Ubuntu (latest), Fedora 38+, Arch linux)
+      - Git for version control
+      - Claude account for OAuth authentication
+    </environment_setup>
+  </prerequisites>
+
+  <feature_count>91</feature_count>
+
+  <security_and_access_control>
+    <user_roles>
+      <role name="user">
+        <description>Single user mode - whoever uses the desktop app</description>
+        <permissions>
+          - Full access to all features
+          - Manage conversations, MCP servers, custom tools
+          - Configure settings and themes
+          - Access all stored data
+        </permissions>
+      </role>
+    </user_roles>
+    <authentication>
+      <method>OAuth via Anthropic Agent SDK (same as Claude Code)</method>
+      <token_storage>Encrypted in SQLite database</token_storage>
+      <session_timeout>Token refresh handled by SDK</session_timeout>
+      <auto_reconnect>Yes, on app launch if token valid</auto_reconnect>
+    </authentication>
+    <sensitive_operations>
+      - Delete all conversations requires confirmation
+      - Clear knowledge base requires confirmation
+      - Remove MCP server requires confirmation
+      - Logout clears local tokens
+    </sensitive_operations>
+  </security_and_access_control>
+
+  <core_features>
+    <authentication_onboarding>
+      - Welcome screen displaying OAuth status
+      - Connect to Claude button triggering OAuth flow
+      - Display connected user profile (email/name)
+      - Logout functionality
+      - Auto-reconnect on app launch with persisted token
+    </authentication_onboarding>
+
+    <chat_interface>
+      - Message input with send button (Enter or Ctrl+Enter configurable)
+      - Streaming responses displayed in real-time
+      - Full Markdown rendering (headers, lists, tables, blockquotes)
+      - Code blocks with syntax highlighting and copy button
+      - Stop generation button to cancel mid-response
+      - Regenerate last response option
+      - Edit previous messages and re-send
+      - "Claude is typing..." indicator during streaming
+      - Timestamp display on messages
+      - Auto-scroll with "scroll to bottom" button
+      - Message role indicators (user/assistant)
+      - Loading states during API calls
+    </chat_interface>
+
+    <file_attachments>
+      - Drag and drop files into chat
+      - Explicit upload button
+      - Image preview for attached images
+      - Text/code file content extraction
+      - PDF text extraction support
+      - Attachment indicator on messages
+    </file_attachments>
+
+    <artifacts_panel>
+      - Collapsible side panel for artifacts
+      - Code artifacts with syntax highlighting
+      - Copy artifact content button
+      - Download artifact as file
+      - Markdown/document artifact rendering
+      - HTML preview in sandboxed iframe
+      - Mermaid diagram rendering
+      - SVG preview support
+      - Artifact history per conversation
+      - Toggle panel visibility
+    </artifacts_panel>
+
+    <conversations_organization>
+      - Sidebar listing all conversations
+      - Create new conversation (Ctrl+N shortcut)
+      - Rename conversation inline
+      - Delete conversation with confirmation
+      - Search conversations by title
+      - Full-text search within conversation content
+      - Folder/project grouping for conversations
+      - Drag and drop to reorder/move to folders
+      - Export conversation as Markdown
+      - Export conversation as JSON
+      - Import conversation from JSON
+      - Empty state when no conversations
+    </conversations_organization>
+
+    <mcp_integration>
+      - UI to list configured MCP servers
+      - Add new MCP server (name, command, args, env)
+      - Edit existing MCP server configuration
+      - Remove MCP server with confirmation
+      - Connection status indicator per server
+      - List available tools per connected server
+      - Toggle enable/disable per server
+      - MCP call logs viewer for debugging
+      - Preset configurations for popular servers (filesystem, git)
+    </mcp_integration>
+
+    <custom_tools>
+      - UI to list custom tools
+      - Create new custom tool (name, description, JSON schema)
+      - Edit custom tool definition
+      - Delete custom tool
+      - Enable/disable toggle per tool
+      - Test tool execution manually
+      - Import tools from JSON
+      - Export tools to JSON
+    </custom_tools>
+
+    <knowledge_base>
+      - Add files to knowledge base
+      - Add folders to knowledge base
+      - Remove files from knowledge base
+      - List all knowledge base files
+      - Toggle KB on/off per conversation
+      - Display files currently in context
+      - Support for CLAUDE.md / project instructions
+    </knowledge_base>
+
+    <settings_theming>
+      - Settings panel/page
+      - Built-in Light theme
+      - Built-in Dark theme
+      - Theme editor (primary colors, backgrounds, accents)
+      - Save custom themes
+      - Switch between themes
+      - Send behavior toggle (Enter vs Ctrl+Enter)
+      - Auto-scroll on new messages toggle
+      - Notification sounds on/off
+      - View storage usage statistics
+      - Clear cache/temp files
+      - About section (version, GitHub link, licenses)
+    </settings_theming>
+
+    <keyboard_shortcuts>
+      - New conversation shortcut (default Ctrl+N)
+      - Send message shortcut
+      - Stop generation shortcut
+      - Toggle sidebar shortcut
+      - Toggle artifacts panel shortcut
+      - Focus search shortcut
+      - Configure/rebind shortcuts in settings
+    </keyboard_shortcuts>
+
+    <system_integration>
+      - System tray icon (optional)
+      - Minimize to tray option
+      - Desktop notifications for background responses
+      - Deep link support (clawd://conversation/xxx)
+      - Check for updates functionality
+    </system_integration>
+
+    <developer_debug>
+      - Application logs viewer
+      - MCP call inspector
+      - Raw message JSON viewer
+      - Export debug information
+    </developer_debug>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      <settings>
+        - key (TEXT PRIMARY KEY)
+        - value (TEXT, JSON)
+        - updated_at (DATETIME)
+      </settings>
+
+      <auth>
+        - id (INTEGER PRIMARY KEY)
+        - access_token (TEXT, encrypted)
+        - refresh_token (TEXT, encrypted)
+        - expires_at (DATETIME)
+        - user_email (TEXT)
+        - user_name (TEXT)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </auth>
+
+      <folders>
+        - id (INTEGER PRIMARY KEY)
+        - name (TEXT)
+        - parent_id (INTEGER, FK nullable)
+        - position (INTEGER)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </folders>
+
+      <conversations>
+        - id (INTEGER PRIMARY KEY)
+        - title (TEXT)
+        - folder_id (INTEGER, FK nullable)
+        - position (INTEGER)
+        - model (TEXT)
+        - system_prompt (TEXT)
+        - kb_enabled (BOOLEAN)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </conversations>
+
+      <messages>
+        - id (INTEGER PRIMARY KEY)
+        - conversation_id (INTEGER, FK)
+        - role (TEXT: user/assistant)
+        - content (TEXT)
+        - attachments (TEXT, JSON array)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </messages>
+
+      <artifacts>
+        - id (INTEGER PRIMARY KEY)
+        - message_id (INTEGER, FK)
+        - type (TEXT: code/markdown/html/mermaid/svg)
+        - title (TEXT)
+        - content (TEXT)
+        - language (TEXT, nullable)
+        - created_at (DATETIME)
+      </artifacts>
+
+      <mcp_servers>
+        - id (INTEGER PRIMARY KEY)
+        - name (TEXT)
+        - command (TEXT)
+        - args (TEXT, JSON array)
+        - env (TEXT, JSON object)
+        - enabled (BOOLEAN)
+        - status (TEXT: disconnected/connected/error)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </mcp_servers>
+
+      <custom_tools>
+        - id (INTEGER PRIMARY KEY)
+        - name (TEXT)
+        - description (TEXT)
+        - input_schema (TEXT, JSON)
+        - handler_code (TEXT)
+        - enabled (BOOLEAN)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </custom_tools>
+
+      <knowledge_files>
+        - id (INTEGER PRIMARY KEY)
+        - path (TEXT)
+        - name (TEXT)
+        - content_hash (TEXT)
+        - size (INTEGER)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </knowledge_files>
+
+      <conversation_knowledge>
+        - conversation_id (INTEGER, FK)
+        - knowledge_file_id (INTEGER, FK)
+        - PRIMARY KEY (conversation_id, knowledge_file_id)
+      </conversation_knowledge>
+
+      <themes>
+        - id (INTEGER PRIMARY KEY)
+        - name (TEXT)
+        - is_builtin (BOOLEAN)
+        - colors (TEXT, JSON)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </themes>
+
+      <keyboard_shortcuts>
+        - id (INTEGER PRIMARY KEY)
+        - action (TEXT)
+        - keybinding (TEXT)
+        - enabled (BOOLEAN)
+        - created_at (DATETIME)
+        - updated_at (DATETIME)
+      </keyboard_shortcuts>
+    </tables>
+  </database_schema>
+
+  <ipc_api_summary>
+    <auth>
+      - auth:getStatus → { authenticated, user }
+      - auth:login → trigger OAuth flow
+      - auth:logout → clear tokens
+    </auth>
+
+    <conversations>
+      - conversations:list → [conversations]
+      - conversations:get → conversation with messages
+      - conversations:create → new conversation
+      - conversations:update → update title/folder
+      - conversations:delete → delete
+      - conversations:export → markdown/json
+      - conversations:import → from json
+      - conversations:search → search by title or content
+    </conversations>
+
+    <messages>
+      - messages:send → send message, returns stream
+      - messages:stop → cancel generation
+      - messages:regenerate → regenerate last
+      - messages:edit → edit and resend
+    </messages>
+
+    <folders>
+      - folders:list → [folders]
+      - folders:create → create folder
+      - folders:update → update folder
+      - folders:delete → delete folder
+      - folders:reorder → reorder folders
+    </folders>
+
+    <mcp>
+      - mcp:listServers → [servers with status]
+      - mcp:addServer → add config
+      - mcp:updateServer → update config
+      - mcp:removeServer → remove
+      - mcp:getTools → tools for a server
+      - mcp:toggleServer → enable/disable
+      - mcp:getLogs → recent MCP call logs
+    </mcp>
+
+    <tools>
+      - tools:list → [custom tools]
+      - tools:create → create tool
+      - tools:update → update tool
+      - tools:delete → delete tool
+      - tools:toggle → enable/disable
+      - tools:test → test execution
+      - tools:import → import from JSON
+      - tools:export → export to JSON
+    </tools>
+
+    <knowledge>
+      - kb:listFiles → [files]
+      - kb:addFile → add to KB
+      - kb:addFolder → add folder to KB
+      - kb:removeFile → remove
+      - kb:getConversationKB → files for conversation
+      - kb:toggleForConversation → enable/disable KB for conversation
+    </knowledge>
+
+    <settings>
+      - settings:get → all settings
+      - settings:set → update setting
+      - themes:list → [themes]
+      - themes:create → create theme
+      - themes:update → update theme
+      - themes:delete → delete theme
+      - shortcuts:list → [shortcuts]
+      - shortcuts:update → update shortcut
+    </settings>
+
+    <system>
+      - system:getInfo → version, paths
+      - system:getLogs → app logs
+      - system:clearCache → clear temp files
+      - system:checkUpdate → check for updates
+      - system:openExternal → open URL in browser
+      - system:showNotification → desktop notification
+    </system>
+  </ipc_api_summary>
+
+  <ui_layout>
+    <main_structure>
+      Three-column layout:
+      - Left sidebar (collapsible): folder tree, conversation list, search, new conversation button
+      - Center main area: active conversation with messages, input box at bottom
+      - Right panel (collapsible): artifacts viewer with tabs/history
+
+      Title bar: app name, connected user, settings button, window controls
+      Status bar (optional): connection status, model info
+    </main_structure>
+
+    <welcome_screen>
+      - Centered card with Clawd Desktop branding
+      - OAuth status indicator (not connected / connecting / connected)
+      - "Connect to Claude" button
+      - Link to documentation/help
+    </welcome_screen>
+
+    <settings_layout>
+      - Modal or dedicated page
+      - Sidebar with categories: General, Appearance, Shortcuts, MCP, Tools, KB, Storage, About
+      - Content area for selected category
+    </settings_layout>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      <dark_theme>
+        - Background: #1a1a2e, #16213e
+        - Surface: #0f3460
+        - Primary: #e94560
+        - Text: #eaeaea, #a0a0a0
+        - Accent: #533483
+        - Success: #00d26a
+        - Error: #ff4757
+        - Warning: #ffc107
+      </dark_theme>
+      <light_theme>
+        - Background: #ffffff, #f5f5f5
+        - Surface: #ffffff
+        - Primary: #6366f1
+        - Text: #1f2937, #6b7280
+        - Accent: #8b5cf6
+        - Success: #10b981
+        - Error: #ef4444
+        - Warning: #f59e0b
+      </light_theme>
+    </color_palette>
+    <typography>
+      - Font family: Inter, system-ui, sans-serif
+      - Monospace: JetBrains Mono, Fira Code, monospace
+      - Base size: 14px
+      - Line height: 1.5
+    </typography>
+    <spacing>
+      - Base unit: 4px
+      - Standard gaps: 8px, 12px, 16px, 24px
+      - Border radius: 4px (small), 8px (medium), 12px (large)
+    </spacing>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Foundation</title>
+      <tasks>
+        - Set up Electron project with Vite + React
+        - Configure electron-builder for Linux targets
+        - Set up SQLite database with migrations
+        - Implement secure IPC bridge (contextBridge, preload)
+        - Basic window management (minimize, maximize, close)
+        - Create main process service architecture
+      </tasks>
+    </step>
+
+    <step number="2">
+      <title>Authentication</title>
+      <tasks>
+        - Integrate Anthropic Agent SDK with OAuth
+        - Create Welcome screen component
+        - Implement OAuth flow (open browser, callback handling)
+        - Store tokens securely in database
+        - Auto-reconnect on app launch
+        - User profile display and logout
+      </tasks>
+    </step>
+
+    <step number="3">
+      <title>Core Chat</title>
+      <tasks>
+        - Create chat view layout
+        - Implement message input component
+        - Connect to Claude via Agent SDK
+        - Implement streaming response display
+        - Add Markdown rendering with syntax highlighting
+        - Stop generation and regenerate features
+        - Edit and resend messages
+        - Auto-scroll behavior
+      </tasks>
+    </step>
+
+    <step number="4">
+      <title>Conversations Management</title>
+      <tasks>
+        - Create sidebar component
+        - Implement conversation CRUD
+        - Add folder support
+        - Search by title and content
+        - Drag and drop reordering
+        - Export/import conversations
+      </tasks>
+    </step>
+
+    <step number="5">
+      <title>Attachments & Files</title>
+      <tasks>
+        - Implement file drop zone
+        - Handle various file types (images, text, PDF)
+        - Create attachment preview component
+        - Send file content to Claude as context
+        - Display attachment indicators
+      </tasks>
+    </step>
+
+    <step number="6">
+      <title>Artifacts</title>
+      <tasks>
+        - Create collapsible side panel
+        - Detect and parse artifacts from responses
+        - Render code artifacts with highlighting
+        - Render Markdown artifacts
+        - Sandboxed HTML preview
+        - Mermaid diagram support
+        - Copy/download artifact actions
+        - Artifact history tracking
+      </tasks>
+    </step>
+
+    <step number="7">
+      <title>MCP Integration</title>
+      <tasks>
+        - Create MCP server manager in main process
+        - UI for server configuration
+        - Spawn and manage MCP server processes
+        - Tool discovery from connected servers
+        - Enable/disable servers
+        - MCP call logging
+        - Preset configurations
+      </tasks>
+    </step>
+
+    <step number="8">
+      <title>Custom Tools & Knowledge Base</title>
+      <tasks>
+        - Custom tool definition UI
+        - Tool schema editor
+        - Tool testing interface
+        - Knowledge base file manager
+        - Per-conversation KB toggle
+        - CLAUDE.md support
+      </tasks>
+    </step>
+
+    <step number="9">
+      <title>Settings & Theming</title>
+      <tasks>
+        - Settings modal/page structure
+        - Theme switcher (light/dark)
+        - Custom theme editor
+        - Keyboard shortcuts configuration
+        - Behavior settings
+        - Storage management UI
+        - About section
+      </tasks>
+    </step>
+
+    <step number="10">
+      <title>Polish & System Integration</title>
+      <tasks>
+        - System tray support
+        - Desktop notifications
+        - Deep link handling
+        - Auto-update checker
+        - Debug/logs viewer
+        - Performance optimization
+        - Final testing and bug fixes
+        - Documentation and README
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - All 91 features implemented and working
+      - OAuth flow works seamlessly
+      - Chat with Claude works with streaming
+      - All CRUD operations functional
+      - MCP servers can be configured and used
+      - Artifacts display correctly
+      - Import/export works correctly
+    </functionality>
+    <stability>
+      - No crashes during normal usage
+      - Graceful error handling throughout
+      - Database operations are atomic
+      - Memory usage stays reasonable
+      - No memory leaks during long sessions
+    </stability>
+    <performance>
+      - App launches in under 3 seconds
+      - UI remains responsive during streaming
+      - Large conversations load smoothly
+      - Search returns results quickly
+      - Smooth scrolling with many messages
+    </performance>
+    <user_experience>
+      - Intuitive interface similar to Claude Desktop
+      - Consistent design language
+      - Themes work correctly
+      - Keyboard shortcuts functional
+      - Helpful feedback for all actions
+    </user_experience>
+    <packaging>
+      - Builds successfully for AppImage
+      - Builds successfully for .deb
+      - Builds successfully for .rpm
+      - Auto-updater works (if implemented)
+      - Clean installation/uninstallation
+    </packaging>
+  </success_criteria>
+</project_specification>

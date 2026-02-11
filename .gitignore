@@ -1,0 +1,14 @@
+node_modules/
+out/
+dist/
+dist-electron/
+release/
+*.AppImage
+*.deb
+*.snap
+.env
+.env.local
+*.log
+scripts/.native-cache/
+.DS_Store
+Thumbs.db
