@@ -1,6 +1,3 @@
-import * as fs from 'fs'
-import * as os from 'os'
-import * as path from 'path'
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { buildCwdRestrictionHooks } from './cwdHooks'
@@ -401,11 +398,6 @@ export async function streamMessage(
     } else {
       const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
       console.error('[streaming] Error:', err)
-      try {
-        const logPath = path.join(os.homedir(), 'Desktop', 'agent-debug.log')
-        const entry = `[${new Date().toISOString()}] ${errorMsg}\n${err instanceof Error ? err.stack : ''}\n\n`
-        fs.appendFileSync(logPath, entry)
-      } catch { /* ignore log errors */ }
       sendChunk('error', errorMsg, convExtra)
     }
   } finally {
