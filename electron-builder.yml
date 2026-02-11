@@ -15,6 +15,7 @@ mac:
       arch:
         - arm64
   category: public.app-category.productivity
+  icon: build/icon.icns
 
 linux:
   target:
