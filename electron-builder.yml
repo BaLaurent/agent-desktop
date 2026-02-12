@@ -16,6 +16,8 @@ mac:
         - arm64
   category: public.app-category.productivity
   icon: build/icon.icns
+  extendInfo:
+    NSMicrophoneUsageDescription: "Agent Desktop uses the microphone for voice input transcription (via whisper.cpp). Audio is processed locally and never sent to any server."
 
 linux:
   target:

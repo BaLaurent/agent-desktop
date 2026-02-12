@@ -64,7 +64,12 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
       mediaStream = stream
       audioChunks = []
 
-      const recorder = new MediaRecorder(stream)
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : ''
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
       mediaRecorder = recorder
 
       recorder.ondataavailable = (e) => {
@@ -77,7 +82,10 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
       releaseMediaStream()
       const msg = err instanceof Error ? err.message : 'Failed to start recording'
       if (msg.includes('Permission denied') || msg.includes('NotAllowedError')) {
-        set({ error: 'Microphone access denied. Allow microphone access in your system settings.' })
+        const hint = navigator.userAgent.includes('Macintosh')
+          ? 'Microphone access denied. Go to System Settings > Privacy & Security > Microphone and enable Agent Desktop.'
+          : 'Microphone access denied. Allow microphone access in your system settings.'
+        set({ error: hint })
       } else {
         set({ error: msg })
       }
@@ -111,7 +119,7 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
 
       // Decode webm → AudioBuffer → WAV
       const arrayBuffer = await blob.arrayBuffer()
-      const audioCtx = new AudioContext({ sampleRate: 48000 })
+      const audioCtx = new AudioContext()
       let audioBuffer: AudioBuffer
       try {
         audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
