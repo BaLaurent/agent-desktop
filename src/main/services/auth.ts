@@ -34,6 +34,30 @@ function credentialsAvailable(credentialsPath: string): boolean {
   return false
 }
 
+/**
+ * Extract user email and display name from ~/.claude/.claude.json (oauthAccount).
+ */
+function getUserInfoFromCredentials(credentialsPath: string): { email: string; name: string } {
+  const fallback = { email: 'Claude User', name: 'Claude User' }
+  try {
+    const configDir = path.dirname(credentialsPath)
+    const claudeJsonPath = path.join(configDir, '.claude.json')
+    if (fs.existsSync(claudeJsonPath)) {
+      const data = JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8'))
+      const account = data?.oauthAccount
+      if (account?.emailAddress) {
+        return {
+          email: account.emailAddress,
+          name: account.displayName || account.emailAddress,
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return fallback
+}
+
 function runDiagnostics(sdkError?: string): AuthDiagnostics {
   const home = os.homedir()
   const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(home, '.claude')
@@ -71,6 +95,8 @@ async function getStatus(): Promise<AuthStatus> {
     }
   }
 
+  const userInfo = getUserInfoFromCredentials(credentialsPath)
+
   try {
     const sdk = await loadAgentSDK()
 
@@ -87,21 +113,18 @@ async function getStatus(): Promise<AuthStatus> {
     for await (const message of testQuery) {
       const msg = message as Record<string, unknown>
       if (msg.type === 'system' && (msg as { subtype?: string }).subtype === 'init') {
-        return {
-          authenticated: true,
-          user: { email: 'Claude User', name: 'Claude User' },
-        }
+        return { authenticated: true, user: userInfo }
       }
       if (msg.type === 'result') {
         const isError = !!(msg as { is_error?: boolean }).is_error
         return {
           authenticated: !isError,
-          user: isError ? null : { email: 'Claude User', name: 'Claude User' },
+          user: isError ? null : userInfo,
         }
       }
     }
 
-    return { authenticated: true, user: { email: 'Claude User', name: 'Claude User' } }
+    return { authenticated: true, user: userInfo }
   } catch (err) {
     const sdkError = err instanceof Error ? err.message : String(err)
     const diagnostics = runDiagnostics(sdkError)
