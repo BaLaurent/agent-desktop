@@ -1,19 +1,27 @@
 import { app, Tray, Menu, nativeImage, BrowserWindow } from 'electron'
-
-// 16x16 purple square PNG as data URL
-const TRAY_ICON_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAH0lEQVQ4y2NkYPj/n4EKgJGqpg8aNGDQgEEDBgIAAIYEEAHvMJTqAAAAAElFTkSuQmCC'
+import * as path from 'path'
 
 function isAlive(win: BrowserWindow | null): win is BrowserWindow {
   return win !== null && !win.isDestroyed()
+}
+
+function loadTrayIcon(): Electron.NativeImage {
+  // In packaged app, files are in process.resourcesPath (via extraResources).
+  // In dev, load from the project build/ directory.
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'trayTemplate.png')
+    : path.join(app.getAppPath(), 'build', 'trayTemplate.png')
+  const img = nativeImage.createFromPath(iconPath)
+  // setTemplateImage makes macOS auto-adapt for light/dark menu bars
+  img.setTemplateImage(true)
+  return img
 }
 
 export function createTray(
   getWindow: () => BrowserWindow | null,
   ensureWindow: () => void,
 ): Tray {
-  const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
-  const tray = new Tray(icon)
+  const tray = new Tray(loadTrayIcon())
 
   function showWindow(): void {
     let win = getWindow()
