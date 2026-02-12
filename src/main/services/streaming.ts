@@ -1,7 +1,7 @@
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { buildCwdRestrictionHooks } from './cwdHooks'
-import { findBinaryInPath } from '../utils/env'
+import { findBinaryInPath, ensureFreshMacOSToken } from '../utils/env'
 import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall } from '../../shared/types'
 
 // Per-conversation abort controllers: Map<conversationId, AbortController>
@@ -105,6 +105,9 @@ export async function streamMessage(
   aiSettings?: AISettings,
   conversationId?: number
 ): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean }> {
+  // Ensure the macOS OAuth token is fresh (refresh if expired) before every SDK call
+  await ensureFreshMacOSToken()
+
   const sdk = await loadAgentSDK()
 
   const abortController = new AbortController()
