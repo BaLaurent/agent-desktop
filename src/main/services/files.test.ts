@@ -161,13 +161,49 @@ describe('files IPC handlers', () => {
       expect(result[0].name).toBe('visible.txt')
     })
 
-    it('skips node_modules', async () => {
+    it('skips node_modules by default', async () => {
       mkdirSync(join(testDir, 'node_modules'))
       writeFileSync(join(testDir, 'index.js'), 'ok')
 
       const result = await ipc.invoke('files:listTree', testDir)
       expect(result).toHaveLength(1)
       expect(result[0].name).toBe('index.js')
+    })
+
+    it('skips custom exclude patterns (venv, __pycache__)', async () => {
+      mkdirSync(join(testDir, 'venv'))
+      mkdirSync(join(testDir, '__pycache__'))
+      mkdirSync(join(testDir, 'node_modules'))
+      writeFileSync(join(testDir, 'app.py'), 'ok')
+
+      const result = await ipc.invoke('files:listTree', testDir, ['node_modules', 'venv', '__pycache__'])
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('app.py')
+    })
+
+    it('uses default exclude (node_modules) when no patterns provided', async () => {
+      mkdirSync(join(testDir, 'node_modules'))
+      mkdirSync(join(testDir, 'venv'))
+      writeFileSync(join(testDir, 'app.py'), 'ok')
+
+      const result = await ipc.invoke('files:listTree', testDir)
+      // venv should still appear since default only excludes node_modules
+      const names = result.map((n: any) => n.name)
+      expect(names).toContain('venv')
+      expect(names).not.toContain('node_modules')
+      expect(names).toContain('app.py')
+    })
+
+    it('passes custom excludes to recursive children', async () => {
+      mkdirSync(join(testDir, 'src'))
+      mkdirSync(join(testDir, 'src', '__pycache__'))
+      writeFileSync(join(testDir, 'src', 'main.py'), 'ok')
+
+      const result = await ipc.invoke('files:listTree', testDir, ['__pycache__'])
+      expect(result).toHaveLength(1) // src directory
+      expect(result[0].isDirectory).toBe(true)
+      expect(result[0].children).toHaveLength(1) // only main.py, __pycache__ excluded
+      expect(result[0].children[0].name).toBe('main.py')
     })
 
     it('recurses into subdirectories', async () => {

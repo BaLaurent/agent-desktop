@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FileNode } from '../../../shared/types'
+import { fuzzyMatch, fuzzyHighlight } from '../../utils/fuzzyMatch'
 
 export interface FlatFile {
   name: string
@@ -45,8 +46,12 @@ export function FileMentionDropdown({ files, filter, selectedIndex, onSelect, on
   const selectedRef = useRef<HTMLButtonElement>(null)
 
   const filtered = filter
-    ? files.filter((f) => f.relativePath.toLowerCase().includes(filter.toLowerCase()))
-    : files
+    ? files
+        .map((f) => ({ file: f, ...fuzzyMatch(filter, f.relativePath) }))
+        .filter((r) => r.match)
+        .sort((a, b) => b.score - a.score)
+        .map((r) => ({ ...r.file, _indices: r.indices }))
+    : files.map((f) => ({ ...f, _indices: [] as number[] }))
 
   // Scroll selected item into view
   useEffect(() => {
@@ -110,7 +115,7 @@ export function FileMentionDropdown({ files, filter, selectedIndex, onSelect, on
               <path d="M3.75 1.5a.25.25 0 00-.25.25v12.5c0 .138.112.25.25.25h8.5a.25.25 0 00.25-.25V4.664a.25.25 0 00-.073-.177l-2.914-2.914a.25.25 0 00-.177-.073H3.75z" />
             </svg>
             <span className="truncate">
-              {filter ? highlightMatch(file.relativePath, filter) : file.relativePath}
+              {filter && file._indices.length > 0 ? fuzzyHighlight(file.relativePath, file._indices) : file.relativePath}
             </span>
           </button>
         )
@@ -119,18 +124,3 @@ export function FileMentionDropdown({ files, filter, selectedIndex, onSelect, on
   )
 }
 
-function highlightMatch(text: string, query: string): React.ReactNode {
-  const lowerText = text.toLowerCase()
-  const lowerQuery = query.toLowerCase()
-  const idx = lowerText.indexOf(lowerQuery)
-  if (idx === -1) return text
-  return (
-    <>
-      {text.slice(0, idx)}
-      <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-        {text.slice(idx, idx + query.length)}
-      </span>
-      {text.slice(idx + query.length)}
-    </>
-  )
-}

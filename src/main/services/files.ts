@@ -38,7 +38,7 @@ export function classifyFileExt(ext: string): string | null {
 }
 
 // Recursive tree (used by @mention autocomplete) — budget-limited
-async function listTree(basePath: string, depth = 0, fileCount = { value: 0 }): Promise<FileNode[]> {
+async function listTree(basePath: string, depth = 0, fileCount = { value: 0 }, excludeSet: Set<string> = new Set(['node_modules'])): Promise<FileNode[]> {
   if (depth >= MAX_DEPTH || fileCount.value >= MAX_FILES) return []
 
   let entries: string[]
@@ -52,7 +52,7 @@ async function listTree(basePath: string, depth = 0, fileCount = { value: 0 }): 
 
   for (const entry of entries) {
     if (fileCount.value >= MAX_FILES) break
-    if (entry.startsWith('.') || entry === 'node_modules') continue
+    if (entry.startsWith('.') || excludeSet.has(entry)) continue
 
     const fullPath = join(basePath, entry)
     let stat: Awaited<ReturnType<typeof fsp.stat>>
@@ -65,7 +65,7 @@ async function listTree(basePath: string, depth = 0, fileCount = { value: 0 }): 
     fileCount.value++
 
     if (stat.isDirectory()) {
-      const children = await listTree(fullPath, depth + 1, fileCount)
+      const children = await listTree(fullPath, depth + 1, fileCount, excludeSet)
       nodes.push({ name: entry, path: fullPath, isDirectory: true, children })
     } else {
       nodes.push({ name: entry, path: fullPath, isDirectory: false })
@@ -140,11 +140,12 @@ async function generateCopyPath(originalPath: string): Promise<string> {
 }
 
 export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void {
-  ipcMain.handle('files:listTree', async (_event, basePath: string) => {
+  ipcMain.handle('files:listTree', async (_event, basePath: string, excludePatterns?: string[]) => {
     validateString(basePath, 'basePath')
     const resolved = expandTilde(basePath)
     validatePathSafe(resolved)
-    return listTree(resolved)
+    const excludeSet = new Set(Array.isArray(excludePatterns) ? excludePatterns : ['node_modules'])
+    return listTree(resolved, 0, { value: 0 }, excludeSet)
   })
 
   ipcMain.handle('files:listDir', async (_event, basePath: string) => {

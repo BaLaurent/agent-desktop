@@ -107,6 +107,16 @@
 - `allowDangerouslySkipPermissions` only set when mode is `bypassPermissions`
 - Dropdown in "AI / Model" settings tab
 
+## Skills (Agent SDK)
+- `ai_skills` setting: `'off'` (default), `'user'`, `'project'`
+- Cascades via global → folder → conversation `ai_overrides` (same pattern as other AI settings)
+- `'user'`: sets `settingSources: ['user']` — discovers skills from `~/.claude/skills/`
+- `'project'`: sets `settingSources: ['user', 'project']` — also discovers `.claude/skills/` in CWD
+- Both non-off modes add `'Skill'` to `allowedTools` (appended after MCP wildcards if present)
+- Seed default: `'off'` in `seed.ts`; existing DBs get `'off'` via fallback in `getAISettings()`
+- Settings UI: dropdown in Settings > AI between Permission Mode and CWD Restriction
+- Auto-enabled in override popovers via `SETTING_DEFS` + `SKILLS_OPTIONS` in `constants.ts`
+
 ## MCP Servers → SDK Integration
 - Existing CRUD in `src/main/services/mcp.ts` stores configs in `mcp_servers` table
 - **Transport types**: `stdio` (default), `http`, `sse` — stored in `type` column on `mcp_servers`
@@ -424,7 +434,7 @@
 - `seedShortcuts` converted from count-gate to `INSERT OR IGNORE` (existing users get new shortcuts)
 
 ## Testing
-- `npm test` — run all 802 tests (556 main + 246 renderer)
+- `npm test` — run all 808 tests (562 main + 246 renderer)
 - `npm run test:main` / `npm run test:renderer` — run suites independently
 - `npm run test:watch` — watch mode for main process tests
 - Vitest configs: `vitest.config.main.ts` (node env) + `vitest.config.renderer.ts` (jsdom env)

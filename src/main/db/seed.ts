@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import { DEFAULT_MODEL } from '../../shared/constants'
+import { DEFAULT_MODEL, DEFAULT_EXCLUDE_PATTERNS } from '../../shared/constants'
 
 export function seedDefaults(db: Database.Database): void {
   seedShortcuts(db)
@@ -52,6 +52,7 @@ function seedSettings(db: Database.Database): void {
     ['whisper_autoSend', 'false'],
     ['hooks_cwdRestriction', 'true'],
     ['ai_skills', 'off'],
+    ['files_excludePatterns', DEFAULT_EXCLUDE_PATTERNS],
   ]
 
   for (const [key, value] of defaults) {

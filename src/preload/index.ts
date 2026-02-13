@@ -44,7 +44,7 @@ const api: AgentAPI = {
     },
   },
   files: {
-    listTree: (basePath: string) => withTimeout(ipcRenderer.invoke('files:listTree', basePath)),
+    listTree: (basePath: string, excludePatterns?: string[]) => withTimeout(ipcRenderer.invoke('files:listTree', basePath, excludePatterns)),
     listDir: (dirPath: string) => withTimeout(ipcRenderer.invoke('files:listDir', dirPath)),
     readFile: (filePath: string) => withTimeout(ipcRenderer.invoke('files:readFile', filePath)),
     writeFile: (filePath: string, content: string) => withTimeout(ipcRenderer.invoke('files:writeFile', filePath, content)),

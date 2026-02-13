@@ -12,6 +12,7 @@ export interface AIOverrides {
   ai_knowledgeFolders?: string
   ai_skills?: string
   hooks_cwdRestriction?: string
+  files_excludePatterns?: string
 }
 
 export interface Conversation {

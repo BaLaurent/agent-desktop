@@ -46,7 +46,7 @@ export interface AgentAPI {
     onStream(callback: (chunk: StreamChunk) => void): () => void
   }
   files: {
-    listTree(basePath: string): Promise<FileNode[]>
+    listTree(basePath: string, excludePatterns?: string[]): Promise<FileNode[]>
     listDir(dirPath: string): Promise<FileNode[]>
     readFile(filePath: string): Promise<{ content: string; language: string | null; warning?: string }>
     writeFile(filePath: string, content: string): Promise<void>

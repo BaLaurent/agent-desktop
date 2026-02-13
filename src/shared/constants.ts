@@ -57,6 +57,7 @@ export const SETTING_DEFS: SettingDef[] = [
   { key: 'ai_permissionMode', label: 'Permission Mode', type: 'select', options: PERMISSION_OPTIONS },
   { key: 'ai_skills', label: 'Skills', type: 'select', options: SKILLS_OPTIONS },
   { key: 'ai_defaultSystemPrompt', label: 'System Prompt', type: 'textarea' },
+  { key: 'files_excludePatterns', label: 'File Exclude Patterns', type: 'textarea' },
 ]
 
 // ─── AI Override Keys ────────────────────────────────────────
@@ -72,7 +73,12 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_mcpDisabled',
   'ai_knowledgeFolders',
   'ai_skills',
+  'files_excludePatterns',
 ]
+
+// ─── File Exclude Patterns ──────────────────────────────────
+
+export const DEFAULT_EXCLUDE_PATTERNS = 'node_modules,venv,.venv,__pycache__,dist,build,.next,.nuxt,target,.cache,.tox,.mypy_cache,.pytest_cache,.eggs,.gradle,.cargo,vendor,.turbo,.parcel-cache,coverage'
 
 // ─── MCP Server Name Interface ───────────────────────────────
 

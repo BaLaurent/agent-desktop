@@ -19,7 +19,7 @@ import { parseOverrides, resolveEffectiveSettings, getInheritanceSource } from '
 import { parseMcpDisabledList } from '../utils/mcpUtils'
 import { useVoiceInputStore } from '../stores/voiceInputStore'
 import type { Attachment, AIOverrides, KnowledgeSelection } from '../../shared/types'
-import { DEFAULT_MODEL, shortenModelName } from '../../shared/constants'
+import { DEFAULT_MODEL, DEFAULT_EXCLUDE_PATTERNS, shortenModelName } from '../../shared/constants'
 
 interface ChatViewProps {
   conversationId: number | null
@@ -108,6 +108,12 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     const raw = effectiveSettings['ai_knowledgeFolders']
     if (!raw) return []
     try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [] } catch { return [] }
+  }, [effectiveSettings])
+
+  // File exclude patterns — resolve from cascade
+  const excludePatterns = useMemo(() => {
+    const raw = effectiveSettings['files_excludePatterns'] || DEFAULT_EXCLUDE_PATTERNS
+    return raw.split(',').map((s: string) => s.trim()).filter(Boolean)
   }, [effectiveSettings])
 
   const kbCollectionEntries = useMemo(() => {
@@ -431,6 +437,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
               isStreaming={isStreaming}
               externalText={autoSendVoice ? undefined : (lastTranscription ?? undefined)}
               cwd={displayCwd}
+              excludePatterns={excludePatterns}
               onCanSendChange={setCanSend}
             />
             <button

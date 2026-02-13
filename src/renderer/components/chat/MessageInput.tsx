@@ -3,6 +3,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { FileMentionDropdown, flattenFileTree } from './FileMentionDropdown'
 import type { FlatFile } from './FileMentionDropdown'
 import type { FileNode } from '../../../shared/types'
+import { fuzzyMatch } from '../../utils/fuzzyMatch'
 
 export interface MessageInputHandle {
   triggerMention: () => void
@@ -15,12 +16,13 @@ interface MessageInputProps {
   isStreaming: boolean
   externalText?: { text: string; id: number }
   cwd?: string | null
+  excludePatterns?: string[]
   onCanSendChange?: (canSend: boolean) => void
   onPaste?: (e: React.ClipboardEvent) => void
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
-  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, onCanSendChange, onPaste }, ref) {
+  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, onCanSendChange, onPaste }, ref) {
     const [content, setContent] = useState('')
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
@@ -36,15 +38,19 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     // Resolved mentions: maps @displayText → absolute path for send-time substitution
     const [resolvedMentions, setResolvedMentions] = useState<Array<{ display: string; name: string; path: string }>>([])
 
+    const excludeKeyRef = useRef<string>('')
+
     async function loadFiles() {
       if (!cwd) return
-      // Cache: only refetch if CWD changed
-      if (mentionCwdRef.current === cwd && mentionFiles.length > 0) return
+      const excludeKey = excludePatterns ? excludePatterns.join(',') : ''
+      // Cache: only refetch if CWD or exclude patterns changed
+      if (mentionCwdRef.current === cwd && excludeKeyRef.current === excludeKey && mentionFiles.length > 0) return
       try {
-        const tree: FileNode[] = await window.agent.files.listTree(cwd)
+        const tree: FileNode[] = await window.agent.files.listTree(cwd, excludePatterns)
         const flat = flattenFileTree(tree, cwd)
         setMentionFiles(flat)
         mentionCwdRef.current = cwd
+        excludeKeyRef.current = excludeKey
       } catch {
         setMentionFiles([])
       }
@@ -184,9 +190,13 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
       }
     }, [cwd, mentionOpen, closeMention])
 
-    // Compute filtered files for keyboard nav bounds
+    // Compute filtered files for keyboard nav bounds (must match dropdown logic)
     const filteredFiles = mentionFilter
-      ? mentionFiles.filter((f) => f.relativePath.toLowerCase().includes(mentionFilter.toLowerCase()))
+      ? mentionFiles
+          .map((f) => ({ file: f, ...fuzzyMatch(mentionFilter, f.relativePath) }))
+          .filter((r) => r.match)
+          .sort((a, b) => b.score - a.score)
+          .map((r) => r.file)
       : mentionFiles
 
     const handleKeyDown = useCallback(
