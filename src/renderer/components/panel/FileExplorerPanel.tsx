@@ -5,6 +5,7 @@ import { HtmlPreview } from '../artifacts/HtmlPreview'
 import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
 import { SvgPreview } from '../artifacts/SvgPreview'
+import { CodeEditorModal } from './CodeEditorModal'
 import type { FileNode } from '../../../shared/types'
 import { useSettingsStore } from '../../stores/settingsStore'
 
@@ -465,7 +466,7 @@ function FileTreeNode({
 // ── Monaco File Editor ─────────────────────────────────────────
 
 function MonacoFileEditor({ content, language }: { content: string; language: string | null }) {
-  const { setEditorContent, saveFile } = useFileExplorerStore()
+  const { editorContent, setEditorContent, saveFile } = useFileExplorerStore()
 
   const handleMount = (editor: any, monaco: any) => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveFile())
@@ -476,7 +477,7 @@ function MonacoFileEditor({ content, language }: { content: string; language: st
       height="100%"
       language={toMonacoLanguage(language)}
       theme="vs-dark"
-      value={content}
+      value={editorContent ?? content}
       onChange={(val) => setEditorContent(val ?? '')}
       onMount={handleMount}
       options={{ minimap: { enabled: false }, fontSize: 13, wordWrap: 'on', scrollBeyondLastLine: false }}
@@ -488,14 +489,22 @@ function MonacoFileEditor({ content, language }: { content: string; language: st
 
 const HTML_EXTENSIONS = new Set(['html', 'htm'])
 
-function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs }: {
-  filePath: string; isThemesCwd: boolean; jsEnabled: boolean; onToggleJs: () => void
+function isMonacoActive(fileLanguage: string | null, filePath: string, viewMode: string): boolean {
+  if (fileLanguage === 'image') return false
+  const ext = getFileExtension(filePath)
+  if (viewMode === 'preview' && PREVIEW_EXTENSIONS.has(ext)) return false
+  return true
+}
+
+function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand }: {
+  filePath: string; isThemesCwd: boolean; jsEnabled: boolean; onToggleJs: () => void; onExpand: () => void
 }) {
   const { isDirty, viewMode, setViewMode, saveFile, fileLanguage } = useFileExplorerStore()
   const canToggle = hasPreviewMode(fileLanguage, filePath)
   const name = getBasename(filePath)
   const showApplyTheme = isThemesCwd && getFileExtension(filePath) === 'css'
   const showJsToggle = viewMode === 'preview' && HTML_EXTENSIONS.has(getFileExtension(filePath))
+  const showExpand = isMonacoActive(fileLanguage, filePath, viewMode)
 
   return (
     <div
@@ -530,6 +539,20 @@ function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs }: {
           aria-pressed={jsEnabled}
         >
           JS
+        </button>
+      )}
+      {showExpand && (
+        <button
+          onClick={onExpand}
+          className="px-2.5 py-1 rounded text-xs font-medium transition-colors hover:opacity-80"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text-muted)',
+            border: '1px solid color-mix(in srgb, var(--color-text-muted) 20%, transparent)',
+          }}
+          aria-label="Expand code editor"
+        >
+          Expand ↗
         </button>
       )}
       {canToggle && (
@@ -706,12 +729,13 @@ function CreateInput({ kind, onSubmit, onCancel }: {
 }
 
 export function FileExplorerPanel() {
-  const { tree, selectedFilePath, fileContent, fileLanguage, fileWarning, loading, error, refresh, selectFile, cwd, expandedPaths, toggleDir, expandDir, viewMode } = useFileExplorerStore()
+  const { tree, selectedFilePath, fileContent, editorContent, fileLanguage, fileWarning, loading, error, refresh, selectFile, cwd, expandedPaths, toggleDir, expandDir, viewMode } = useFileExplorerStore()
   const themesCwd = isThemesDirectory(cwd)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [jsEnabled, setJsEnabled] = useState(false)
   const [jsPromptDismissed, setJsPromptDismissed] = useState(false)
+  const [showCodeModal, setShowCodeModal] = useState(false)
 
   // DnD state
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
@@ -738,6 +762,7 @@ export function FileExplorerPanel() {
       setJsEnabled(false)
     }
     setJsPromptDismissed(false)
+    setShowCodeModal(false)
   }, [selectedFilePath])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
@@ -967,6 +992,7 @@ export function FileExplorerPanel() {
                 isThemesCwd={themesCwd}
                 jsEnabled={jsEnabled}
                 onToggleJs={() => setJsEnabled((v) => !v)}
+                onExpand={() => setShowCodeModal(true)}
               />
               {fileWarning && (
                 <div className="px-3 py-1.5 text-xs flex-shrink-0 bg-warning" style={{ color: '#000' }} role="alert">
@@ -1013,6 +1039,17 @@ export function FileExplorerPanel() {
           onRename={handleStartRename}
           onCreateFile={handleCreateFileInDir}
           onCreateFolder={handleCreateFolderInDir}
+        />
+      )}
+
+      {/* Expanded code editor modal */}
+      {showCodeModal && selectedFilePath && fileContent !== null && (
+        <CodeEditorModal
+          value={editorContent ?? fileContent!}
+          onChange={(v) => useFileExplorerStore.getState().setEditorContent(v)}
+          onClose={() => setShowCodeModal(false)}
+          language={fileLanguage}
+          filename={getBasename(selectedFilePath)}
         />
       )}
     </div>

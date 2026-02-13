@@ -58,6 +58,7 @@
   - `'user'` discovers `~/.claude/skills/`, `'project'` also discovers `.claude/skills/` in CWD
 - **maxTurns**: 0 = unlimited (SDK receives `undefined`); no upper cap in UI
 - Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `files_excludePatterns`
+- **System prompt editor**: `SystemPromptEditorModal` — full-screen Monaco editor modal, shared by global AI settings and folder/conversation override forms ("Expand" button on textarea fields)
 - See `src/shared/constants.ts` for `SETTING_DEFS`, `MODEL_OPTIONS`, `PERMISSION_OPTIONS`
 
 ## MCP Servers
@@ -168,6 +169,8 @@
 ## Tray
 - `createTray(getWindow, ensureWindow)` — accepts closures, not direct `BrowserWindow` ref
 - **Gotcha**: `isAlive(win)` guard needed — fixes null mainWindow race condition at startup
+- **Platform icons**: macOS uses template image (auto dark/light); Linux/Windows use explicit `trayDark.png`/`trayLight.png` based on `nativeTheme.shouldUseDarkColors`
+- Theme listener: `nativeTheme.on('updated')` swaps icon on Linux/Windows (macOS excluded — template image handles it)
 - Quit calls `app.quit()` after destroying window
 
 ## Database Purge
