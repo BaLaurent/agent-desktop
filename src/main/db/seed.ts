@@ -51,6 +51,7 @@ function seedSettings(db: Database.Database): void {
     ['whisper_advancedParams', ''],
     ['whisper_autoSend', 'false'],
     ['hooks_cwdRestriction', 'true'],
+    ['ai_skills', 'off'],
   ]
 
   for (const [key, value] of defaults) {

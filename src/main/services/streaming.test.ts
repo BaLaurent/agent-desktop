@@ -132,6 +132,78 @@ describe('streamMessage — MCP allowedTools', () => {
   })
 })
 
+describe('streamMessage — Skills settingSources', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+  })
+
+  it('does not set settingSources or Skill in allowedTools when skills=off', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { skills: 'off', permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.settingSources).toBeUndefined()
+    expect(opts.allowedTools).toBeUndefined()
+  })
+
+  it('sets settingSources=[user] and Skill in allowedTools when skills=user', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { skills: 'user', permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.settingSources).toEqual(['user'])
+    expect(opts.allowedTools).toEqual(expect.arrayContaining(['Skill']))
+  })
+
+  it('sets settingSources=[user,project] and combines with MCP wildcards when skills=project', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      {
+        skills: 'project',
+        permissionMode: 'bypassPermissions',
+        mcpServers: {
+          spotify: { command: 'uvx', args: ['mcp-spotify'] },
+        },
+      },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.settingSources).toEqual(['user', 'project'])
+    expect(opts.allowedTools).toEqual(
+      expect.arrayContaining(['mcp__spotify__*', 'Skill'])
+    )
+  })
+})
+
 describe('streamMessage — system init (MCP status)', () => {
   beforeEach(() => {
     mockSendFn.mockClear()

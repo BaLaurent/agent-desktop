@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { MODEL_OPTIONS, DEFAULT_MODEL } from '../../../shared/constants'
+import { MODEL_OPTIONS, DEFAULT_MODEL, SKILLS_OPTIONS } from '../../../shared/constants'
 
 export function AISettings() {
   const { settings, loadSettings, setSetting } = useSettingsStore()
@@ -14,6 +14,7 @@ export function AISettings() {
   const maxThinkingTokens = settings['ai_maxThinkingTokens'] ?? '0'
   const maxBudgetUsd = settings['ai_maxBudgetUsd'] ?? '0'
   const permissionMode = settings['ai_permissionMode'] ?? 'bypassPermissions'
+  const skills = settings['ai_skills'] ?? 'off'
   const cwdRestriction = settings['hooks_cwdRestriction'] ?? 'true'
   const defaultSystemPrompt = settings['ai_defaultSystemPrompt'] ?? ''
   const [confirmDisable, setConfirmDisable] = useState(false)
@@ -159,6 +160,34 @@ export function AISettings() {
           <option value="default">Default</option>
           <option value="dontAsk">Don't Ask</option>
           <option value="plan">Plan Only</option>
+        </select>
+      </div>
+
+      {/* Skills */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Skills
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Load Claude Code skills from filesystem directories.
+          </span>
+        </div>
+        <select
+          value={skills}
+          onChange={(e) => setSetting('ai_skills', e.target.value)}
+          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          aria-label="Select skills mode"
+        >
+          {SKILLS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
       </div>
 

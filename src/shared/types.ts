@@ -10,6 +10,7 @@ export interface AIOverrides {
   ai_defaultSystemPrompt?: string
   ai_mcpDisabled?: string
   ai_knowledgeFolders?: string
+  ai_skills?: string
   hooks_cwdRestriction?: string
 }
 

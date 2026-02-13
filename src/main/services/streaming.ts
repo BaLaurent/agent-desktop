@@ -68,6 +68,7 @@ export interface AISettings {
   mcpServers?: Record<string, { command: string; args: string[]; env?: Record<string, string> } | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> }>
   cwdRestrictionEnabled?: boolean
   writableKnowledgePaths?: string[]
+  skills?: 'off' | 'user' | 'project'
 }
 
 interface StreamEventMessage {
@@ -262,6 +263,15 @@ export async function streamMessage(
       queryOptions.allowedTools = [
         ...(Array.isArray(queryOptions.allowedTools) ? queryOptions.allowedTools as string[] : []),
         ...mcpWildcards,
+      ]
+    }
+
+    // Skills: set settingSources + add 'Skill' to allowedTools
+    if (aiSettings?.skills && aiSettings.skills !== 'off') {
+      queryOptions.settingSources = aiSettings.skills === 'user' ? ['user'] : ['user', 'project']
+      queryOptions.allowedTools = [
+        ...(Array.isArray(queryOptions.allowedTools) ? queryOptions.allowedTools as string[] : []),
+        'Skill',
       ]
     }
 

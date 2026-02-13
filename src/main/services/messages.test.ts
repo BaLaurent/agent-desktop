@@ -319,6 +319,34 @@ describe('Messages Service', () => {
     expect(settings.model).toBe('claude-sonnet-4-5-20250929')
   })
 
+  it('getAISettings returns skills off by default', () => {
+    const settings = getAISettings(db, convId)
+    expect(settings.skills).toBe('off')
+  })
+
+  it('getAISettings reads ai_skills from global settings', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_skills', 'user')").run()
+    const settings = getAISettings(db, convId)
+    expect(settings.skills).toBe('user')
+  })
+
+  it('getAISettings cascades ai_skills: conversation > folder > global', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_skills', 'off')").run()
+    const folder = db.prepare("INSERT INTO folders (name) VALUES ('Skills Folder')").run()
+    const folderId = folder.lastInsertRowid as number
+    db.prepare('UPDATE folders SET ai_overrides = ? WHERE id = ?').run(
+      JSON.stringify({ ai_skills: 'user' }),
+      folderId
+    )
+    db.prepare('UPDATE conversations SET folder_id = ?, ai_overrides = ? WHERE id = ?').run(
+      folderId,
+      JSON.stringify({ ai_skills: 'project' }),
+      convId
+    )
+    const settings = getAISettings(db, convId)
+    expect(settings.skills).toBe('project')
+  })
+
   it('saveMessage inserts and returns message with id', () => {
     const msg = saveMessage(db, convId, 'user', 'Hello world')
     expect(msg.id).toBeGreaterThan(0)
