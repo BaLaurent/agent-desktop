@@ -11,6 +11,7 @@ import type {
   KnowledgeCollection,
   ThemeFile,
   KeyboardShortcut,
+  SlashCommand,
   StreamChunk,
   Attachment,
   AuthStatus,
@@ -97,6 +98,9 @@ export interface AgentAPI {
     delete(filename: string): Promise<void>
     getDir(): Promise<string>
     refresh(): Promise<ThemeFile[]>
+  }
+  commands: {
+    list(cwd?: string, skillsMode?: string): Promise<SlashCommand[]>
   }
   shortcuts: {
     list(): Promise<KeyboardShortcut[]>

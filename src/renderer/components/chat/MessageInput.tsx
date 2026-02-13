@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { FileMentionDropdown, flattenFileTree } from './FileMentionDropdown'
+import { SlashCommandDropdown } from './SlashCommandDropdown'
 import type { FlatFile } from './FileMentionDropdown'
-import type { FileNode } from '../../../shared/types'
+import type { FileNode, SlashCommand } from '../../../shared/types'
 import { fuzzyMatch } from '../../utils/fuzzyMatch'
 
 export interface MessageInputHandle {
@@ -17,12 +18,13 @@ interface MessageInputProps {
   externalText?: { text: string; id: number }
   cwd?: string | null
   excludePatterns?: string[]
+  skillsMode?: string
   onCanSendChange?: (canSend: boolean) => void
   onPaste?: (e: React.ClipboardEvent) => void
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
-  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, onCanSendChange, onPaste }, ref) {
+  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, skillsMode, onCanSendChange, onPaste }, ref) {
     const [content, setContent] = useState('')
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
@@ -40,6 +42,14 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
 
     const excludeKeyRef = useRef<string>('')
 
+    // Slash command state
+    const [slashOpen, setSlashOpen] = useState(false)
+    const [slashFilter, setSlashFilter] = useState('')
+    const [slashIndex, setSlashIndex] = useState(0)
+    const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([])
+    const slashAnchorRef = useRef<number>(-1)
+    const slashCwdRef = useRef<string | null>(null)
+
     async function loadFiles() {
       if (!cwd) return
       const excludeKey = excludePatterns ? excludePatterns.join(',') : ''
@@ -53,6 +63,21 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
         excludeKeyRef.current = excludeKey
       } catch {
         setMentionFiles([])
+      }
+    }
+
+    const slashSkillsModeRef = useRef<string | undefined>(undefined)
+
+    async function loadCommands() {
+      // Cache: only refetch if CWD or skillsMode changed
+      if (slashCwdRef.current === (cwd ?? null) && slashSkillsModeRef.current === skillsMode && slashCommands.length > 0) return
+      try {
+        const cmds = await window.agent.commands.list(cwd ?? undefined, skillsMode)
+        setSlashCommands(cmds)
+        slashCwdRef.current = cwd ?? null
+        slashSkillsModeRef.current = skillsMode
+      } catch {
+        setSlashCommands([])
       }
     }
 
@@ -127,6 +152,13 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
       mentionAnchorRef.current = -1
     }, [])
 
+    const closeSlash = useCallback(() => {
+      setSlashOpen(false)
+      setSlashFilter('')
+      setSlashIndex(0)
+      slashAnchorRef.current = -1
+    }, [])
+
     const handleSelectFile = useCallback((file: FlatFile) => {
       // Replace @filter with @relativePath (human-readable); resolve to link on send
       const anchor = mentionAnchorRef.current
@@ -152,43 +184,87 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
       textareaRef.current?.focus()
     }, [closeMention])
 
+    const handleSelectCommand = useCallback((cmd: SlashCommand) => {
+      const anchor = slashAnchorRef.current
+      const replacement = `/${cmd.name} `
+      if (anchor >= 0) {
+        setContent((prev) => {
+          const before = prev.slice(0, anchor)
+          const el = textareaRef.current
+          const cursorPos = el ? el.selectionStart : prev.length
+          const after = prev.slice(cursorPos)
+          return before + replacement + after
+        })
+      } else {
+        setContent((prev) => prev + replacement)
+      }
+      closeSlash()
+      textareaRef.current?.focus()
+    }, [closeSlash])
+
     const handleChange = useCallback((value: string) => {
       setContent(value)
 
-      if (!cwd) {
-        if (mentionOpen) closeMention()
-        return
-      }
-
-      // Find the last @ that is at position 0 or preceded by space/newline
       const textarea = textareaRef.current
       const cursorPos = textarea ? textarea.selectionStart : value.length
 
-      let atPos = -1
-      for (let i = cursorPos - 1; i >= 0; i--) {
-        if (value[i] === '@') {
-          if (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\n') {
-            atPos = i
+      // --- @ mention detection (requires cwd) ---
+      if (cwd) {
+        let atPos = -1
+        for (let i = cursorPos - 1; i >= 0; i--) {
+          if (value[i] === '@') {
+            if (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\n') {
+              atPos = i
+            }
+            break
           }
-          break
+          if (value[i] === ' ' || value[i] === '\n') break
         }
-        // Stop searching if we hit a space or newline before finding @
-        if (value[i] === ' ' || value[i] === '\n') break
-      }
 
-      if (atPos >= 0) {
-        const filter = value.slice(atPos + 1, cursorPos)
-        mentionAnchorRef.current = atPos
-        setMentionFilter(filter)
-        setMentionIndex(0)
-        if (!mentionOpen) {
-          setMentionOpen(true)
-          loadFiles()
+        if (atPos >= 0) {
+          const filter = value.slice(atPos + 1, cursorPos)
+          mentionAnchorRef.current = atPos
+          setMentionFilter(filter)
+          setMentionIndex(0)
+          if (!mentionOpen) {
+            setMentionOpen(true)
+            loadFiles()
+          }
+          // @ is open — don't also open /
+          if (slashOpen) closeSlash()
+          return
+        } else if (mentionOpen) {
+          closeMention()
         }
       } else if (mentionOpen) {
         closeMention()
       }
-    }, [cwd, mentionOpen, closeMention])
+
+      // --- / slash command detection ---
+      let slashPos = -1
+      for (let i = cursorPos - 1; i >= 0; i--) {
+        if (value[i] === '/') {
+          if (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\n') {
+            slashPos = i
+          }
+          break
+        }
+        if (value[i] === ' ' || value[i] === '\n') break
+      }
+
+      if (slashPos >= 0 && !mentionOpen) {
+        const filter = value.slice(slashPos + 1, cursorPos)
+        slashAnchorRef.current = slashPos
+        setSlashFilter(filter)
+        setSlashIndex(0)
+        if (!slashOpen) {
+          setSlashOpen(true)
+          loadCommands()
+        }
+      } else if (slashOpen) {
+        closeSlash()
+      }
+    }, [cwd, mentionOpen, slashOpen, closeMention, closeSlash])
 
     // Compute filtered files for keyboard nav bounds (must match dropdown logic)
     const filteredFiles = mentionFilter
@@ -199,8 +275,43 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           .map((r) => r.file)
       : mentionFiles
 
+    // Compute filtered commands for keyboard nav bounds
+    const filteredCommands = slashFilter
+      ? slashCommands
+          .map((cmd) => ({ cmd, ...fuzzyMatch(slashFilter, cmd.name) }))
+          .filter((r) => r.match)
+          .sort((a, b) => b.score - a.score)
+          .map((r) => r.cmd)
+      : slashCommands
+
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
+        // Slash command dropdown keyboard handling
+        if (slashOpen && filteredCommands.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setSlashIndex((prev) => Math.min(prev + 1, filteredCommands.length - 1))
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setSlashIndex((prev) => Math.max(prev - 1, 0))
+            return
+          }
+          if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault()
+            const cmd = filteredCommands[slashIndex]
+            if (cmd) handleSelectCommand(cmd)
+            return
+          }
+        }
+
+        if (slashOpen && e.key === 'Escape') {
+          e.preventDefault()
+          closeSlash()
+          return
+        }
+
         // Mention dropdown keyboard handling takes priority
         if (mentionOpen && filteredFiles.length > 0) {
           if (e.key === 'ArrowDown') {
@@ -239,7 +350,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           }
         }
       },
-      [handleSend, sendOnEnter, mentionOpen, filteredFiles, mentionIndex, handleSelectFile, closeMention]
+      [handleSend, sendOnEnter, mentionOpen, filteredFiles, mentionIndex, handleSelectFile, closeMention, slashOpen, filteredCommands, slashIndex, handleSelectCommand, closeSlash]
     )
 
     return (
@@ -247,6 +358,15 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
         className="flex-1 flex items-end gap-2 rounded-lg px-3 py-2 relative"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
+        {slashOpen && (
+          <SlashCommandDropdown
+            commands={slashCommands}
+            filter={slashFilter}
+            selectedIndex={slashIndex}
+            onSelect={handleSelectCommand}
+            onClose={closeSlash}
+          />
+        )}
         {mentionOpen && (
           <FileMentionDropdown
             files={mentionFiles}
@@ -262,7 +382,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={onPaste}
-          placeholder={disabled ? 'Sign in to start chatting...' : 'Message Claude... (@ to mention files)'}
+          placeholder={disabled ? 'Sign in to start chatting...' : 'Message Claude... (@ to mention files, / for commands)'}
           disabled={disabled}
           rows={1}
           className="flex-1 resize-none bg-transparent outline-none text-sm leading-6"

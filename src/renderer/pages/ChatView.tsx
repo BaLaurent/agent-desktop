@@ -438,6 +438,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
               externalText={autoSendVoice ? undefined : (lastTranscription ?? undefined)}
               cwd={displayCwd}
               excludePatterns={excludePatterns}
+              skillsMode={effectiveSettings['ai_skills'] ?? 'off'}
               onCanSendChange={setCanSend}
             />
             <button

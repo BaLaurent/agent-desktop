@@ -56,16 +56,15 @@ export function AISettings() {
             Max Turns
           </span>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Maximum agentic turns per request (1-50).
+            Maximum agentic turns per request. 0 = unlimited.
           </span>
         </div>
         <input
           type="number"
-          min={1}
-          max={50}
+          min={0}
           value={maxTurns}
           onChange={(e) => {
-            const v = Math.max(1, Math.min(50, Number(e.target.value) || 1))
+            const v = Math.max(0, Number(e.target.value) || 0)
             setSetting('ai_maxTurns', String(v))
           }}
           className="w-20 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right"

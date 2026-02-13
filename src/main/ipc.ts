@@ -17,6 +17,7 @@ import { registerHandlers as themesHandlers, ensureThemeDir } from './services/t
 import { registerHandlers as shortcutsHandlers } from './services/shortcuts'
 import { registerHandlers as systemHandlers } from './services/system'
 import { registerHandlers as whisperHandlers } from './services/whisper'
+import { registerHandlers as commandsHandlers } from './services/commands'
 
 const serviceModules = [
   authHandlers,
@@ -60,6 +61,7 @@ export function registerAllHandlers(ipcMain: IpcMain, db: Database.Database): vo
     register(safeIpc, db)
   }
   themesHandlers(safeIpc)
+  commandsHandlers(safeIpc)
   ensureThemeDir().catch((err) => console.error('[themes] Failed to ensure theme dir:', err))
   ensureKnowledgesDir().catch((err) => console.error('[knowledge] Failed to ensure knowledges dir:', err))
 }

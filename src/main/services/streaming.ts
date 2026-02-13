@@ -147,7 +147,7 @@ export async function streamMessage(
     const queryOptions: Record<string, unknown> = {
       model: aiSettings?.model || undefined,
       systemPrompt: systemPrompt || undefined,
-      maxTurns: aiSettings?.maxTurns ?? 1,
+      maxTurns: aiSettings?.maxTurns || undefined,
       maxThinkingTokens: aiSettings?.maxThinkingTokens || undefined,
       maxBudgetUsd: aiSettings?.maxBudgetUsd || undefined,
       cwd: aiSettings?.cwd || undefined,

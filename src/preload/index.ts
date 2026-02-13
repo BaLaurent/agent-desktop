@@ -97,6 +97,9 @@ const api: AgentAPI = {
     getDir: () => withTimeout(ipcRenderer.invoke('themes:getDir')),
     refresh: () => withTimeout(ipcRenderer.invoke('themes:refresh')),
   },
+  commands: {
+    list: (cwd?: string, skillsMode?: string) => withTimeout(ipcRenderer.invoke('commands:list', cwd, skillsMode)),
+  },
   shortcuts: {
     list: () => withTimeout(ipcRenderer.invoke('shortcuts:list')),
     update: (id, keybinding) => withTimeout(ipcRenderer.invoke('shortcuts:update', id, keybinding)),

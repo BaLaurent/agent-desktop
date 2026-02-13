@@ -4,7 +4,7 @@ import { MessageInput } from './MessageInput'
 describe('MessageInput', () => {
   it('shows placeholder with @ hint when not disabled', () => {
     render(<MessageInput onSend={vi.fn()} disabled={false} isStreaming={false} />)
-    expect(screen.getByPlaceholderText('Message Claude... (@ to mention files)')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Message Claude... (@ to mention files, / for commands)')).toBeInTheDocument()
   })
 
   it('shows "Sign in to start chatting..." when disabled', () => {
@@ -28,7 +28,7 @@ describe('MessageInput', () => {
     const onSend = vi.fn()
     render(<MessageInput onSend={onSend} disabled={false} isStreaming={false} />)
 
-    const textarea = screen.getByPlaceholderText('Message Claude... (@ to mention files)')
+    const textarea = screen.getByPlaceholderText('Message Claude... (@ to mention files, / for commands)')
     fireEvent.change(textarea, { target: { value: '  hello world  ' } })
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
 
@@ -39,7 +39,7 @@ describe('MessageInput', () => {
     const onSend = vi.fn()
     render(<MessageInput onSend={onSend} disabled={false} isStreaming={false} />)
 
-    const textarea = screen.getByPlaceholderText('Message Claude... (@ to mention files)')
+    const textarea = screen.getByPlaceholderText('Message Claude... (@ to mention files, / for commands)')
     fireEvent.change(textarea, { target: { value: 'hello' } })
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
 
