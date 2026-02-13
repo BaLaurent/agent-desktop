@@ -56,6 +56,7 @@
 - **Allowed Tools**: `ai_tools` = `'preset:claude_code'` (all) or JSON array; see `SDK_TOOLS` in `src/main/services/tools.ts`
 - **Skills**: `ai_skills` = `'off'`|`'user'`|`'project'`; non-off modes add `'Skill'` to `allowedTools` and set `settingSources`
   - `'user'` discovers `~/.claude/skills/`, `'project'` also discovers `.claude/skills/` in CWD
+- **maxTurns**: 0 = unlimited (SDK receives `undefined`); no upper cap in UI
 - Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `files_excludePatterns`
 - See `src/shared/constants.ts` for `SETTING_DEFS`, `MODEL_OPTIONS`, `PERMISSION_OPTIONS`
 
@@ -103,6 +104,18 @@
 - **Copy-to-session**: files copied to `{cwd}/attachments/` with dedup naming; markdown links appended to message content
 - **File path API**: `webUtils.getPathForFile(file)` via preload — replaces unsafe `(file as any).path`
 - Paste: 5MB limit, saved to `os.tmpdir()/agent-paste/` with unique filename
+
+## Slash Commands
+- Type `/` in chat input to open autocomplete dropdown with fuzzy filtering
+- Backend: `src/main/services/commands.ts` scans directories in priority order (later overrides earlier):
+  1. **Builtin**: `compact`, `clear`, `help`
+  2. **User**: `~/.claude/commands/*.md` (frontmatter `description:`)
+  3. **Project**: `{cwd}/.claude/commands/*.md`
+  4. **Skills**: `~/.claude/skills/*/SKILL.md` and `{cwd}/.claude/skills/*/SKILL.md` (only when `ai_skills` ≠ `'off'`)
+- Uses `Map<string, SlashCommand>` for dedup — same-name commands replaced by higher-priority source
+- Frontmatter parsing: reads first 2KB, supports plain, quoted, and YAML folded block (`>`) descriptions
+- `SlashCommandDropdown` mirrors `FileMentionDropdown` pattern (position, fuzzy match, keyboard nav, click-outside)
+- **Gotcha**: `commands:list` IPC does NOT need `db` — registered like `themes`/`system` (no db param)
 
 ## Chat UI
 - **Layout gotcha**: `FileDropZone` wrapper must have `flex-1 flex flex-col overflow-hidden`; `MessageList` uses `overflow-y-auto` inner div

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { MODEL_OPTIONS, DEFAULT_MODEL, SKILLS_OPTIONS } from '../../../shared/constants'
+import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 
 export function AISettings() {
   const { settings, loadSettings, setSetting } = useSettingsStore()
@@ -18,6 +19,7 @@ export function AISettings() {
   const cwdRestriction = settings['hooks_cwdRestriction'] ?? 'true'
   const defaultSystemPrompt = settings['ai_defaultSystemPrompt'] ?? ''
   const [confirmDisable, setConfirmDisable] = useState(false)
+  const [showPromptEditor, setShowPromptEditor] = useState(false)
 
   return (
     <div className="flex flex-col gap-1">
@@ -256,13 +258,27 @@ export function AISettings() {
 
       {/* Default System Prompt */}
       <div className="flex flex-col gap-2 py-3">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            Default System Prompt
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Global system prompt. Per-conversation prompts override this.
-          </span>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Default System Prompt
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Global system prompt. Per-conversation prompts override this.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowPromptEditor(true)}
+            className="px-2.5 py-1 rounded text-xs font-medium transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text-muted)',
+              border: '1px solid color-mix(in srgb, var(--color-text-muted) 20%, transparent)',
+            }}
+            aria-label="Expand system prompt editor"
+          >
+            Expand ↗
+          </button>
         </div>
         <textarea
           value={defaultSystemPrompt}
@@ -277,6 +293,14 @@ export function AISettings() {
           aria-label="Default system prompt"
         />
       </div>
+
+      {showPromptEditor && (
+        <SystemPromptEditorModal
+          value={defaultSystemPrompt}
+          onChange={(v) => setSetting('ai_defaultSystemPrompt', v)}
+          onClose={() => setShowPromptEditor(false)}
+        />
+      )}
     </div>
   )
 }

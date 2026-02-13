@@ -12,6 +12,14 @@ extraResources:
     to: trayTemplate.png
   - from: build/trayTemplate@2x.png
     to: trayTemplate@2x.png
+  - from: build/trayDark.png
+    to: trayDark.png
+  - from: build/trayDark@2x.png
+    to: trayDark@2x.png
+  - from: build/trayLight.png
+    to: trayLight.png
+  - from: build/trayLight@2x.png
+    to: trayLight@2x.png
 extraMetadata:
   main: ./out/main/index.js
 mac:

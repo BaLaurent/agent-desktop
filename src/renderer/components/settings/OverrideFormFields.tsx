@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { SETTING_DEFS, type McpServerName } from '../../../shared/constants'
 import { Checkbox } from '../ui/Checkbox'
+import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 
 interface OverrideFormFieldsProps {
   draft: Record<string, string | undefined>
@@ -28,6 +30,8 @@ export function OverrideFormFields({
   onToggleMcpOverride,
   onToggleMcpServer,
 }: OverrideFormFieldsProps) {
+  const [promptEditorKey, setPromptEditorKey] = useState<string | null>(null)
+
   return (
     <>
       {SETTING_DEFS.map((def) => {
@@ -41,12 +45,24 @@ export function OverrideFormFields({
               <label className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
                 {def.label}
               </label>
-              <button
-                onClick={() => onToggleOverride(def.key)}
-                className={`text-[10px] px-1.5 py-0.5 rounded ${active ? 'bg-primary text-contrast' : 'bg-base text-muted'}`}
-              >
-                {active ? 'Override' : 'Inherited'}
-              </button>
+              <div className="flex items-center gap-1">
+                {active && def.type === 'textarea' && (
+                  <button
+                    onClick={() => setPromptEditorKey(def.key)}
+                    className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-80"
+                    style={{ color: 'var(--color-text-muted)' }}
+                    aria-label={`Expand ${def.label} editor`}
+                  >
+                    Expand ↗
+                  </button>
+                )}
+                <button
+                  onClick={() => onToggleOverride(def.key)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded ${active ? 'bg-primary text-contrast' : 'bg-base text-muted'}`}
+                >
+                  {active ? 'Override' : 'Inherited'}
+                </button>
+              </div>
             </div>
             {active ? (
               def.type === 'select' ? (
@@ -67,18 +83,27 @@ export function OverrideFormFields({
                   ))}
                 </select>
               ) : def.type === 'textarea' ? (
-                <textarea
-                  value={draft[def.key] || ''}
-                  onChange={(e) => onDraftChange(def.key, e.target.value)}
-                  rows={3}
-                  placeholder="Enter system prompt..."
-                  className="w-full px-2 py-1 rounded text-xs border outline-none resize-y"
-                  style={{
-                    backgroundColor: 'var(--color-bg)',
-                    color: 'var(--color-text)',
-                    borderColor: 'var(--color-primary)',
-                  }}
-                />
+                <>
+                  <textarea
+                    value={draft[def.key] || ''}
+                    onChange={(e) => onDraftChange(def.key, e.target.value)}
+                    rows={3}
+                    placeholder="Enter system prompt..."
+                    className="w-full px-2 py-1 rounded text-xs border outline-none resize-y"
+                    style={{
+                      backgroundColor: 'var(--color-bg)',
+                      color: 'var(--color-text)',
+                      borderColor: 'var(--color-primary)',
+                    }}
+                  />
+                  {promptEditorKey === def.key && (
+                    <SystemPromptEditorModal
+                      value={draft[def.key] || ''}
+                      onChange={(v) => onDraftChange(def.key, v)}
+                      onClose={() => setPromptEditorKey(null)}
+                    />
+                  )}
+                </>
               ) : (
                 <input
                   type="number"

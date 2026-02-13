@@ -1,20 +1,26 @@
-import { app, Tray, Menu, nativeImage, BrowserWindow } from 'electron'
+import { app, Tray, Menu, nativeImage, nativeTheme, BrowserWindow } from 'electron'
 import * as path from 'path'
 
 function isAlive(win: BrowserWindow | null): win is BrowserWindow {
   return win !== null && !win.isDestroyed()
 }
 
+function trayIconPath(filename: string): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, filename)
+    : path.join(app.getAppPath(), 'build', filename)
+}
+
 function loadTrayIcon(): Electron.NativeImage {
-  // In packaged app, files are in process.resourcesPath (via extraResources).
-  // In dev, load from the project build/ directory.
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'trayTemplate.png')
-    : path.join(app.getAppPath(), 'build', 'trayTemplate.png')
-  const img = nativeImage.createFromPath(iconPath)
-  // setTemplateImage makes macOS auto-adapt for light/dark menu bars
-  img.setTemplateImage(true)
-  return img
+  if (process.platform === 'darwin') {
+    // macOS: template image auto-adapts for light/dark menu bars
+    const img = nativeImage.createFromPath(trayIconPath('trayTemplate.png'))
+    img.setTemplateImage(true)
+    return img
+  }
+  // Linux/Windows: pick icon variant based on system theme
+  const filename = nativeTheme.shouldUseDarkColors ? 'trayLight.png' : 'trayDark.png'
+  return nativeImage.createFromPath(trayIconPath(filename))
 }
 
 export function createTray(
@@ -79,6 +85,13 @@ export function createTray(
       showWindow()
     }
   })
+
+  // Swap icon when system theme changes (Linux/Windows)
+  if (process.platform !== 'darwin') {
+    nativeTheme.on('updated', () => {
+      tray.setImage(loadTrayIcon())
+    })
+  }
 
   return tray
 }
