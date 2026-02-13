@@ -183,6 +183,24 @@ export interface McpConnectionStatus {
   error?: string
 }
 
+// ─── Notification Types ─────────────────────────────────────
+
+export type NotificationEvent =
+  | 'success'
+  | 'max_tokens'
+  | 'refusal'
+  | 'error_max_turns'
+  | 'error_max_budget'
+  | 'error_execution'
+  | 'error_js'
+
+export interface NotificationEventConfig {
+  sound: boolean
+  desktop: boolean
+}
+
+export type NotificationConfig = Record<NotificationEvent, NotificationEventConfig>
+
 // ─── IPC / Runtime Types ──────────────────────────────────────
 
 export interface StreamChunk {
@@ -196,6 +214,8 @@ export interface StreamChunk {
   questions?: string
   mcpServers?: string  // JSON McpConnectionStatus[]
   conversationId?: number
+  stopReason?: string
+  resultSubtype?: string
 }
 
 export type StreamPart =

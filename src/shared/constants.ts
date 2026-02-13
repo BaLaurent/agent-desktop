@@ -80,6 +80,30 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
 
 export const DEFAULT_EXCLUDE_PATTERNS = 'node_modules,venv,.venv,__pycache__,dist,build,.next,.nuxt,target,.cache,.tox,.mypy_cache,.pytest_cache,.eggs,.gradle,.cargo,vendor,.turbo,.parcel-cache,coverage'
 
+// ─── Notification Event Definitions ─────────────────────────
+
+import type { NotificationConfig } from './types'
+
+export const NOTIFICATION_EVENTS = [
+  { key: 'success', label: 'Completed' },
+  { key: 'max_tokens', label: 'Token limit reached' },
+  { key: 'refusal', label: 'Request declined' },
+  { key: 'error_max_turns', label: 'Max turns reached' },
+  { key: 'error_max_budget', label: 'Budget exceeded' },
+  { key: 'error_execution', label: 'Execution error' },
+  { key: 'error_js', label: 'System error' },
+] as const
+
+export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
+  success:          { sound: true, desktop: true },
+  max_tokens:       { sound: true, desktop: true },
+  refusal:          { sound: true, desktop: true },
+  error_max_turns:  { sound: true, desktop: true },
+  error_max_budget: { sound: true, desktop: true },
+  error_execution:  { sound: true, desktop: true },
+  error_js:         { sound: true, desktop: false },
+}
+
 // ─── MCP Server Name Interface ───────────────────────────────
 
 export interface McpServerName {

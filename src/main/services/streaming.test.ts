@@ -204,6 +204,144 @@ describe('streamMessage — Skills settingSources', () => {
   })
 })
 
+describe('streamMessage — stopReason in done chunk', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+  })
+
+  function getDoneChunk(): Record<string, unknown> | undefined {
+    const call = mockSendFn.mock.calls.find(
+      (c: unknown[]) => c[0] === 'messages:stream' && (c[1] as { type: string }).type === 'done'
+    )
+    return call ? (call[1] as Record<string, unknown>) : undefined
+  }
+
+  it('includes stopReason and resultSubtype from success result message', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const done = getDoneChunk()
+    expect(done).toBeDefined()
+    expect(done!.stopReason).toBe('end_turn')
+    expect(done!.resultSubtype).toBe('success')
+  })
+
+  it('includes resultSubtype for error_max_turns', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: { type: 'result', subtype: 'error_max_turns' },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const done = getDoneChunk()
+    expect(done!.resultSubtype).toBe('error_max_turns')
+  })
+
+  it('captures stop_reason refusal from result message', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: { type: 'result', subtype: 'success', stop_reason: 'refusal' },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const done = getDoneChunk()
+    expect(done!.stopReason).toBe('refusal')
+  })
+
+  it('sets stopReason to aborted on user abort', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockRejectedValue(Object.assign(new Error('abort'), { name: 'AbortError' })),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const done = getDoneChunk()
+    expect(done!.stopReason).toBe('aborted')
+  })
+
+  it('does not include stopReason when no result message was received', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const done = getDoneChunk()
+    expect(done).toBeDefined()
+    expect(done!.stopReason).toBeUndefined()
+    expect(done!.resultSubtype).toBeUndefined()
+  })
+})
+
 describe('streamMessage — system init (MCP status)', () => {
   beforeEach(() => {
     mockSendFn.mockClear()

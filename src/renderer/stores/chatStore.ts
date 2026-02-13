@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Message, Attachment, StreamChunk, StreamPart, AskUserQuestion, McpConnectionStatus } from '../../shared/types'
+import type { Message, Attachment, StreamChunk, StreamPart, AskUserQuestion, McpConnectionStatus, NotificationEvent, NotificationConfig } from '../../shared/types'
+import { DEFAULT_NOTIFICATION_CONFIG, NOTIFICATION_EVENTS } from '../../shared/constants'
 import { useSettingsStore } from './settingsStore'
 import { playCompletionSound, playErrorSound } from '../utils/notificationSound'
 
@@ -32,6 +33,31 @@ function syncViewFromBuffer(
 ): { streamParts: StreamPart[]; streamingContent: string } {
   const parts = (convId != null && buffers[convId]) ? buffers[convId] : []
   return { streamParts: parts, streamingContent: getTextFromParts(parts) }
+}
+
+function getNotificationConfig(settings: Record<string, string>): NotificationConfig {
+  const raw = settings.notificationConfig
+  if (!raw) return DEFAULT_NOTIFICATION_CONFIG
+  try {
+    const parsed = JSON.parse(raw) as Partial<NotificationConfig>
+    return { ...DEFAULT_NOTIFICATION_CONFIG, ...parsed }
+  } catch {
+    return DEFAULT_NOTIFICATION_CONFIG
+  }
+}
+
+function mapToNotificationEvent(stopReason?: string, resultSubtype?: string): NotificationEvent {
+  if (stopReason === 'refusal') return 'refusal'
+  if (stopReason === 'max_tokens') return 'max_tokens'
+  if (resultSubtype === 'error_max_turns') return 'error_max_turns'
+  if (resultSubtype === 'error_max_budget_usd') return 'error_max_budget'
+  if (resultSubtype === 'error_during_execution') return 'error_execution'
+  return 'success'
+}
+
+function getEventLabel(event: NotificationEvent): string {
+  const entry = NOTIFICATION_EVENTS.find((e) => e.key === event)
+  return entry?.label ?? 'Response complete'
 }
 
 function cleanupStreamBuffer(
@@ -345,10 +371,19 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'done': {
       const doneSettings = useSettingsStore.getState().settings
-      if (doneSettings.notificationSounds === 'true') {
-        playCompletionSound()
-        if (document.hidden) {
-          window.agent.system.showNotification('Agent Desktop', 'Response complete').catch(() => {})
+      if (doneSettings.notificationSounds === 'true' && chunk.stopReason !== 'aborted') {
+        const event = mapToNotificationEvent(chunk.stopReason, chunk.resultSubtype)
+        const config = getNotificationConfig(doneSettings)
+        const eventConfig = config[event]
+        if (eventConfig.sound) {
+          if (event === 'success') {
+            playCompletionSound()
+          } else {
+            playErrorSound()
+          }
+        }
+        if (eventConfig.desktop && document.hidden) {
+          window.agent.system.showNotification('Agent Desktop', getEventLabel(event)).catch(() => {})
         }
       }
       useChatStore.setState(cleanupStreamBuffer(store, bufferKey))
@@ -358,7 +393,14 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
     case 'error': {
       const errSettings = useSettingsStore.getState().settings
       if (errSettings.notificationSounds === 'true') {
-        playErrorSound()
+        const config = getNotificationConfig(errSettings)
+        const eventConfig = config.error_js
+        if (eventConfig.sound) {
+          playErrorSound()
+        }
+        if (eventConfig.desktop && document.hidden) {
+          window.agent.system.showNotification('Agent Desktop', getEventLabel('error_js')).catch(() => {})
+        }
       }
       useChatStore.setState({
         error: chunk.content ?? 'Stream error',

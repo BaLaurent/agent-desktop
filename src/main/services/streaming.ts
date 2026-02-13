@@ -83,6 +83,7 @@ interface StreamEventMessage {
 interface ResultMessage {
   type: 'result'
   subtype?: string
+  stop_reason?: string
   tool_name?: string
   tool_use_id?: string
   summary?: string
@@ -125,6 +126,9 @@ export async function streamMessage(
   let currentToolBlockId: string | null = null
   // Track AskUserQuestion tool IDs to suppress them from regular tool streaming/persistence
   const askUserToolIds = new Set<string>()
+  // Capture SDK result metadata for notification routing in the renderer
+  let lastStopReason: string | undefined
+  let lastResultSubtype: string | undefined
 
   try {
     sendChunk('text', '', convExtra)
@@ -353,6 +357,9 @@ export async function streamMessage(
         }
       } else if (msg.type === 'result') {
         const result = msg as ResultMessage
+        // Capture stop_reason and subtype from every result message
+        if (result.stop_reason) lastStopReason = result.stop_reason
+        if (result.subtype) lastResultSubtype = result.subtype
         if (result.subtype === 'tool_result' || result.tool_name) {
           const toolName = result.tool_name || 'tool'
           const toolId = result.tool_use_id || `tool_${Date.now()}`
@@ -400,14 +407,18 @@ export async function streamMessage(
       }
     }
 
-    sendChunk('done', undefined, convExtra)
+    sendChunk('done', undefined, {
+      ...convExtra,
+      ...(lastStopReason ? { stopReason: lastStopReason } : {}),
+      ...(lastResultSubtype ? { resultSubtype: lastResultSubtype } : {}),
+    })
   } catch (err: unknown) {
     if (
       err instanceof Error &&
       (err.name === 'AbortError' || err.message.includes('abort'))
     ) {
       aborted = true
-      sendChunk('done', undefined, convExtra)
+      sendChunk('done', undefined, { ...convExtra, stopReason: 'aborted' })
     } else {
       const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
       console.error('[streaming] Error:', err)

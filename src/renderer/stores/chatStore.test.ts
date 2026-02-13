@@ -1,6 +1,16 @@
+import { vi } from 'vitest'
 import { mockAgent, capturedStreamListener } from '../__tests__/setup'
 import { useChatStore } from './chatStore'
 import type { StreamChunk } from '../../shared/types'
+import { useSettingsStore } from './settingsStore'
+import { DEFAULT_NOTIFICATION_CONFIG } from '../../shared/constants'
+
+// Mock notification sounds — jsdom has no AudioContext
+vi.mock('../utils/notificationSound', () => ({
+  playCompletionSound: vi.fn(),
+  playErrorSound: vi.fn(),
+}))
+import { playCompletionSound, playErrorSound } from '../utils/notificationSound'
 
 function getStreamListener(): (chunk: StreamChunk) => void {
   if (!capturedStreamListener) throw new Error('Stream listener was not captured — chatStore module did not register onStream')
@@ -741,6 +751,139 @@ describe('chatStore', () => {
       expect(state.isStreaming).toBe(true)
       expect(state.streamParts).toEqual([{ type: 'text', content: 'conv1 data' }])
       expect(state.streamingContent).toBe('conv1 data')
+    })
+  })
+
+  describe('notification events', () => {
+    const listener = () => getStreamListener()
+
+    beforeEach(() => {
+      vi.mocked(playCompletionSound).mockClear()
+      vi.mocked(playErrorSound).mockClear()
+      mockAgent.system.showNotification.mockClear()
+      // Set master toggle ON with default config
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+        },
+      })
+      useChatStore.setState({
+        activeConversationId: 1,
+        isStreaming: true,
+        streamBuffers: { 1: [{ type: 'text', content: 'data' }] },
+      })
+    })
+
+    it('plays completion sound for success event', () => {
+      listener()({ type: 'done', conversationId: 1 })
+      expect(playCompletionSound).toHaveBeenCalledTimes(1)
+      expect(playErrorSound).not.toHaveBeenCalled()
+    })
+
+    it('plays error sound for error_max_turns event', () => {
+      listener()({ type: 'done', conversationId: 1, resultSubtype: 'error_max_turns' })
+      expect(playErrorSound).toHaveBeenCalledTimes(1)
+      expect(playCompletionSound).not.toHaveBeenCalled()
+    })
+
+    it('plays error sound for refusal event', () => {
+      listener()({ type: 'done', conversationId: 1, stopReason: 'refusal' })
+      expect(playErrorSound).toHaveBeenCalledTimes(1)
+      expect(playCompletionSound).not.toHaveBeenCalled()
+    })
+
+    it('plays error sound for max_tokens event', () => {
+      listener()({ type: 'done', conversationId: 1, stopReason: 'max_tokens' })
+      expect(playErrorSound).toHaveBeenCalledTimes(1)
+    })
+
+    it('plays error sound for error_js event on error chunk', () => {
+      listener()({ type: 'error', content: 'Something broke', conversationId: 1 })
+      expect(playErrorSound).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not play sound when event has sound: false', () => {
+      const config = { ...DEFAULT_NOTIFICATION_CONFIG, success: { sound: false, desktop: false } }
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(config),
+        },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(playCompletionSound).not.toHaveBeenCalled()
+      expect(playErrorSound).not.toHaveBeenCalled()
+    })
+
+    it('does not play any sound for aborted streams', () => {
+      listener()({ type: 'done', conversationId: 1, stopReason: 'aborted' })
+      expect(playCompletionSound).not.toHaveBeenCalled()
+      expect(playErrorSound).not.toHaveBeenCalled()
+    })
+
+    it('master toggle OFF disables all notifications', () => {
+      useSettingsStore.setState({
+        settings: { notificationSounds: 'false' },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(playCompletionSound).not.toHaveBeenCalled()
+      expect(playErrorSound).not.toHaveBeenCalled()
+    })
+
+    it('master toggle OFF disables error notifications too', () => {
+      useSettingsStore.setState({
+        settings: { notificationSounds: 'false' },
+      })
+
+      listener()({ type: 'error', content: 'fail', conversationId: 1 })
+      expect(playErrorSound).not.toHaveBeenCalled()
+    })
+
+    it('shows desktop notification when document is hidden and desktop: true', () => {
+      Object.defineProperty(document, 'hidden', { value: true, writable: true, configurable: true })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(mockAgent.system.showNotification).toHaveBeenCalledWith('Agent Desktop', 'Completed')
+
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+    })
+
+    it('does not show desktop notification when document is visible', () => {
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(mockAgent.system.showNotification).not.toHaveBeenCalled()
+    })
+
+    it('does not show desktop notification when desktop: false for error_js', () => {
+      Object.defineProperty(document, 'hidden', { value: true, writable: true, configurable: true })
+
+      // error_js has desktop: false by default
+      listener()({ type: 'error', content: 'crash', conversationId: 1 })
+      expect(mockAgent.system.showNotification).not.toHaveBeenCalled()
+
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+    })
+
+    it('falls back to DEFAULT_NOTIFICATION_CONFIG when notificationConfig is missing', () => {
+      useSettingsStore.setState({
+        settings: { notificationSounds: 'true' },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(playCompletionSound).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to DEFAULT_NOTIFICATION_CONFIG when notificationConfig is invalid JSON', () => {
+      useSettingsStore.setState({
+        settings: { notificationSounds: 'true', notificationConfig: '{broken' },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(playCompletionSound).toHaveBeenCalledTimes(1)
     })
   })
 })
