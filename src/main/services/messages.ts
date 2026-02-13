@@ -54,9 +54,20 @@ export async function copyAttachmentsToSession(
 }
 
 export function buildMessageHistory(db: Database.Database, conversationId: number, limit = 100): Array<{ role: 'user' | 'assistant'; content: string }> {
-  const rows = db
-    .prepare('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?')
-    .all(conversationId, limit) as Pick<Message, 'role' | 'content'>[]
+  const conv = db.prepare('SELECT cleared_at FROM conversations WHERE id = ?').get(conversationId) as { cleared_at: string | null } | undefined
+
+  let query = 'SELECT role, content FROM messages WHERE conversation_id = ?'
+  const params: (number | string)[] = [conversationId]
+
+  if (conv?.cleared_at) {
+    query += ' AND created_at > ?'
+    params.push(conv.cleared_at)
+  }
+
+  query += ' ORDER BY created_at DESC LIMIT ?'
+  params.push(limit)
+
+  const rows = db.prepare(query).all(...params) as Pick<Message, 'role' | 'content'>[]
 
   return rows.reverse().map((row) => ({
     role: row.role,

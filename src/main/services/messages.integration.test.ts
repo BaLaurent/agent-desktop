@@ -227,6 +227,59 @@ describe('messages integration', () => {
     expect(abortStream).toHaveBeenCalled()
   })
 
+  describe('cleared_at context boundary', () => {
+    it('buildMessageHistory excludes messages before cleared_at', async () => {
+      const t1 = '2024-01-01T00:00:00.000Z'
+      const t2 = '2024-01-01T00:00:01.000Z'
+      const t3 = '2024-01-01T00:00:02.000Z'
+      const t4 = '2024-01-01T00:00:03.000Z'
+
+      db.prepare(
+        "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Old question', '[]', ?, ?)"
+      ).run(convId, t1, t1)
+      db.prepare(
+        "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'assistant', 'Old reply', '[]', ?, ?)"
+      ).run(convId, t2, t2)
+      db.prepare(
+        "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'New question', '[]', ?, ?)"
+      ).run(convId, t3, t3)
+      db.prepare(
+        "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'assistant', 'New reply', '[]', ?, ?)"
+      ).run(convId, t4, t4)
+
+      // Set cleared_at between old and new messages
+      db.prepare('UPDATE conversations SET cleared_at = ? WHERE id = ?').run(t2, convId)
+
+      // Send a message — buildMessageHistory should exclude old messages
+      mockStreamMessage.mockResolvedValueOnce({ content: 'Post-clear reply' })
+      await ipc.invoke('messages:send', convId, 'After clear')
+
+      // The history passed to streamMessage should only contain messages after cleared_at
+      const historyArg = mockStreamMessage.mock.calls[0][0] as { role: string; content: string }[]
+      const contents = historyArg.map(m => m.content)
+      expect(contents).not.toContain('Old question')
+      expect(contents).not.toContain('Old reply')
+      expect(contents).toContain('New question')
+      expect(contents).toContain('New reply')
+      expect(contents).toContain('After clear')
+    })
+
+    it('buildMessageHistory returns all messages when cleared_at is null', async () => {
+      const t1 = '2024-01-01T00:00:00.000Z'
+      db.prepare(
+        "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Hello', '[]', ?, ?)"
+      ).run(convId, t1, t1)
+
+      mockStreamMessage.mockResolvedValueOnce({ content: 'Reply' })
+      await ipc.invoke('messages:send', convId, 'World')
+
+      const historyArg = mockStreamMessage.mock.calls[0][0] as { role: string; content: string }[]
+      expect(historyArg).toHaveLength(2)
+      expect(historyArg[0].content).toBe('Hello')
+      expect(historyArg[1].content).toBe('World')
+    })
+  })
+
   describe('auto-title generation', () => {
     function mockSDKWithAssistantMessage(text: string) {
       const asyncIter = (async function* () {

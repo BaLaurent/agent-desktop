@@ -1,11 +1,22 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { StreamingIndicator } from './StreamingIndicator'
 import { useSettingsStore } from '../../stores/settingsStore'
 import type { Message, StreamPart } from '../../../shared/types'
 
+function ContextClearedDivider() {
+  return (
+    <div className="flex items-center gap-3 my-4" style={{ color: 'var(--color-text-muted)' }}>
+      <div className="flex-1 h-px" style={{ backgroundColor: 'var(--color-border)' }} />
+      <span className="text-xs whitespace-nowrap">Context cleared</span>
+      <div className="flex-1 h-px" style={{ backgroundColor: 'var(--color-border)' }} />
+    </div>
+  )
+}
+
 interface MessageListProps {
   messages: Message[]
+  clearedAt?: string | null
   isStreaming: boolean
   streamParts: StreamPart[]
   streamingContent: string
@@ -17,6 +28,7 @@ interface MessageListProps {
 
 export function MessageList({
   messages,
+  clearedAt,
   isStreaming,
   streamParts,
   streamingContent,
@@ -77,15 +89,26 @@ export function MessageList({
         className="h-full overflow-y-auto px-6 py-4"
       >
         <div className={chatLayout !== 'wide' ? 'max-w-3xl mx-auto' : undefined}>
-          {messages.map((msg, idx) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              isLast={idx === messages.length - 1}
-              onEdit={onEdit}
-              onRegenerate={onRegenerate}
-            />
-          ))}
+          {messages.map((msg, idx) => {
+            const showDivider = clearedAt
+              && idx > 0
+              && messages[idx - 1].created_at <= clearedAt
+              && msg.created_at > clearedAt
+            return (
+              <React.Fragment key={msg.id}>
+                {showDivider && <ContextClearedDivider />}
+                <MessageBubble
+                  message={msg}
+                  isLast={idx === messages.length - 1}
+                  onEdit={onEdit}
+                  onRegenerate={onRegenerate}
+                />
+              </React.Fragment>
+            )
+          })}
+          {clearedAt && messages.length > 0 && messages[messages.length - 1].created_at <= clearedAt && (
+            <ContextClearedDivider />
+          )}
 
           {isStreaming && (
             <StreamingIndicator

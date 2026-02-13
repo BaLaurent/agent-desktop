@@ -157,4 +157,9 @@ function runMigrations(db: Database.Database): void {
   if (!folderCols2.some((c) => c.name === 'default_cwd')) {
     db.exec('ALTER TABLE folders ADD COLUMN default_cwd TEXT')
   }
+
+  // Add cleared_at column to conversations (context boundary for /clear command)
+  if (!convCols.some((c) => c.name === 'cleared_at')) {
+    db.exec('ALTER TABLE conversations ADD COLUMN cleared_at TEXT')
+  }
 }

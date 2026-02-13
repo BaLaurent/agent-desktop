@@ -25,6 +25,7 @@ export interface Conversation {
   cwd: string | null
   kb_enabled: number // 0 or 1 (SQLite boolean)
   ai_overrides: string | null // JSON AIOverrides
+  cleared_at: string | null
   created_at: string
   updated_at: string
 }

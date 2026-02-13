@@ -112,6 +112,49 @@ describe('chatStore', () => {
     expect(state.streamBuffers).toEqual({})
   })
 
+  it('clearContext updates clearedAt state and calls conversations.update', async () => {
+    await useChatStore.getState().clearContext(42)
+
+    const state = useChatStore.getState()
+    expect(state.clearedAt).toBeTruthy()
+    // Should be a valid ISO date string
+    expect(new Date(state.clearedAt!).toISOString()).toBe(state.clearedAt)
+    expect(mockAgent.conversations.update).toHaveBeenCalledWith(42, expect.objectContaining({ cleared_at: state.clearedAt }))
+  })
+
+  it('clearChat resets clearedAt to null', () => {
+    useChatStore.setState({ clearedAt: '2024-01-01T00:00:00.000Z' })
+    useChatStore.getState().clearChat()
+    expect(useChatStore.getState().clearedAt).toBeNull()
+  })
+
+  it('loadMessages extracts clearedAt from conversation', async () => {
+    const clearedTs = '2024-06-15T12:00:00.000Z'
+    mockAgent.conversations.get.mockResolvedValueOnce({
+      id: 1,
+      title: 'Test',
+      cleared_at: clearedTs,
+      messages: [],
+    })
+
+    await useChatStore.getState().loadMessages(1)
+
+    expect(useChatStore.getState().clearedAt).toBe(clearedTs)
+  })
+
+  it('loadMessages sets clearedAt to null when conversation has no cleared_at', async () => {
+    useChatStore.setState({ clearedAt: '2024-01-01T00:00:00.000Z' })
+    mockAgent.conversations.get.mockResolvedValueOnce({
+      id: 1,
+      title: 'Test',
+      messages: [],
+    })
+
+    await useChatStore.getState().loadMessages(1)
+
+    expect(useChatStore.getState().clearedAt).toBeNull()
+  })
+
   it('regenerateLastResponse removes last assistant message and sets isStreaming', async () => {
     useChatStore.setState({
       messages: [

@@ -6,6 +6,7 @@ import { playCompletionSound, playErrorSound } from '../utils/notificationSound'
 
 interface ChatState {
   messages: Message[]
+  clearedAt: string | null
   isStreaming: boolean
   streamParts: StreamPart[]
   streamingContent: string
@@ -21,6 +22,7 @@ interface ChatState {
   editMessage: (messageId: number, content: string) => Promise<void>
   setActiveConversation: (id: number | null) => void
   clearChat: () => void
+  clearContext: (conversationId: number) => Promise<void>
 }
 
 function getTextFromParts(parts: StreamPart[]): string {
@@ -84,6 +86,7 @@ function cleanupStreamBuffer(
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
+  clearedAt: null,
   isStreaming: false,
   streamParts: [],
   streamingContent: '',
@@ -96,7 +99,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({ isLoading: true, error: s.error ?? null }))
     try {
       const convo = await window.agent.conversations.get(conversationId)
-      set({ messages: convo.messages, isLoading: false })
+      set({ messages: convo.messages, clearedAt: convo.cleared_at ?? null, isLoading: false })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load messages'
       set({ error: msg, isLoading: false })
@@ -229,7 +232,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearChat: () => {
-    set({ messages: [], streamParts: [], streamingContent: '', streamBuffers: {}, isStreaming: false, error: null, activeConversationId: null })
+    set({ messages: [], clearedAt: null, streamParts: [], streamingContent: '', streamBuffers: {}, isStreaming: false, error: null, activeConversationId: null })
+  },
+
+  clearContext: async (conversationId: number) => {
+    const clearedAt = new Date().toISOString()
+    await window.agent.conversations.update(conversationId, { cleared_at: clearedAt } as any)
+    set({ clearedAt })
   },
 }))
 

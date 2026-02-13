@@ -7,7 +7,7 @@ import type { SlashCommand } from '../../shared/types'
 
 const BUILTIN_COMMANDS: SlashCommand[] = [
   { name: 'compact', description: 'Compact conversation history', source: 'builtin' },
-  { name: 'clear', description: 'Clear conversation', source: 'builtin' },
+  { name: 'clear', description: 'Clear AI context (messages stay visible)', source: 'builtin' },
   { name: 'help', description: 'Show available commands', source: 'builtin' },
 ]
 

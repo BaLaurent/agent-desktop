@@ -55,7 +55,8 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       if (data.system_prompt !== undefined && data.system_prompt !== null) validateString(data.system_prompt as string, 'system_prompt', 100_000)
       if (data.cwd !== undefined && data.cwd !== null) validateString(data.cwd as string, 'cwd', 1000)
       if (data.ai_overrides !== undefined && data.ai_overrides !== null) validateString(data.ai_overrides as string, 'ai_overrides', 10_000)
-      const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides']
+      if (data.cleared_at !== undefined && data.cleared_at !== null) validateString(data.cleared_at as string, 'cleared_at', 50)
+      const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides', 'cleared_at']
       const fields: string[] = []
       const values: unknown[] = []
       for (const key of allowed) {

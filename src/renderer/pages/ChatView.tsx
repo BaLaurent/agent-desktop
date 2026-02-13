@@ -31,6 +31,7 @@ interface ChatViewProps {
 export function ChatView({ conversationId, conversationTitle, conversationModel, conversationCwd }: ChatViewProps) {
   const {
     messages,
+    clearedAt,
     isStreaming,
     streamParts,
     streamingContent,
@@ -281,8 +282,12 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     }
   }, [conversationId, isStreaming])
 
-  const handleSend = (content: string) => {
+  const handleSend = async (content: string) => {
     if (!conversationId) return
+    if (content.trim() === '/clear') {
+      await useChatStore.getState().clearContext(conversationId)
+      return
+    }
     sendMessage(conversationId, content, attachments.length > 0 ? attachments : undefined)
     setAttachments([])
   }
@@ -375,6 +380,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
         {/* Messages */}
         <MessageList
           messages={messages}
+          clearedAt={clearedAt}
           isStreaming={isStreaming}
           streamParts={streamParts}
           streamingContent={streamingContent}
