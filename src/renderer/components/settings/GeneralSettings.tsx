@@ -190,6 +190,28 @@ export function GeneralSettings() {
                       </div>
                     ))}
                   </div>
+
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-text-muted)]/10">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                        Desktop notification trigger
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        When to show desktop notifications
+                      </span>
+                    </div>
+                    <select
+                      value={settings.notificationDesktopMode ?? 'unfocused'}
+                      onChange={(e) => setSetting('notificationDesktopMode', e.target.value)}
+                      className="text-xs rounded px-2 py-1 border border-[var(--color-text-muted)]/20"
+                      style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)' }}
+                      aria-label="Desktop notification trigger mode"
+                    >
+                      <option value="hidden">Hidden only</option>
+                      <option value="unfocused">Unfocused</option>
+                      <option value="always">Always</option>
+                    </select>
+                  </div>
                 </div>
               )}
             </div>

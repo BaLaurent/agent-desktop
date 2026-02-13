@@ -54,6 +54,7 @@ function seedSettings(db: Database.Database): void {
     ['ai_skills', 'off'],
     ['files_excludePatterns', DEFAULT_EXCLUDE_PATTERNS],
     ['notificationConfig', JSON.stringify(DEFAULT_NOTIFICATION_CONFIG)],
+    ['notificationDesktopMode', 'unfocused'],
   ]
 
   for (const [key, value] of defaults) {

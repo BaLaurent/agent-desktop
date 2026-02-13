@@ -60,6 +60,15 @@ function getEventLabel(event: NotificationEvent): string {
   return entry?.label ?? 'Response complete'
 }
 
+function shouldShowDesktopNotification(mode: string): boolean {
+  switch (mode) {
+    case 'hidden': return document.hidden
+    case 'always': return true
+    case 'unfocused':
+    default: return !document.hasFocus()
+  }
+}
+
 function cleanupStreamBuffer(
   state: { streamBuffers: Record<number, StreamPart[]>; activeConversationId: number | null },
   conversationId: number
@@ -371,10 +380,13 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'done': {
       const doneSettings = useSettingsStore.getState().settings
+      console.log('[notif:done] master toggle notificationSounds =', doneSettings.notificationSounds, '| stopReason =', chunk.stopReason)
       if (doneSettings.notificationSounds === 'true' && chunk.stopReason !== 'aborted') {
         const event = mapToNotificationEvent(chunk.stopReason, chunk.resultSubtype)
+        console.log('[notif:done] event =', event, '| stopReason =', chunk.stopReason, '| resultSubtype =', chunk.resultSubtype)
         const config = getNotificationConfig(doneSettings)
         const eventConfig = config[event]
+        console.log('[notif:done] eventConfig =', JSON.stringify(eventConfig))
         if (eventConfig.sound) {
           if (event === 'success') {
             playCompletionSound()
@@ -382,7 +394,10 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
             playErrorSound()
           }
         }
-        if (eventConfig.desktop && document.hidden) {
+        const doneDesktopMode = doneSettings.notificationDesktopMode ?? 'unfocused'
+        console.log('[notif:done] desktop =', eventConfig.desktop, '| mode =', doneDesktopMode, '| shouldShow =', shouldShowDesktopNotification(doneDesktopMode))
+        if (eventConfig.desktop && shouldShowDesktopNotification(doneDesktopMode)) {
+          console.log('[notif:done] >>> showNotification called:', getEventLabel(event))
           window.agent.system.showNotification('Agent Desktop', getEventLabel(event)).catch(() => {})
         }
       }
@@ -392,13 +407,18 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'error': {
       const errSettings = useSettingsStore.getState().settings
+      console.log('[notif:error] master toggle notificationSounds =', errSettings.notificationSounds)
       if (errSettings.notificationSounds === 'true') {
         const config = getNotificationConfig(errSettings)
         const eventConfig = config.error_js
+        console.log('[notif:error] eventConfig =', JSON.stringify(eventConfig))
         if (eventConfig.sound) {
           playErrorSound()
         }
-        if (eventConfig.desktop && document.hidden) {
+        const errDesktopMode = errSettings.notificationDesktopMode ?? 'unfocused'
+        console.log('[notif:error] desktop =', eventConfig.desktop, '| mode =', errDesktopMode, '| shouldShow =', shouldShowDesktopNotification(errDesktopMode))
+        if (eventConfig.desktop && shouldShowDesktopNotification(errDesktopMode)) {
+          console.log('[notif:error] >>> showNotification called')
           window.agent.system.showNotification('Agent Desktop', getEventLabel('error_js')).catch(() => {})
         }
       }

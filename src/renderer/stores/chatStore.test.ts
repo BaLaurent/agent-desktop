@@ -842,8 +842,15 @@ describe('chatStore', () => {
       expect(playErrorSound).not.toHaveBeenCalled()
     })
 
-    it('shows desktop notification when document is hidden and desktop: true', () => {
+    it('shows desktop notification when document is hidden and desktop: true (hidden mode)', () => {
       Object.defineProperty(document, 'hidden', { value: true, writable: true, configurable: true })
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+          notificationDesktopMode: 'hidden',
+        },
+      })
 
       listener()({ type: 'done', conversationId: 1 })
       expect(mockAgent.system.showNotification).toHaveBeenCalledWith('Agent Desktop', 'Completed')
@@ -851,21 +858,125 @@ describe('chatStore', () => {
       Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
     })
 
-    it('does not show desktop notification when document is visible', () => {
+    it('does not show desktop notification when document is visible (hidden mode)', () => {
       Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+          notificationDesktopMode: 'hidden',
+        },
+      })
 
       listener()({ type: 'done', conversationId: 1 })
       expect(mockAgent.system.showNotification).not.toHaveBeenCalled()
     })
 
+    it('shows desktop notification when window lacks focus (unfocused mode)', () => {
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+      const originalHasFocus = document.hasFocus
+      document.hasFocus = () => false
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+          notificationDesktopMode: 'unfocused',
+        },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(mockAgent.system.showNotification).toHaveBeenCalledWith('Agent Desktop', 'Completed')
+
+      document.hasFocus = originalHasFocus
+    })
+
+    it('does not show desktop notification when window has focus (unfocused mode)', () => {
+      const originalHasFocus = document.hasFocus
+      document.hasFocus = () => true
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+          notificationDesktopMode: 'unfocused',
+        },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(mockAgent.system.showNotification).not.toHaveBeenCalled()
+
+      document.hasFocus = originalHasFocus
+    })
+
+    it('always shows desktop notification in always mode', () => {
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+      const originalHasFocus = document.hasFocus
+      document.hasFocus = () => true
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+          notificationDesktopMode: 'always',
+        },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(mockAgent.system.showNotification).toHaveBeenCalledWith('Agent Desktop', 'Completed')
+
+      document.hasFocus = originalHasFocus
+    })
+
+    it('defaults to unfocused mode when notificationDesktopMode setting is absent', () => {
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+      const originalHasFocus = document.hasFocus
+      document.hasFocus = () => false
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+        },
+      })
+
+      listener()({ type: 'done', conversationId: 1 })
+      expect(mockAgent.system.showNotification).toHaveBeenCalledWith('Agent Desktop', 'Completed')
+
+      document.hasFocus = originalHasFocus
+    })
+
     it('does not show desktop notification when desktop: false for error_js', () => {
       Object.defineProperty(document, 'hidden', { value: true, writable: true, configurable: true })
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
+          notificationDesktopMode: 'hidden',
+        },
+      })
 
       // error_js has desktop: false by default
       listener()({ type: 'error', content: 'crash', conversationId: 1 })
       expect(mockAgent.system.showNotification).not.toHaveBeenCalled()
 
       Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+    })
+
+    it('error handler respects always mode', () => {
+      Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true })
+      const originalHasFocus = document.hasFocus
+      document.hasFocus = () => true
+      // Enable desktop for error_js
+      const config = { ...DEFAULT_NOTIFICATION_CONFIG, error_js: { sound: true, desktop: true } }
+      useSettingsStore.setState({
+        settings: {
+          notificationSounds: 'true',
+          notificationConfig: JSON.stringify(config),
+          notificationDesktopMode: 'always',
+        },
+      })
+
+      listener()({ type: 'error', content: 'crash', conversationId: 1 })
+      expect(mockAgent.system.showNotification).toHaveBeenCalledWith('Agent Desktop', 'System error')
+
+      document.hasFocus = originalHasFocus
     })
 
     it('falls back to DEFAULT_NOTIFICATION_CONFIG when notificationConfig is missing', () => {
