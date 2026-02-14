@@ -68,16 +68,20 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
     }
   }, [streamingContent])
 
-  // Voice mode: detect stream completion → notification + bubble
+  // Stream completion → notification (both modes) + bubble (voice-only)
   useEffect(() => {
-    if (voiceMode && voiceSent && prevStreamingRef.current && !isStreaming) {
+    if (prevStreamingRef.current && !isStreaming) {
       const settings = useSettingsStore.getState().settings
       const responseContent = streamingContent || lastResponse
+
+      // Notification: fires for both text and voice modes
       if (settings.quickChat_responseNotification === 'true' && responseContent) {
         const preview = responseContent.slice(0, 100) + (responseContent.length > 100 ? '...' : '')
         window.agent.system.showNotification('Quick Chat', preview).catch(() => {})
       }
-      if (settings.quickChat_responseBubble === 'true') {
+
+      // Bubble repositioning: voice-only
+      if (voiceMode && voiceSent && settings.quickChat_responseBubble === 'true') {
         window.agent.quickChat.setBubbleMode().catch(() => {})
       }
     }
