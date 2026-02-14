@@ -62,6 +62,7 @@ function seedSettings(db: Database.Database): void {
     ['quickChat_conversationId', ''],
     ['quickChat_responseNotification', 'true'],
     ['quickChat_responseBubble', 'true'],
+    ['quickChat_voiceHeadless', 'false'],
   ]
 
   for (const [key, value] of defaults) {

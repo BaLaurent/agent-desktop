@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useChatStore } from '../../stores/chatStore'
+import { playListeningSound, playProcessingSound } from '../../utils/notificationSound'
 import { OverlayInput } from './OverlayInput'
 import { OverlayResponse } from './OverlayResponse'
 import { OverlayVoice } from './OverlayVoice'
@@ -10,6 +11,10 @@ interface OverlayChatProps {
 }
 
 export function OverlayChat({ voiceMode }: OverlayChatProps) {
+  const [headless] = useState(() => {
+    const p = new URLSearchParams(window.location.search)
+    return p.get('headless') === 'true'
+  })
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
   const [voiceSent, setVoiceSent] = useState(false)
@@ -50,6 +55,20 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
     init()
   }, [setActiveConversation])
 
+  // Headless: notify "Listening..." on mount
+  useEffect(() => {
+    if (!headless || !voiceMode) return
+    playListeningSound()
+    window.agent.system.showNotification('Quick Chat', 'Listening...').catch(() => {})
+  }, [headless, voiceMode])
+
+  // Headless: notify "Processing..." when voice recording stops
+  useEffect(() => {
+    if (!headless || !voiceSent) return
+    playProcessingSound()
+    window.agent.system.showNotification('Quick Chat', 'Processing...').catch(() => {})
+  }, [headless, voiceSent])
+
   // Escape key → hide overlay
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,8 +99,13 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
         window.agent.system.showNotification('Quick Chat', preview).catch(() => {})
       }
 
-      // Bubble repositioning: voice-only
-      if (voiceMode && voiceSent && settings.quickChat_responseBubble === 'true') {
+      // Headless: auto-hide after response
+      if (headless) {
+        window.agent.quickChat.hide().catch(() => {})
+      }
+
+      // Bubble repositioning: voice-only (non-headless)
+      if (!headless && voiceMode && voiceSent && settings.quickChat_responseBubble === 'true') {
         window.agent.quickChat.setBubbleMode().catch(() => {})
       }
     }

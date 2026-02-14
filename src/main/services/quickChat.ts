@@ -8,6 +8,7 @@ import { getMainWindow } from '../index'
 import { DEFAULT_MODEL } from '../../shared/constants'
 
 let overlayWindow: BrowserWindow | null = null
+let headlessActive = false
 let db: Database.Database
 
 // --- Conversation Management ---
@@ -52,7 +53,7 @@ function purgeConversation(): void {
 
 // --- Overlay Window ---
 
-function createOverlay(voice: boolean): BrowserWindow {
+function createOverlay(voice: boolean, headless = false): BrowserWindow {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
   const winW = 650
   const winH = voice ? 200 : 420
@@ -81,10 +82,12 @@ function createOverlay(voice: boolean): BrowserWindow {
   // Load same renderer with overlay query param
   const base = process.env.ELECTRON_RENDERER_URL || 'file://' + join(__dirname, '../renderer/index.html')
   const sep = base.includes('?') ? '&' : '?'
-  win.loadURL(`${base}${sep}mode=overlay&voice=${voice}`)
+  win.loadURL(`${base}${sep}mode=overlay&voice=${voice}&headless=${headless}`)
 
-  win.once('ready-to-show', () => win.show())
-  win.on('closed', () => { overlayWindow = null })
+  if (!headless) {
+    win.once('ready-to-show', () => win.show())
+  }
+  win.on('closed', () => { overlayWindow = null; headlessActive = false })
 
   registerStreamWindow(win)
   return win
@@ -92,7 +95,7 @@ function createOverlay(voice: boolean): BrowserWindow {
 
 export function showOverlay(mode: 'text' | 'voice'): void {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    if (overlayWindow.isVisible()) {
+    if (overlayWindow.isVisible() || headlessActive) {
       if (mode === 'voice') {
         overlayWindow.webContents.send('overlay:stopRecording')
       } else {
@@ -103,7 +106,13 @@ export function showOverlay(mode: 'text' | 'voice'): void {
     overlayWindow.destroy()
     overlayWindow = null
   }
-  overlayWindow = createOverlay(mode === 'voice')
+
+  const isHeadless = mode === 'voice' &&
+    (db.prepare("SELECT value FROM settings WHERE key = 'quickChat_voiceHeadless'")
+      .get() as { value: string } | undefined)?.value === 'true'
+
+  headlessActive = !!isHeadless
+  overlayWindow = createOverlay(mode === 'voice', isHeadless)
 }
 
 export function hideOverlay(): void {

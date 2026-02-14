@@ -41,6 +41,16 @@ export function QuickChatSettings() {
           />
           Show response bubble (voice mode)
         </label>
+
+        <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+          <input
+            type="checkbox"
+            checked={settings.quickChat_voiceHeadless === 'true'}
+            onChange={(e) => setSetting('quickChat_voiceHeadless', e.target.checked ? 'true' : 'false')}
+            className="accent-[var(--color-primary)]"
+          />
+          Headless voice mode (notifications only, no overlay)
+        </label>
       </div>
 
       {/* Purge */}
