@@ -145,12 +145,12 @@
 - **Gotcha**: `getProxyObject()` fails on portal Request paths — Hyprland doesn't expose `org.freedesktop.portal.Request` for introspection
 - **Gotcha**: do NOT include `preferred_trigger` in `BindShortcuts` — Hyprland portal ignores/warns on unknown data types
 - **Hyprland-specific**: portal doesn't auto-assign keybindings; must `hyprctl keyword bind MODS,key,global,:shortcut-id` (colon prefix = empty appid)
-- Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`); re-registered via `quickChat:reregisterShortcuts` IPC
+- Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`); re-registered via `quickChat:reregisterShortcuts` IPC
 - Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
 
 ## Keyboard Shortcuts & Deep Links
 - Dynamic shortcuts stored in `keyboard_shortcuts` table; parsed via `shortcutMatcher.ts`
-- Global shortcuts (`quick_chat`, `quick_voice`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
+- Global shortcuts (`quick_chat`, `quick_voice`, `show_app`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
 - Deep link: `agent://conversation/{id}`; tray "New Conversation" sends `tray:newConversation` IPC
 
 ## Auto-Title Generation
