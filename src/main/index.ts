@@ -110,6 +110,20 @@ if (!gotLock) {
     registerGlobalShortcuts(db, {
       onQuickChat: () => showOverlay('text'),
       onQuickVoice: () => showOverlay('voice'),
+      onShowApp: () => {
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+          mainWindow.hide()
+        } else {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            createWindow()
+          }
+          if (mainWindow) {
+            mainWindow.show()
+            if (mainWindow.isMinimized()) mainWindow.restore()
+            mainWindow.focus()
+          }
+        }
+      },
     })
 
     createTray(getMainWindow, createWindow)

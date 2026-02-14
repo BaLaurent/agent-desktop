@@ -6,6 +6,7 @@ import { registerWaylandShortcuts, unregisterWaylandShortcuts } from './waylandS
 interface ShortcutCallbacks {
   onQuickChat: () => void
   onQuickVoice: () => void
+  onShowApp: () => void
 }
 
 let db: Database.Database
@@ -37,16 +38,19 @@ export async function reregister(): Promise<void> {
 
   const chatKey = readShortcutKeybinding('quick_chat') || 'Alt+Space'
   const voiceKey = readShortcutKeybinding('quick_voice') || 'Alt+Shift+Space'
+  const showKey = readShortcutKeybinding('show_app') || 'Super+A'
 
   if (sessionType === 'wayland') {
     const ok = await registerWaylandShortcuts(
       [
         { id: 'quick-chat', accelerator: chatKey, description: 'Quick Chat' },
         { id: 'quick-voice', accelerator: voiceKey, description: 'Quick Voice' },
+        { id: 'show-app', accelerator: showKey, description: 'Show App' },
       ],
       (shortcutId) => {
         if (shortcutId === 'quick-chat') callbacks.onQuickChat()
         if (shortcutId === 'quick-voice') callbacks.onQuickVoice()
+        if (shortcutId === 'show-app') callbacks.onShowApp()
       }
     )
     waylandActive = ok
@@ -64,6 +68,11 @@ export async function reregister(): Promise<void> {
       globalShortcut.register(voiceKey, callbacks.onQuickVoice)
     } catch (e) {
       console.warn('[globalShortcuts] Failed to register', voiceKey, e)
+    }
+    try {
+      globalShortcut.register(showKey, callbacks.onShowApp)
+    } catch (e) {
+      console.warn('[globalShortcuts] Failed to register', showKey, e)
     }
   }
 }

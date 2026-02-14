@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useShortcutsStore } from '../../stores/shortcutsStore'
 import type { SystemInfo } from '../../../shared/types'
 
-const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice'])
+const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice', 'show_app'])
 
 function formatActionName(action: string): string {
   return action
@@ -45,6 +45,7 @@ const DEFAULT_KEYBINDINGS: Record<string, string> = {
   voice_input: 'CommandOrControl+Shift+V',
   quick_chat: 'Alt+Space',
   quick_voice: 'Alt+Shift+Space',
+  show_app: 'Super+A',
 }
 
 export function ShortcutSettings() {
@@ -116,7 +117,7 @@ export function ShortcutSettings() {
             className="text-xs font-semibold uppercase tracking-wide pt-2"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Global Shortcuts (Quick Chat)
+            Global Shortcuts
           </h4>
 
           {sessionType === 'wayland' && (

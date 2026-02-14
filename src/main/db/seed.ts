@@ -23,6 +23,7 @@ function seedShortcuts(db: Database.Database): void {
     ['cycle_permission_mode', 'Shift+Tab'],
     ['quick_chat', 'Alt+Space'],
     ['quick_voice', 'Alt+Shift+Space'],
+    ['show_app', 'Super+A'],
   ]
 
   for (const [action, keybinding] of defaults) {

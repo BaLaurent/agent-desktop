@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { KeyboardShortcut } from '../../shared/types'
 
-const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice'])
+const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice', 'show_app'])
 
 interface ShortcutsState {
   shortcuts: KeyboardShortcut[]
