@@ -82,6 +82,16 @@ describe('OverlayChat', () => {
     expect(screen.getByLabelText('Close overlay')).toBeInTheDocument()
   })
 
+  it('renders response only once when streaming', async () => {
+    useChatStore.setState({ isStreaming: true, streamingContent: 'Unique response text' })
+    await act(async () => {
+      render(<OverlayChat voiceMode={false} />)
+    })
+
+    const matches = screen.getAllByText('Unique response text')
+    expect(matches).toHaveLength(1)
+  })
+
   describe('response notification', () => {
     it('fires notification in text mode when streaming completes', async () => {
       useChatStore.setState({ isStreaming: true, streamingContent: 'Hello from AI' })

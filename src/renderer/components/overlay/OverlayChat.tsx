@@ -192,13 +192,6 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
         </>
       )}
 
-      {/* Voice mode: show response after sending */}
-      {voiceMode && voiceSent && (
-        <div className="flex-1 min-h-0">
-          <OverlayResponse content={streamingContent || lastResponse} />
-        </div>
-      )}
-
       {/* Error display */}
       {error && (
         <div
