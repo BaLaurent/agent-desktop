@@ -79,14 +79,20 @@ function createOverlay(voice: boolean, headless = false): BrowserWindow {
     },
   })
 
-  // Load same renderer with overlay query param
   const base = process.env.ELECTRON_RENDERER_URL || 'file://' + join(__dirname, '../renderer/index.html')
   const sep = base.includes('?') ? '&' : '?'
-  win.loadURL(`${base}${sep}mode=overlay&voice=${voice}&headless=${headless}`)
+  const url = `${base}${sep}mode=overlay&voice=${voice}&headless=${headless}`
 
+  // Use did-finish-load instead of ready-to-show — the latter never fires
+  // for transparent windows on Linux/Wayland
   if (!headless) {
-    win.once('ready-to-show', () => win.show())
+    win.webContents.once('did-finish-load', () => {
+      win.show()
+      win.focus()
+    })
   }
+
+  win.loadURL(url)
   win.on('closed', () => { overlayWindow = null; headlessActive = false })
 
   registerStreamWindow(win)

@@ -4,7 +4,7 @@
   "description": "Open-source Linux desktop client for Claude AI",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev -- --ozone-platform-hint=auto",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "electron-builder",
