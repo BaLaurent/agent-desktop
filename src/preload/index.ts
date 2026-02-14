@@ -101,7 +101,7 @@ const api: AgentAPI = {
     list: (cwd?: string, skillsMode?: string) => withTimeout(ipcRenderer.invoke('commands:list', cwd, skillsMode)),
   },
   quickChat: {
-    getConversationId: () => withTimeout(ipcRenderer.invoke('quickChat:getConversationId')),
+    getConversationId: (mode?: string) => withTimeout(ipcRenderer.invoke('quickChat:getConversationId', mode)),
     purge: () => withTimeout(ipcRenderer.invoke('quickChat:purge')),
     hide: () => withTimeout(ipcRenderer.invoke('quickChat:hide')),
     setBubbleMode: () => withTimeout(ipcRenderer.invoke('quickChat:setBubbleMode')),

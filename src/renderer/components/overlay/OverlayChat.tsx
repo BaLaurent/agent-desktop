@@ -47,7 +47,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
         document.documentElement.style.fontSize = settings.fontSize + 'px'
       }
 
-      const id = await window.agent.quickChat.getConversationId()
+      const id = await window.agent.quickChat.getConversationId(voiceMode ? 'voice' : 'text')
       setConversationId(id)
       setActiveConversation(id)
       setReady(true)

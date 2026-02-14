@@ -103,7 +103,7 @@ export interface AgentAPI {
     list(cwd?: string, skillsMode?: string): Promise<SlashCommand[]>
   }
   quickChat: {
-    getConversationId(): Promise<number>
+    getConversationId(mode?: 'text' | 'voice'): Promise<number>
     purge(): Promise<void>
     hide(): Promise<void>
     setBubbleMode(): Promise<void>

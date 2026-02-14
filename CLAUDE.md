@@ -134,6 +134,8 @@
 - Overlay components in `src/renderer/components/overlay/` — `OverlayChat` (container), `OverlayInput`, `OverlayResponse`, `OverlayVoice`
 - Settings in `QuickChatSettings.tsx`: response notification toggle, response bubble toggle, purge history
 - **Gotcha**: shortcut re-toggle while visible → voice mode sends `overlay:stopRecording`, text mode hides; only creates new window if hidden/destroyed
+- **Gotcha**: `ready-to-show` never fires for transparent BrowserWindows on Linux/Wayland — must use `webContents.did-finish-load` instead
+- **Gotcha**: overlay must use `h-screen` not `h-full` — `html`/`body`/`#root` lack `height: 100%`, so `h-full` resolves to `auto` and breaks `overflow-y-auto` scrolling
 
 ## Global Shortcuts (Wayland/X11)
 - Hybrid routing in `globalShortcuts.ts`: `getSessionType()` → X11 uses Electron `globalShortcut.register()`, Wayland uses XDG Desktop Portal

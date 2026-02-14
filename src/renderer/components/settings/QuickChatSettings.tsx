@@ -53,6 +53,26 @@ export function QuickChatSettings() {
         </label>
       </div>
 
+      {/* Conversations */}
+      <div className="flex flex-col gap-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+          Conversations
+        </h4>
+
+        <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+          <input
+            type="checkbox"
+            checked={settings.quickChat_separateVoiceConversation === 'true'}
+            onChange={(e) => setSetting('quickChat_separateVoiceConversation', e.target.checked ? 'true' : 'false')}
+            className="accent-[var(--color-primary)]"
+          />
+          Separate conversations for text and voice
+        </label>
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          When enabled, voice Quick Chat uses a dedicated conversation instead of sharing with text mode.
+        </span>
+      </div>
+
       {/* Purge */}
       <div className="flex flex-col gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>

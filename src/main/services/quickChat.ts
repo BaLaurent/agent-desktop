@@ -13,26 +13,33 @@ let db: Database.Database
 
 // --- Conversation Management ---
 
-function ensureConversation(): number {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'quickChat_conversationId'").get() as { value: string } | undefined
-  const existingId = row?.value ? Number(row.value) : 0
+function getSetting(key: string): string {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+  return row?.value || ''
+}
+
+function ensureConversation(mode?: 'text' | 'voice'): number {
+  const separate = getSetting('quickChat_separateVoiceConversation') === 'true'
+  const useVoiceKey = separate && mode === 'voice'
+  const settingKey = useVoiceKey ? 'quickChat_voiceConversationId' : 'quickChat_conversationId'
+  const title = useVoiceKey ? 'Quick Chat (Voice)' : 'Quick Chat'
+
+  const existingId = Number(getSetting(settingKey)) || 0
 
   if (existingId > 0) {
-    // Verify conversation still exists
     const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(existingId)
     if (exists) return existingId
   }
 
   // Create new Quick Chat conversation
-  const modelRow = db.prepare("SELECT value FROM settings WHERE key = 'ai_model'").get() as { value: string } | undefined
-  const model = modelRow?.value || DEFAULT_MODEL
+  const model = getSetting('ai_model') || DEFAULT_MODEL
 
   const result = db.prepare(
     `INSERT INTO conversations (title, model, updated_at) VALUES (?, ?, datetime('now'))`
-  ).run('Quick Chat', model)
+  ).run(title, model)
 
   const newId = result.lastInsertRowid as number
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('quickChat_conversationId', ?, datetime('now'))").run(String(newId))
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))").run(settingKey, String(newId))
 
   // Notify main window to refresh conversation list so Quick Chat appears in sidebar
   const win = getMainWindow()
@@ -44,10 +51,14 @@ function ensureConversation(): number {
 }
 
 function purgeConversation(): void {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'quickChat_conversationId'").get() as { value: string } | undefined
-  const id = row?.value ? Number(row.value) : 0
-  if (id > 0) {
-    db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(id)
+  const textId = Number(getSetting('quickChat_conversationId')) || 0
+  if (textId > 0) {
+    db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(textId)
+  }
+
+  const voiceId = Number(getSetting('quickChat_voiceConversationId')) || 0
+  if (voiceId > 0 && voiceId !== textId) {
+    db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(voiceId)
   }
 }
 
@@ -139,7 +150,9 @@ function setBubbleMode(): void {
 export function registerHandlers(ipcMain: IpcMain, database: Database.Database): void {
   db = database
 
-  ipcMain.handle('quickChat:getConversationId', () => ensureConversation())
+  ipcMain.handle('quickChat:getConversationId', (_e, mode?: string) =>
+    ensureConversation(mode === 'voice' ? 'voice' : 'text')
+  )
   ipcMain.handle('quickChat:purge', () => purgeConversation())
   ipcMain.handle('quickChat:hide', () => hideOverlay())
   ipcMain.handle('quickChat:setBubbleMode', () => setBubbleMode())

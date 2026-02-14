@@ -60,6 +60,8 @@ function seedSettings(db: Database.Database): void {
     ['globalShortcut_quickChat', 'Alt+Space'],
     ['globalShortcut_quickVoice', 'Alt+Shift+Space'],
     ['quickChat_conversationId', ''],
+    ['quickChat_voiceConversationId', ''],
+    ['quickChat_separateVoiceConversation', 'false'],
     ['quickChat_responseNotification', 'true'],
     ['quickChat_responseBubble', 'true'],
     ['quickChat_voiceHeadless', 'false'],
