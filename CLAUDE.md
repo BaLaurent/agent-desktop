@@ -127,8 +127,28 @@
 - **Markdown**: `react-markdown` + `remark-gfm` (NO `rehype-highlight`); `extractText()` required because children can be element arrays, not strings — without it, code blocks render `[object Object]`
 - **General Settings**: `sendOnEnter`, `autoScroll`, `minimizeToTray`, `notificationSounds` — behavior in setting name
 
+## Quick Chat
+- Global overlay (Alt+Space / Alt+Shift+Space) for quick agent interactions from anywhere on the desktop
+- Frameless, transparent, always-on-top BrowserWindow; loads same renderer with `?mode=overlay&voice={bool}` query params
+- Dedicated conversation persisted via `quickChat_conversationId` in settings table; auto-created on first use
+- Overlay components in `src/renderer/components/overlay/` — `OverlayChat` (container), `OverlayInput`, `OverlayResponse`, `OverlayVoice`
+- Settings in `QuickChatSettings.tsx`: response notification toggle, response bubble toggle, purge history
+- **Gotcha**: shortcut re-toggle while visible → voice mode sends `overlay:stopRecording`, text mode hides; only creates new window if hidden/destroyed
+
+## Global Shortcuts (Wayland/X11)
+- Hybrid routing in `globalShortcuts.ts`: `getSessionType()` → X11 uses Electron `globalShortcut.register()`, Wayland uses XDG Desktop Portal
+- Session detection priority: `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` (both can be set under XWayland)
+- Wayland: `dbus-next` (pure JS) → `CreateSession` → `BindShortcuts` → `Activated` signal via raw `AddMatch` + bus message handler
+- **Gotcha**: `bus.name` is null until D-Bus Hello handshake completes — must `await bus.once('connect')` before accessing
+- **Gotcha**: `getProxyObject()` fails on portal Request paths — Hyprland doesn't expose `org.freedesktop.portal.Request` for introspection
+- **Gotcha**: do NOT include `preferred_trigger` in `BindShortcuts` — Hyprland portal ignores/warns on unknown data types
+- **Hyprland-specific**: portal doesn't auto-assign keybindings; must `hyprctl keyword bind MODS,key,global,:shortcut-id` (colon prefix = empty appid)
+- Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`); re-registered via `quickChat:reregisterShortcuts` IPC
+- Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
+
 ## Keyboard Shortcuts & Deep Links
 - Dynamic shortcuts stored in `keyboard_shortcuts` table; parsed via `shortcutMatcher.ts`
+- Global shortcuts (`quick_chat`, `quick_voice`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
 - Deep link: `agent://conversation/{id}`; tray "New Conversation" sends `tray:newConversation` IPC
 
 ## Auto-Title Generation

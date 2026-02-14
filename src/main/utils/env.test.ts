@@ -12,7 +12,7 @@ vi.mock('fs', () => ({
 }))
 
 import * as fs from 'fs'
-import { enrichEnvironment, findBinaryInPath, isAppImage } from './env'
+import { enrichEnvironment, findBinaryInPath, getSessionType, isAppImage } from './env'
 
 describe('env utility', () => {
   beforeEach(() => {
@@ -172,6 +172,46 @@ describe('env utility', () => {
 
       expect(process.env.LD_PRELOAD).toBe('/usr/lib/libbar.so')
       expect(process.env.LD_PRELOAD_APPIMAGE).toContain('/tmp/.mount_AgentABCDEF')
+    })
+  })
+
+  describe('getSessionType', () => {
+    it('returns wayland when XDG_SESSION_TYPE is wayland', () => {
+      process.env.XDG_SESSION_TYPE = 'wayland'
+      expect(getSessionType()).toBe('wayland')
+    })
+
+    it('returns wayland when WAYLAND_DISPLAY is set without XDG_SESSION_TYPE', () => {
+      delete process.env.XDG_SESSION_TYPE
+      process.env.WAYLAND_DISPLAY = 'wayland-0'
+      expect(getSessionType()).toBe('wayland')
+    })
+
+    it('returns x11 when XDG_SESSION_TYPE is x11', () => {
+      process.env.XDG_SESSION_TYPE = 'x11'
+      delete process.env.WAYLAND_DISPLAY
+      expect(getSessionType()).toBe('x11')
+    })
+
+    it('returns x11 when DISPLAY is set without XDG_SESSION_TYPE or WAYLAND_DISPLAY', () => {
+      delete process.env.XDG_SESSION_TYPE
+      delete process.env.WAYLAND_DISPLAY
+      process.env.DISPLAY = ':0'
+      expect(getSessionType()).toBe('x11')
+    })
+
+    it('returns unknown when no session variables are set', () => {
+      delete process.env.XDG_SESSION_TYPE
+      delete process.env.WAYLAND_DISPLAY
+      delete process.env.DISPLAY
+      expect(getSessionType()).toBe('unknown')
+    })
+
+    it('returns wayland when both WAYLAND_DISPLAY and DISPLAY are set (XWayland)', () => {
+      delete process.env.XDG_SESSION_TYPE
+      process.env.WAYLAND_DISPLAY = 'wayland-0'
+      process.env.DISPLAY = ':0'
+      expect(getSessionType()).toBe('wayland')
     })
   })
 })
