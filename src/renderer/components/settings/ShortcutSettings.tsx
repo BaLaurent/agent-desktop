@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useShortcutsStore } from '../../stores/shortcutsStore'
+import type { SystemInfo } from '../../../shared/types'
+
+const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice'])
 
 function formatActionName(action: string): string {
   return action
@@ -17,7 +20,9 @@ function keyEventToAccelerator(e: KeyboardEvent): string | null {
   const key = e.key
   if (['Control', 'Meta', 'Alt', 'Shift'].includes(key)) return null
 
-  if (key.length === 1) {
+  if (key === ' ') {
+    parts.push('Space')
+  } else if (key.length === 1) {
     parts.push(key.toUpperCase())
   } else if (key === 'Escape') {
     return null
@@ -37,15 +42,19 @@ const DEFAULT_KEYBINDINGS: Record<string, string> = {
   focus_search: 'CommandOrControl+K',
   settings: 'CommandOrControl+,',
   voice_input: 'CommandOrControl+Shift+V',
+  quick_chat: 'Alt+Space',
+  quick_voice: 'Alt+Shift+Space',
 }
 
 export function ShortcutSettings() {
   const { shortcuts, loadShortcuts, updateShortcut } = useShortcutsStore()
   const [recordingId, setRecordingId] = useState<number | null>(null)
   const [conflict, setConflict] = useState<string | null>(null)
+  const [sessionType, setSessionType] = useState<SystemInfo['sessionType'] | null>(null)
 
   useEffect(() => {
     loadShortcuts()
+    window.agent.system.getInfo().then((info) => setSessionType(info.sessionType)).catch(() => {})
   }, [loadShortcuts])
 
   const handleKeyDown = useCallback(
@@ -86,84 +95,54 @@ export function ShortcutSettings() {
     }
   }, [recordingId, handleKeyDown])
 
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Table */}
-      <div className="flex flex-col">
-        {/* Header */}
-        <div
-          className="flex items-center py-2 border-b border-[var(--color-text-muted)]/20 text-xs font-medium"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          <span className="flex-1">Action</span>
-          <span className="w-48">Keybinding</span>
-          <span className="w-20 text-right">Edit</span>
-        </div>
+  const appShortcuts = shortcuts.filter((s) => !GLOBAL_SHORTCUT_ACTIONS.has(s.action))
+  const globalShortcuts = shortcuts.filter((s) => GLOBAL_SHORTCUT_ACTIONS.has(s.action))
 
-        {/* Rows */}
-        {shortcuts.map((shortcut) => (
-          <div
-            key={shortcut.id}
-            className="flex items-center py-3 border-b border-[var(--color-text-muted)]/10"
+  return (
+    <div className="flex flex-col gap-6">
+      {/* App shortcuts */}
+      <ShortcutTable
+        shortcuts={appShortcuts}
+        recordingId={recordingId}
+        conflict={conflict}
+        onRecord={(id) => { setConflict(null); setRecordingId(recordingId === id ? null : id) }}
+      />
+
+      {/* Global shortcuts */}
+      {globalShortcuts.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h4
+            className="text-xs font-semibold uppercase tracking-wide pt-2"
+            style={{ color: 'var(--color-text-muted)' }}
           >
-            <span
-              className="flex-1 text-sm"
-              style={{ color: 'var(--color-text)' }}
+            Global Shortcuts (Quick Chat)
+          </h4>
+
+          {sessionType === 'wayland' && (
+            <div
+              className="rounded px-3 py-2 text-xs leading-relaxed"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent)',
+                color: 'var(--color-text)',
+                border: '1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 30%, transparent)',
+              }}
+              role="alert"
             >
-              {formatActionName(shortcut.action)}
-            </span>
-            <span className="w-48">
-              {recordingId === shortcut.id ? (
-                <span className="flex flex-col gap-1">
-                  <span
-                    className="text-xs italic"
-                    style={{ color: 'var(--color-primary)' }}
-                  >
-                    Press a key combination...
-                  </span>
-                  {conflict && (
-                    <span
-                      className="text-xs"
-                      style={{ color: 'var(--color-warning)' }}
-                    >
-                      Conflicts with: {conflict}
-                    </span>
-                  )}
-                </span>
-              ) : (
-                <span
-                  className="inline-block px-2 py-1 rounded text-xs font-mono"
-                  style={{
-                    backgroundColor: 'var(--color-bg)',
-                    color: 'var(--color-text)',
-                    border: '1px solid var(--color-text-muted)',
-                    opacity: 0.3,
-                  }}
-                >
-                  {shortcut.keybinding}
-                </span>
-              )}
-            </span>
-            <span className="w-20 text-right">
-              <button
-                onClick={() => {
-                  setConflict(null)
-                  setRecordingId(
-                    recordingId === shortcut.id ? null : shortcut.id
-                  )
-                }}
-                className={`px-2 py-1 rounded text-xs font-medium transition-opacity hover:opacity-80 ${
-                  recordingId === shortcut.id
-                    ? 'bg-warning text-contrast'
-                    : 'bg-deep text-body'
-                }`}
-              >
-                {recordingId === shortcut.id ? 'Cancel' : 'Record'}
-              </button>
-            </span>
-          </div>
-        ))}
-      </div>
+              <strong>Wayland session detected.</strong> Global shortcuts use the XDG Desktop Portal.
+              If shortcuts don&apos;t work, verify your compositor supports{' '}
+              <code className="text-xs">org.freedesktop.portal.GlobalShortcuts</code>{' '}
+              (KDE Plasma 5.27+, Hyprland, GNOME 47+).
+            </div>
+          )}
+
+          <ShortcutTable
+            shortcuts={globalShortcuts}
+            recordingId={recordingId}
+            conflict={conflict}
+            onRecord={(id) => { setConflict(null); setRecordingId(recordingId === id ? null : id) }}
+          />
+        </div>
+      )}
 
       {/* Reset button */}
       <div className="pt-2">
@@ -185,6 +164,91 @@ export function ShortcutSettings() {
           Reset All to Defaults
         </button>
       </div>
+    </div>
+  )
+}
+
+function ShortcutTable({
+  shortcuts,
+  recordingId,
+  conflict,
+  onRecord,
+}: {
+  shortcuts: { id: number; action: string; keybinding: string }[]
+  recordingId: number | null
+  conflict: string | null
+  onRecord: (id: number) => void
+}) {
+  return (
+    <div className="flex flex-col">
+      {/* Header */}
+      <div
+        className="flex items-center py-2 border-b border-[var(--color-text-muted)]/20 text-xs font-medium"
+        style={{ color: 'var(--color-text-muted)' }}
+      >
+        <span className="flex-1">Action</span>
+        <span className="w-48">Keybinding</span>
+        <span className="w-20 text-right">Edit</span>
+      </div>
+
+      {/* Rows */}
+      {shortcuts.map((shortcut) => (
+        <div
+          key={shortcut.id}
+          className="flex items-center py-3 border-b border-[var(--color-text-muted)]/10"
+        >
+          <span
+            className="flex-1 text-sm"
+            style={{ color: 'var(--color-text)' }}
+          >
+            {formatActionName(shortcut.action)}
+          </span>
+          <span className="w-48">
+            {recordingId === shortcut.id ? (
+              <span className="flex flex-col gap-1">
+                <span
+                  className="text-xs italic"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  Press a key combination...
+                </span>
+                {conflict && (
+                  <span
+                    className="text-xs"
+                    style={{ color: 'var(--color-warning)' }}
+                  >
+                    Conflicts with: {conflict}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span
+                className="inline-block px-2 py-1 rounded text-xs font-mono"
+                style={{
+                  backgroundColor: 'var(--color-bg)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-text-muted)',
+                  opacity: 0.3,
+                }}
+              >
+                {shortcut.keybinding}
+              </span>
+            )}
+          </span>
+          <span className="w-20 text-right">
+            <button
+              onClick={() => onRecord(shortcut.id)}
+              className={`px-2 py-1 rounded text-xs font-medium transition-opacity hover:opacity-80 ${
+                recordingId === shortcut.id
+                  ? 'bg-warning text-contrast'
+                  : 'bg-deep text-body'
+              }`}
+            >
+              {recordingId === shortcut.id ? 'Cancel' : 'Record'}
+            </button>
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

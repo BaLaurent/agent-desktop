@@ -13,9 +13,9 @@ describe('seedDefaults', () => {
     db.close()
   })
 
-  it('seeds 9 default shortcuts', () => {
+  it('seeds 11 default shortcuts', () => {
     const shortcuts = db.prepare('SELECT * FROM keyboard_shortcuts').all() as any[]
-    expect(shortcuts).toHaveLength(9)
+    expect(shortcuts).toHaveLength(11)
     const actions = shortcuts.map((s: any) => s.action)
     expect(actions).toContain('new_conversation')
     expect(actions).toContain('send_message')
@@ -26,6 +26,8 @@ describe('seedDefaults', () => {
     expect(actions).toContain('settings')
     expect(actions).toContain('voice_input')
     expect(actions).toContain('cycle_permission_mode')
+    expect(actions).toContain('quick_chat')
+    expect(actions).toContain('quick_voice')
   })
 
   it('seeds default settings with camelCase keys', () => {
@@ -45,6 +47,6 @@ describe('seedDefaults', () => {
   it('does not duplicate on second call', () => {
     seedDefaults(db)
     const shortcuts = db.prepare('SELECT * FROM keyboard_shortcuts').all()
-    expect(shortcuts).toHaveLength(9)
+    expect(shortcuts).toHaveLength(11)
   })
 })

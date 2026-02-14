@@ -264,6 +264,7 @@ export interface SystemInfo {
   platform: string
   dbPath: string
   configPath: string
+  sessionType: 'wayland' | 'x11' | 'unknown'
 }
 
 export interface LogEntry {

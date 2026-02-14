@@ -72,6 +72,22 @@ describe('Conversations Service', () => {
     expect(updated.cwd).toBe('/tmp/test-dir')
   })
 
+  it('update cleared_at sets timestamp for context boundary', async () => {
+    const conv = await ipc.invoke('conversations:create', 'Clear Test') as any
+    const ts = '2024-06-15T12:00:00.000Z'
+    await ipc.invoke('conversations:update', conv.id, { cleared_at: ts })
+    const updated = await ipc.invoke('conversations:get', conv.id) as any
+    expect(updated.cleared_at).toBe(ts)
+  })
+
+  it('update cleared_at to null clears the boundary', async () => {
+    const conv = await ipc.invoke('conversations:create', 'Clear Reset') as any
+    await ipc.invoke('conversations:update', conv.id, { cleared_at: '2024-01-01T00:00:00Z' })
+    await ipc.invoke('conversations:update', conv.id, { cleared_at: null })
+    const updated = await ipc.invoke('conversations:get', conv.id) as any
+    expect(updated.cleared_at).toBeNull()
+  })
+
   it('delete cascades (messages are deleted via FK CASCADE)', async () => {
     const conv = await ipc.invoke('conversations:create', 'To Delete') as any
     db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)').run(conv.id, 'user', 'bye')

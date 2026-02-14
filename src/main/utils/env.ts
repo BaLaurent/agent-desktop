@@ -301,6 +301,17 @@ export async function ensureFreshMacOSToken(): Promise<void> {
   }
 }
 
+/** Detect whether the current session is Wayland, X11, or unknown. */
+export function getSessionType(): 'wayland' | 'x11' | 'unknown' {
+  if (process.env.XDG_SESSION_TYPE === 'wayland') return 'wayland'
+  // WAYLAND_DISPLAY being set means Wayland is active, even if DISPLAY is
+  // also set (XWayland). Hyprland/Sway/KDE all set both.
+  if (process.env.WAYLAND_DISPLAY) return 'wayland'
+  if (process.env.XDG_SESSION_TYPE === 'x11') return 'x11'
+  if (process.env.DISPLAY) return 'x11'
+  return 'unknown'
+}
+
 /**
  * Remove AppImage-injected paths from LD_LIBRARY_PATH.
  * AppImage prepends paths like /tmp/.mount_AgentXXX/usr/lib which contain

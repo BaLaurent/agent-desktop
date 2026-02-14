@@ -185,3 +185,10 @@ if (typeof window !== 'undefined' && window.agent?.events?.onConversationTitleUp
     }))
   })
 }
+
+// Listen for conversation list refresh (e.g. Quick Chat conversation created externally)
+if (typeof window !== 'undefined' && window.agent?.events?.onConversationsRefresh) {
+  window.agent.events.onConversationsRefresh(() => {
+    useConversationsStore.getState().loadConversations()
+  })
+}

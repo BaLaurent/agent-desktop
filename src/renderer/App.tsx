@@ -11,8 +11,17 @@ import { MainLayout } from './layouts/MainLayout'
 import { SettingsPage } from './pages/SettingsPage'
 import { parseAccelerator, matchesEvent } from './utils/shortcutMatcher'
 import { parseOverrides, resolveEffectiveSettings } from './utils/resolveAISettings'
+import { OverlayChat } from './components/overlay/OverlayChat'
+
+const params = new URLSearchParams(window.location.search)
+const isOverlay = params.get('mode') === 'overlay'
+const isVoiceMode = params.get('voice') === 'true'
 
 export default function App() {
+  if (isOverlay) {
+    return <OverlayChat voiceMode={isVoiceMode} />
+  }
+
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const openSettings = useCallback(() => setSettingsOpen(true), [])

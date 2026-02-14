@@ -91,6 +91,17 @@ describe('schema', () => {
     db.close()
   })
 
+  it('conversations has cleared_at column after migration', () => {
+    const db = createTestDb()
+    createTables(db)
+
+    const cols = db.pragma('table_info(conversations)') as { name: string }[]
+    const colNames = cols.map((c) => c.name)
+
+    expect(colNames).toContain('cleared_at')
+    db.close()
+  })
+
   it('mcp_servers type column defaults to stdio', () => {
     const db = createTestDb()
     createTables(db)

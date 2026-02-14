@@ -5,6 +5,9 @@ import { registerAllHandlers } from './ipc'
 import { createTray } from './services/tray'
 import { setupDeepLinks } from './services/deeplink'
 import { registerPreviewScheme, registerPreviewProtocol } from './services/protocol'
+import { registerStreamWindow } from './services/streaming'
+import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } from './services/globalShortcuts'
+import { showOverlay } from './services/quickChat'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
@@ -103,11 +106,17 @@ if (!gotLock) {
     registerAllHandlers(ipcMain, db)
     setupDeepLinks(app)
     createWindow()
+    registerStreamWindow(mainWindow!)
+    registerGlobalShortcuts(db, {
+      onQuickChat: () => showOverlay('text'),
+      onQuickVoice: () => showOverlay('voice'),
+    })
 
     createTray(getMainWindow, createWindow)
   })
 
   app.on('before-quit', () => {
+    unregisterGlobalShortcuts()
     closeDatabase()
   })
 

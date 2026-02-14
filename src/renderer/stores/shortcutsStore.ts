@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { KeyboardShortcut } from '../../shared/types'
 
+const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice'])
+
 interface ShortcutsState {
   shortcuts: KeyboardShortcut[]
   isLoading: boolean
@@ -26,6 +28,12 @@ export const useShortcutsStore = create<ShortcutsState>((set, get) => ({
     try {
       await window.agent.shortcuts.update(id, keybinding)
       await get().loadShortcuts()
+
+      // Re-register OS-level global shortcuts when a global action is changed
+      const shortcut = get().shortcuts.find((s) => s.id === id)
+      if (shortcut && GLOBAL_SHORTCUT_ACTIONS.has(shortcut.action)) {
+        await window.agent.quickChat.reregisterShortcuts()
+      }
     } catch {
       // let caller handle
     }

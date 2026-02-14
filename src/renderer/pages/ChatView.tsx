@@ -284,7 +284,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
 
   const handleSend = async (content: string) => {
     if (!conversationId) return
-    if (content.trim() === '/clear') {
+    const trimmed = content.trim()
+    if (trimmed === '/clear' || trimmed === '/compact') {
       await useChatStore.getState().clearContext(conversationId)
       return
     }

@@ -1,5 +1,6 @@
 import { app, Tray, Menu, nativeImage, nativeTheme, BrowserWindow } from 'electron'
 import * as path from 'path'
+import { showOverlay } from './quickChat'
 
 function isAlive(win: BrowserWindow | null): win is BrowserWindow {
   return win !== null && !win.isDestroyed()
@@ -62,6 +63,10 @@ export function createTray(
           win.webContents.send('tray:newConversation')
         }
       },
+    },
+    {
+      label: 'Quick Chat',
+      click: (): void => showOverlay('text'),
     },
     { type: 'separator' },
     {

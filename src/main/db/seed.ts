@@ -21,6 +21,8 @@ function seedShortcuts(db: Database.Database): void {
     ['settings', 'CommandOrControl+,'],
     ['voice_input', 'CommandOrControl+Shift+V'],
     ['cycle_permission_mode', 'Shift+Tab'],
+    ['quick_chat', 'Alt+Space'],
+    ['quick_voice', 'Alt+Shift+Space'],
   ]
 
   for (const [action, keybinding] of defaults) {
@@ -55,6 +57,11 @@ function seedSettings(db: Database.Database): void {
     ['files_excludePatterns', DEFAULT_EXCLUDE_PATTERNS],
     ['notificationConfig', JSON.stringify(DEFAULT_NOTIFICATION_CONFIG)],
     ['notificationDesktopMode', 'unfocused'],
+    ['globalShortcut_quickChat', 'Alt+Space'],
+    ['globalShortcut_quickVoice', 'Alt+Shift+Space'],
+    ['quickChat_conversationId', ''],
+    ['quickChat_responseNotification', 'true'],
+    ['quickChat_responseBubble', 'true'],
   ]
 
   for (const [key, value] of defaults) {

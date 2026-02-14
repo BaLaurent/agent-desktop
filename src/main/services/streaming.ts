@@ -1,3 +1,4 @@
+import { BrowserWindow } from 'electron'
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { buildCwdRestrictionHooks } from './cwdHooks'
@@ -27,13 +28,31 @@ function denyAllPending(): void {
   }
 }
 
+// Registry of windows that receive stream events (main window + overlay)
+const streamWindows = new Set<BrowserWindow>()
+
+export function registerStreamWindow(win: BrowserWindow): void {
+  streamWindows.add(win)
+  win.on('closed', () => streamWindows.delete(win))
+}
+
 function sendChunk(type: string, content?: string, extra?: Record<string, string | number>): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    console.error('[streaming] No window to send chunk:', type)
-    return
+  const payload = { type, content, ...extra }
+
+  // Broadcast to all registered windows
+  for (const win of streamWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('messages:stream', payload)
+    }
   }
-  win.webContents.send('messages:stream', { type, content, ...extra })
+
+  // Fallback: if no windows registered, try mainWindow (backward compat)
+  if (streamWindows.size === 0) {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('messages:stream', payload)
+    }
+  }
 }
 
 interface MessageParam {

@@ -102,6 +102,13 @@ export interface AgentAPI {
   commands: {
     list(cwd?: string, skillsMode?: string): Promise<SlashCommand[]>
   }
+  quickChat: {
+    getConversationId(): Promise<number>
+    purge(): Promise<void>
+    hide(): Promise<void>
+    setBubbleMode(): Promise<void>
+    reregisterShortcuts(): Promise<void>
+  }
   shortcuts: {
     list(): Promise<KeyboardShortcut[]>
     update(id: number, keybinding: string): Promise<void>
@@ -126,6 +133,8 @@ export interface AgentAPI {
     onTrayNewConversation(callback: () => void): () => void
     onDeeplinkNavigate(callback: (conversationId: number) => void): () => void
     onConversationTitleUpdated(callback: (data: { id: number; title: string }) => void): () => void
+    onOverlayStopRecording(callback: () => void): () => void
+    onConversationsRefresh(callback: () => void): () => void
   }
   window: {
     minimize(): void

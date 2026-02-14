@@ -51,6 +51,7 @@ describe('System Service', () => {
         platform: process.platform,
         dbPath: '/tmp/test-userData',
         configPath: '/tmp/test-userData',
+        sessionType: expect.stringMatching(/^(wayland|x11|unknown)$/),
       })
     })
   })

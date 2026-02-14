@@ -51,7 +51,7 @@
 - **Cascade**: `ai_overrides TEXT` (JSON) on both `folders` and `conversations` — priority: Conversation > Folder > Global
 - `null` / `{}` = inherited. Only overridden keys present in JSON
 - **System prompt cascade**: conversation `system_prompt` column > conv `ai_overrides` > folder `ai_overrides` > global setting
-- **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`
+- **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
 - **Permission Mode**: `ai_permissionMode` setting; `allowDangerouslySkipPermissions` only set when `bypassPermissions`
 - **Allowed Tools**: `ai_tools` = `'preset:claude_code'` (all) or JSON array; see `SDK_TOOLS` in `src/main/services/tools.ts`
 - **Skills**: `ai_skills` = `'off'`|`'user'`|`'project'`; non-off modes add `'Skill'` to `allowedTools` and set `settingSources`
@@ -108,6 +108,7 @@
 
 ## Slash Commands
 - Type `/` in chat input to open autocomplete dropdown with fuzzy filtering
+- **`/clear`**: sets `cleared_at` timestamp on conversation — messages before it stay visible in UI but are excluded from AI prompt history via `buildMessageHistory()` filter. `ContextClearedDivider` renders at the boundary in `MessageList`
 - Backend: `src/main/services/commands.ts` scans directories in priority order (later overrides earlier):
   1. **Builtin**: `compact`, `clear`, `help`
   2. **User**: `~/.claude/commands/*.md` (frontmatter `description:`)

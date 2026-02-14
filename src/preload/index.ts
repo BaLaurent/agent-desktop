@@ -100,6 +100,13 @@ const api: AgentAPI = {
   commands: {
     list: (cwd?: string, skillsMode?: string) => withTimeout(ipcRenderer.invoke('commands:list', cwd, skillsMode)),
   },
+  quickChat: {
+    getConversationId: () => withTimeout(ipcRenderer.invoke('quickChat:getConversationId')),
+    purge: () => withTimeout(ipcRenderer.invoke('quickChat:purge')),
+    hide: () => withTimeout(ipcRenderer.invoke('quickChat:hide')),
+    setBubbleMode: () => withTimeout(ipcRenderer.invoke('quickChat:setBubbleMode')),
+    reregisterShortcuts: () => withTimeout(ipcRenderer.invoke('quickChat:reregisterShortcuts')),
+  },
   shortcuts: {
     list: () => withTimeout(ipcRenderer.invoke('shortcuts:list')),
     update: (id, keybinding) => withTimeout(ipcRenderer.invoke('shortcuts:update', id, keybinding)),
@@ -135,6 +142,16 @@ const api: AgentAPI = {
       const handler = (_event: Electron.IpcRendererEvent, data: { id: number; title: string }) => callback(data)
       ipcRenderer.on('conversations:titleUpdated', handler)
       return () => { ipcRenderer.removeListener('conversations:titleUpdated', handler) }
+    },
+    onOverlayStopRecording: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('overlay:stopRecording', handler)
+      return () => { ipcRenderer.removeListener('overlay:stopRecording', handler) }
+    },
+    onConversationsRefresh: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('conversations:refresh', handler)
+      return () => { ipcRenderer.removeListener('conversations:refresh', handler) }
     },
   },
   window: {

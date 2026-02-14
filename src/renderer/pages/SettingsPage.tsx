@@ -9,6 +9,7 @@ import { ToolList } from '../components/tools/ToolList'
 import { McpServerList } from '../components/mcp/McpServerList'
 import { KnowledgeManager } from '../components/knowledge/KnowledgeManager'
 import { VoiceInputSettings } from '../components/settings/VoiceInputSettings'
+import { QuickChatSettings } from '../components/settings/QuickChatSettings'
 
 interface SettingsPageProps {
   onClose: () => void
@@ -20,6 +21,7 @@ const categories = [
   'Appearance',
   'Shortcuts',
   'Voice Input',
+  'Quick Chat',
   'MCP Servers',
   'Allowed Tools',
   'Knowledge Base',
@@ -35,6 +37,7 @@ const categoryComponents: Record<Category, React.FC | null> = {
   Appearance: AppearanceSettings,
   Shortcuts: ShortcutSettings,
   'Voice Input': VoiceInputSettings,
+  'Quick Chat': QuickChatSettings,
   'MCP Servers': McpServerList,
   'Allowed Tools': ToolList,
   'Knowledge Base': KnowledgeManager,

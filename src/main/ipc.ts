@@ -18,6 +18,7 @@ import { registerHandlers as shortcutsHandlers } from './services/shortcuts'
 import { registerHandlers as systemHandlers } from './services/system'
 import { registerHandlers as whisperHandlers } from './services/whisper'
 import { registerHandlers as commandsHandlers } from './services/commands'
+import { registerHandlers as quickChatHandlers } from './services/quickChat'
 
 const serviceModules = [
   authHandlers,
@@ -34,6 +35,7 @@ const serviceModules = [
   shortcutsHandlers,
   systemHandlers,
   whisperHandlers,
+  quickChatHandlers,
 ]
 
 /**

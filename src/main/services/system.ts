@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'
 import type { LogEntry } from '../../shared/types'
 import { app, dialog, shell, Notification } from 'electron'
+import { getSessionType } from '../utils/env'
 
 const LOG_BUFFER_MAX = 500
 const logBuffer: LogEntry[] = []
@@ -34,6 +35,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     platform: process.platform,
     dbPath: app.getPath('userData'),
     configPath: app.getPath('userData'),
+    sessionType: getSessionType(),
   }))
 
   ipcMain.handle('system:getLogs', async (_event, limit?: number) => {

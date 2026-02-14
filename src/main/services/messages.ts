@@ -468,12 +468,17 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
           updateConversationTimestamp(db, conversationId)
 
           // Auto-title on first assistant response (fire-and-forget)
-          const assistantCount = db.prepare(
-            "SELECT COUNT(*) as c FROM messages WHERE conversation_id = ? AND role = 'assistant'"
-          ).get(conversationId) as { c: number }
-          if (assistantCount.c === 1) {
-            generateConversationTitle(db, conversationId, content, responseContent)
-              .catch(err => console.error('[messages] Auto-title error:', err))
+          // Skip for Quick Chat conversation — its title stays fixed
+          const quickChatRow = db.prepare("SELECT value FROM settings WHERE key = 'quickChat_conversationId'").get() as { value: string } | undefined
+          const isQuickChat = quickChatRow?.value === String(conversationId)
+          if (!isQuickChat) {
+            const assistantCount = db.prepare(
+              "SELECT COUNT(*) as c FROM messages WHERE conversation_id = ? AND role = 'assistant'"
+            ).get(conversationId) as { c: number }
+            if (assistantCount.c === 1) {
+              generateConversationTitle(db, conversationId, content, responseContent)
+                .catch(err => console.error('[messages] Auto-title error:', err))
+            }
           }
 
           return assistantMsg

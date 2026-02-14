@@ -17,9 +17,9 @@ describe('Shortcuts Service', () => {
     db.close()
   })
 
-  it('list returns seeded shortcuts (9 from seed.ts)', async () => {
+  it('list returns seeded shortcuts (11 from seed.ts)', async () => {
     const shortcuts = await ipc.invoke('shortcuts:list') as any[]
-    expect(shortcuts).toHaveLength(9)
+    expect(shortcuts).toHaveLength(11)
   })
 
   it('shortcuts have action and keybinding fields', async () => {
