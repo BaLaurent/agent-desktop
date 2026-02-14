@@ -33,11 +33,18 @@ export function parseAccelerator(accel: string): ParsedShortcut {
   return { ctrl, shift, alt, key }
 }
 
+/** Normalise event.key to a canonical lowercase name for comparison with parseAccelerator output. */
+function normalizeEventKey(key: string): string {
+  // macOS Option+Space fires '\u00A0' (non-breaking space); treat as regular space
+  if (key === ' ' || key === '\u00A0') return 'space'
+  return key.toLowerCase()
+}
+
 export function matchesEvent(event: KeyboardEvent, parsed: ParsedShortcut): boolean {
   const ctrlMatch = (event.ctrlKey || event.metaKey) === parsed.ctrl
   const shiftMatch = event.shiftKey === parsed.shift
   const altMatch = event.altKey === parsed.alt
-  const keyMatch = event.key.toLowerCase() === parsed.key
+  const keyMatch = normalizeEventKey(event.key) === parsed.key
 
   return ctrlMatch && shiftMatch && altMatch && keyMatch
 }

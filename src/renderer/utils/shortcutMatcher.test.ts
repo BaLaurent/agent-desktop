@@ -103,4 +103,22 @@ describe('matchesEvent', () => {
     const event = makeEvent({ key: 'n', ctrlKey: true, shiftKey: true })
     expect(matchesEvent(event, parsed)).toBe(false)
   })
+
+  it('matches Alt+Space with event.key = space character', () => {
+    const parsed = parseAccelerator('Alt+Space')
+    const event = makeEvent({ key: ' ', altKey: true })
+    expect(matchesEvent(event, parsed)).toBe(true)
+  })
+
+  it('matches Alt+Space with macOS non-breaking space (\\u00A0)', () => {
+    const parsed = parseAccelerator('Alt+Space')
+    const event = makeEvent({ key: '\u00A0', altKey: true })
+    expect(matchesEvent(event, parsed)).toBe(true)
+  })
+
+  it('matches standalone Space', () => {
+    const parsed = parseAccelerator('Space')
+    const event = makeEvent({ key: ' ' })
+    expect(matchesEvent(event, parsed)).toBe(true)
+  })
 })
