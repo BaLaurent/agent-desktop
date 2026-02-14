@@ -55,7 +55,7 @@ function purgeConversation(): void {
 
 function createOverlay(voice: boolean, headless = false): BrowserWindow {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
-  const winW = 650
+  const winW = voice ? 400 : 650
   const winH = voice ? 200 : 420
   const x = Math.round((screenW - winW) / 2)
   const y = Math.round(screenH * 0.2)
