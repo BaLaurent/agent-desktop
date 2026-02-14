@@ -13,6 +13,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
   const [voiceSent, setVoiceSent] = useState(false)
+  const [lastResponse, setLastResponse] = useState('')
   const prevStreamingRef = useRef(false)
 
   const isStreaming = useChatStore((s) => s.isStreaming)
@@ -60,12 +61,20 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Capture last non-empty streaming content for bubble persistence
+  useEffect(() => {
+    if (streamingContent) {
+      setLastResponse(streamingContent)
+    }
+  }, [streamingContent])
+
   // Voice mode: detect stream completion → notification + bubble
   useEffect(() => {
     if (voiceMode && voiceSent && prevStreamingRef.current && !isStreaming) {
       const settings = useSettingsStore.getState().settings
-      if (settings.quickChat_responseNotification === 'true' && streamingContent) {
-        const preview = streamingContent.slice(0, 100) + (streamingContent.length > 100 ? '...' : '')
+      const responseContent = streamingContent || lastResponse
+      if (settings.quickChat_responseNotification === 'true' && responseContent) {
+        const preview = responseContent.slice(0, 100) + (responseContent.length > 100 ? '...' : '')
         window.agent.system.showNotification('Quick Chat', preview).catch(() => {})
       }
       if (settings.quickChat_responseBubble === 'true') {
@@ -73,11 +82,12 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
       }
     }
     prevStreamingRef.current = isStreaming
-  }, [isStreaming, voiceMode, voiceSent, streamingContent])
+  }, [isStreaming, voiceMode, voiceSent, streamingContent, lastResponse])
 
   const handleSend = useCallback(
     (text: string) => {
       if (!conversationId) return
+      setLastResponse('')
       sendMessage(conversationId, text)
     },
     [conversationId, sendMessage]
@@ -86,6 +96,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
   const handleVoiceTranscription = useCallback(
     (text: string) => {
       if (!conversationId || !text.trim()) return
+      setLastResponse('')
       setVoiceSent(true)
       sendMessage(conversationId, text.trim())
     },
@@ -148,7 +159,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
           <OverlayInput onSend={handleSend} isStreaming={isStreaming} />
           <div className="h-px" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
           <div className="flex-1 min-h-0">
-            <OverlayResponse content={streamingContent} />
+            <OverlayResponse content={streamingContent || lastResponse} />
           </div>
         </>
       )}
@@ -156,7 +167,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
       {/* Voice mode: show response after sending */}
       {voiceMode && voiceSent && (
         <div className="flex-1 min-h-0">
-          <OverlayResponse content={streamingContent} />
+          <OverlayResponse content={streamingContent || lastResponse} />
         </div>
       )}
 
