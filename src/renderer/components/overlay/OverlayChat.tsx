@@ -134,7 +134,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
   if (!ready) {
     return (
       <div
-        className="w-full h-full rounded-xl flex items-center justify-center"
+        className="w-screen h-screen rounded-xl flex items-center justify-center"
         style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
       >
         <div
@@ -147,7 +147,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
 
   return (
     <div
-      className="w-full h-full rounded-xl flex flex-col overflow-hidden"
+      className="w-screen h-screen rounded-xl flex flex-col overflow-hidden"
       style={{
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
         backdropFilter: 'blur(20px)',
@@ -186,9 +186,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
         <>
           <OverlayInput onSend={handleSend} isStreaming={isStreaming} />
           <div className="h-px" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
-          <div className="flex-1 min-h-0">
-            <OverlayResponse content={streamingContent || lastResponse} />
-          </div>
+          <OverlayResponse content={streamingContent || lastResponse} />
         </>
       )}
 

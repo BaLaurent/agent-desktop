@@ -14,9 +14,11 @@ describe('OverlayResponse', () => {
     vi.clearAllMocks()
   })
 
-  it('renders nothing when content is empty string', () => {
+  it('renders empty container when content is empty string', () => {
     const { container } = render(<OverlayResponse content="" />)
-    expect(container.innerHTML).toBe('')
+    const scrollDiv = container.firstChild as HTMLElement
+    expect(scrollDiv).toBeTruthy()
+    expect(scrollDiv.querySelector('[data-testid="markdown"]')).toBeNull()
   })
 
   it('renders markdown content when provided', () => {
@@ -24,10 +26,12 @@ describe('OverlayResponse', () => {
     expect(screen.getByTestId('markdown')).toHaveTextContent('Hello **world**')
   })
 
-  it('renders the scrollable container with max height', () => {
+  it('renders as a flex-1 scrollable container', () => {
     const { container } = render(<OverlayResponse content="some content" />)
     const scrollDiv = container.firstChild as HTMLElement
-    expect(scrollDiv.style.maxHeight).toBe('260px')
+    expect(scrollDiv.className).toContain('flex-1')
+    expect(scrollDiv.className).toContain('min-h-0')
+    expect(scrollDiv.className).toContain('overflow-y-auto')
   })
 
   it('auto-scrolls container to bottom when content changes', () => {
@@ -60,11 +64,5 @@ describe('OverlayResponse', () => {
     if (originalScrollHeight) {
       Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalScrollHeight)
     }
-  })
-
-  it('applies overflow-y-auto class for scrolling', () => {
-    const { container } = render(<OverlayResponse content="text" />)
-    const scrollDiv = container.firstChild as HTMLElement
-    expect(scrollDiv.className).toContain('overflow-y-auto')
   })
 })

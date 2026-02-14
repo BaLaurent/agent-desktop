@@ -15,18 +15,15 @@ export function OverlayResponse({ content }: OverlayResponseProps) {
     }
   }, [content])
 
-  if (!content) return null
-
   return (
     <div
       ref={scrollRef}
-      className="overflow-y-auto px-4 py-2 text-sm leading-relaxed"
+      className="flex-1 min-h-0 overflow-y-auto px-4 py-2 text-sm leading-relaxed"
       style={{
-        maxHeight: 260,
         color: 'var(--color-text, #e0e0e0)',
       }}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      {content && <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>}
     </div>
   )
 }
