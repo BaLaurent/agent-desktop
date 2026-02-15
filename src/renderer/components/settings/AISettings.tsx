@@ -264,9 +264,9 @@ export function AISettings() {
                     }}
                     className="rounded"
                   />
-                  <span className="truncate">{skill.name}</span>
+                  <span className="flex-shrink-0">{skill.name}</span>
                   {skill.description && (
-                    <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                    <span className="text-xs truncate min-w-0" style={{ color: 'var(--color-text-muted)' }}>
                       — {skill.description}
                     </span>
                   )}
