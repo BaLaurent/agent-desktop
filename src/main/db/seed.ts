@@ -12,14 +12,14 @@ function seedShortcuts(db: Database.Database): void {
   )
 
   const defaults: [string, string][] = [
-    ['new_conversation', 'CommandOrControl+N'],
+    ['new_conversation', 'Ctrl+N'],
     ['send_message', 'Enter'],
     ['stop_generation', 'Escape'],
-    ['toggle_sidebar', 'CommandOrControl+B'],
-    ['toggle_panel', 'CommandOrControl+J'],
-    ['focus_search', 'CommandOrControl+K'],
-    ['settings', 'CommandOrControl+,'],
-    ['voice_input', 'CommandOrControl+Shift+V'],
+    ['toggle_sidebar', 'Ctrl+B'],
+    ['toggle_panel', 'Ctrl+J'],
+    ['focus_search', 'Ctrl+K'],
+    ['settings', 'Ctrl+,'],
+    ['voice_input', 'Ctrl+Shift+V'],
     ['cycle_permission_mode', 'Shift+Tab'],
     ['quick_chat', 'Alt+Space'],
     ['quick_voice', 'Alt+Shift+Space'],
