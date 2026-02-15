@@ -2,7 +2,8 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { getDatabase, closeDatabase } from './db/database'
 import { registerAllHandlers } from './ipc'
-import { createTray } from './services/tray'
+import { createTray, setTrayUpdateCallbacks, rebuildTrayMenu } from './services/tray'
+import { initAutoUpdater, stopAutoUpdater, checkForUpdates, installUpdate } from './services/updater'
 import { setupDeepLinks } from './services/deeplink'
 import { registerPreviewScheme, registerPreviewProtocol } from './services/protocol'
 import { registerStreamWindow } from './services/streaming'
@@ -127,10 +128,16 @@ if (!gotLock) {
     })
 
     createTray(getMainWindow, createWindow)
+
+    if (app.isPackaged) {
+      setTrayUpdateCallbacks(checkForUpdates, installUpdate)
+      initAutoUpdater(getMainWindow, () => rebuildTrayMenu(true))
+    }
   })
 
   app.on('before-quit', () => {
     unregisterGlobalShortcuts()
+    stopAutoUpdater()
     closeDatabase()
   })
 

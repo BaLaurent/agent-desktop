@@ -1,5 +1,9 @@
 appId: com.agent.desktop
 productName: Agent Desktop
+publish:
+  - provider: github
+    owner: BaLaurent
+    repo: agent-desktop
 directories:
   buildResources: build
   output: release

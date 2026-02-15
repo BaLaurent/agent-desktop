@@ -2,6 +2,13 @@ import { app, Tray, Menu, nativeImage, nativeTheme, BrowserWindow } from 'electr
 import * as path from 'path'
 import { showOverlay } from './quickChat'
 
+let trayInstance: Tray | null = null
+let getWindowFn: (() => BrowserWindow | null) | null = null
+let ensureWindowFn: (() => void) | null = null
+let updateReadyFlag = false
+let onCheckUpdateFn: (() => void) | null = null
+let onInstallUpdateFn: (() => void) | null = null
+
 function isAlive(win: BrowserWindow | null): win is BrowserWindow {
   return win !== null && !win.isDestroyed()
 }
@@ -24,29 +31,24 @@ function loadTrayIcon(): Electron.NativeImage {
   return nativeImage.createFromPath(trayIconPath(filename))
 }
 
-export function createTray(
-  getWindow: () => BrowserWindow | null,
-  ensureWindow: () => void,
-): Tray {
-  const tray = new Tray(loadTrayIcon())
-
-  function showWindow(): void {
-    let win = getWindow()
-    if (!isAlive(win)) {
-      ensureWindow()
-      win = getWindow()
-    }
-    if (isAlive(win)) {
-      win.show()
-      win.focus()
-    }
+function showWindow(): void {
+  let win = getWindowFn?.() ?? null
+  if (!isAlive(win)) {
+    ensureWindowFn?.()
+    win = getWindowFn?.() ?? null
   }
+  if (isAlive(win)) {
+    win.show()
+    win.focus()
+  }
+}
 
-  const contextMenu = Menu.buildFromTemplate([
+function buildContextMenu(): Menu {
+  const items: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'Show/Hide',
       click: (): void => {
-        const win = getWindow()
+        const win = getWindowFn?.() ?? null
         if (isAlive(win) && win.isVisible()) {
           win.hide()
         } else {
@@ -58,7 +60,7 @@ export function createTray(
       label: 'New Conversation',
       click: (): void => {
         showWindow()
-        const win = getWindow()
+        const win = getWindowFn?.() ?? null
         if (isAlive(win)) {
           win.webContents.send('tray:newConversation')
         }
@@ -69,21 +71,68 @@ export function createTray(
       click: (): void => showOverlay('text'),
     },
     { type: 'separator' },
-    {
-      label: 'Quit',
-      click: (): void => {
-        const win = getWindow()
-        if (isAlive(win)) win.destroy()
-        app.quit()
-      },
+  ]
+
+  // Update menu items (only when callbacks are wired)
+  if (onCheckUpdateFn || onInstallUpdateFn) {
+    if (updateReadyFlag && onInstallUpdateFn) {
+      items.push({
+        label: 'Restart to Update',
+        click: (): void => onInstallUpdateFn?.(),
+      })
+    } else if (onCheckUpdateFn) {
+      items.push({
+        label: 'Check for Updates',
+        click: (): void => onCheckUpdateFn?.(),
+      })
+    }
+    items.push({ type: 'separator' })
+  }
+
+  items.push({
+    label: 'Quit',
+    click: (): void => {
+      const win = getWindowFn?.() ?? null
+      if (isAlive(win)) win.destroy()
+      app.quit()
     },
-  ])
+  })
 
-  tray.setToolTip('Agent Desktop')
-  tray.setContextMenu(contextMenu)
+  return Menu.buildFromTemplate(items)
+}
 
-  tray.on('click', () => {
-    const win = getWindow()
+export function setTrayUpdateCallbacks(
+  onCheckUpdate: () => void,
+  onInstallUpdate: () => void,
+): void {
+  onCheckUpdateFn = onCheckUpdate
+  onInstallUpdateFn = onInstallUpdate
+  // Rebuild to include update menu items
+  if (trayInstance) {
+    trayInstance.setContextMenu(buildContextMenu())
+  }
+}
+
+export function rebuildTrayMenu(updateReady: boolean): void {
+  updateReadyFlag = updateReady
+  if (trayInstance) {
+    trayInstance.setContextMenu(buildContextMenu())
+  }
+}
+
+export function createTray(
+  getWindow: () => BrowserWindow | null,
+  ensureWindow: () => void,
+): Tray {
+  getWindowFn = getWindow
+  ensureWindowFn = ensureWindow
+
+  trayInstance = new Tray(loadTrayIcon())
+  trayInstance.setToolTip('Agent Desktop')
+  trayInstance.setContextMenu(buildContextMenu())
+
+  trayInstance.on('click', () => {
+    const win = getWindowFn?.() ?? null
     if (isAlive(win) && win.isVisible()) {
       win.hide()
     } else {
@@ -94,9 +143,9 @@ export function createTray(
   // Swap icon when system theme changes (Linux/Windows)
   if (process.platform !== 'darwin') {
     nativeTheme.on('updated', () => {
-      tray.setImage(loadTrayIcon())
+      trayInstance?.setImage(loadTrayIcon())
     })
   }
 
-  return tray
+  return trayInstance
 }

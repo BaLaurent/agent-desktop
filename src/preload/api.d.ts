@@ -19,6 +19,8 @@ import type {
   LogEntry,
   ToolApprovalResponse,
   AskUserResponse,
+  UpdateInfo,
+  UpdateStatus,
 } from '../shared/types'
 
 export interface AgentAPI {
@@ -116,6 +118,13 @@ export interface AgentAPI {
   whisper: {
     transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
     validateConfig(): Promise<{ binaryFound: boolean; modelFound: boolean; binaryPath: string; modelPath: string }>
+  }
+  updates: {
+    check(): Promise<UpdateInfo>
+    download(): Promise<void>
+    install(): Promise<void>
+    getStatus(): Promise<UpdateStatus>
+    onStatus(callback: (status: UpdateStatus) => void): () => void
   }
   system: {
     getPathForFile(file: File): string

@@ -115,6 +115,17 @@ const api: AgentAPI = {
     transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('whisper:transcribe', wavBuffer), 45000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('whisper:validateConfig')),
   },
+  updates: {
+    check: () => withTimeout(ipcRenderer.invoke('updates:check')),
+    download: () => withTimeout(ipcRenderer.invoke('updates:download'), 300000),
+    install: () => withTimeout(ipcRenderer.invoke('updates:install')),
+    getStatus: () => withTimeout(ipcRenderer.invoke('updates:getStatus')),
+    onStatus: (callback: (status: unknown) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
+      ipcRenderer.on('updates:status', handler)
+      return () => { ipcRenderer.removeListener('updates:status', handler) }
+    },
+  },
   system: {
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
     getInfo: () => withTimeout(ipcRenderer.invoke('system:getInfo')),

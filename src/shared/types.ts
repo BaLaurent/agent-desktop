@@ -210,6 +210,23 @@ export interface NotificationEventConfig {
 
 export type NotificationConfig = Record<NotificationEvent, NotificationEventConfig>
 
+// ─── Auto-Update Types ──────────────────────────────────────
+
+export interface UpdateInfo {
+  available: boolean
+  version?: string
+  releaseDate?: string
+}
+
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; version: string; releaseDate?: string }
+  | { state: 'not-available' }
+  | { state: 'downloading'; percent: number }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string }
+
 // ─── IPC / Runtime Types ──────────────────────────────────────
 
 export interface StreamChunk {
