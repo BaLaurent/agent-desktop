@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockSendFn = vi.fn()
 vi.mock('../index', () => ({
@@ -201,6 +201,163 @@ describe('streamMessage — Skills settingSources', () => {
     expect(opts.allowedTools).toEqual(
       expect.arrayContaining(['mcp__spotify__*', 'Skill'])
     )
+  })
+
+  it('sets settingSources=[user,project,local] when skills=local', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { skills: 'local', permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.settingSources).toEqual(['user', 'project', 'local'])
+    expect(opts.allowedTools).toEqual(expect.arrayContaining(['Skill']))
+  })
+
+  it('sets settingSources without Skill in allowedTools when skillsEnabled=false', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { skills: 'user', skillsEnabled: false, permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.settingSources).toEqual(['user'])
+    // Skill should NOT be in allowedTools
+    expect(opts.allowedTools).toBeUndefined()
+  })
+
+  it('sets settingSources with Skill when skillsEnabled is undefined (default true)', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { skills: 'project', permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.settingSources).toEqual(['user', 'project'])
+    expect(opts.allowedTools).toEqual(expect.arrayContaining(['Skill']))
+  })
+})
+
+describe('streamMessage — canUseTool disabled skills', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+  })
+
+  it('denies disabled skills even in bypass mode', async () => {
+    let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
+
+    mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
+      capturedCanUseTool = args.options.canUseTool as typeof capturedCanUseTool
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: vi.fn().mockResolvedValue({ done: true }),
+        }),
+      }
+    })
+
+    const streamPromise = streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      {
+        skills: 'user',
+        skillsEnabled: true,
+        disabledSkills: ['weather-wttr'],
+        permissionMode: 'bypassPermissions',
+      },
+      1
+    )
+
+    await streamPromise
+
+    expect(capturedCanUseTool).toBeDefined()
+    const result = await capturedCanUseTool!('Skill', { skill: 'weather-wttr' })
+    expect(result).toEqual({ behavior: 'deny', message: 'Skill "weather-wttr" is disabled' })
+  })
+
+  it('allows non-disabled skills in bypass mode', async () => {
+    let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
+
+    mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
+      capturedCanUseTool = args.options.canUseTool as typeof capturedCanUseTool
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: vi.fn().mockResolvedValue({ done: true }),
+        }),
+      }
+    })
+
+    const streamPromise = streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      {
+        skills: 'user',
+        skillsEnabled: true,
+        disabledSkills: ['weather-wttr'],
+        permissionMode: 'bypassPermissions',
+      },
+      1
+    )
+
+    await streamPromise
+
+    expect(capturedCanUseTool).toBeDefined()
+    const result = await capturedCanUseTool!('Skill', { skill: 'godot-docs' })
+    expect(result).toEqual({ behavior: 'allow', updatedInput: { skill: 'godot-docs' } })
+  })
+
+  it('allows Skill tool when disabledSkills is empty', async () => {
+    let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
+
+    mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
+      capturedCanUseTool = args.options.canUseTool as typeof capturedCanUseTool
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: vi.fn().mockResolvedValue({ done: true }),
+        }),
+      }
+    })
+
+    const streamPromise = streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      {
+        skills: 'user',
+        disabledSkills: [],
+        permissionMode: 'bypassPermissions',
+      },
+      1
+    )
+
+    await streamPromise
+
+    expect(capturedCanUseTool).toBeDefined()
+    const result = await capturedCanUseTool!('Skill', { skill: 'anything' })
+    expect(result).toEqual({ behavior: 'allow', updatedInput: { skill: 'anything' } })
   })
 })
 

@@ -19,12 +19,13 @@ interface MessageInputProps {
   cwd?: string | null
   excludePatterns?: string[]
   skillsMode?: string
+  disabledSkills?: string[]
   onCanSendChange?: (canSend: boolean) => void
   onPaste?: (e: React.ClipboardEvent) => void
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
-  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, skillsMode, onCanSendChange, onPaste }, ref) {
+  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, skillsMode, disabledSkills, onCanSendChange, onPaste }, ref) {
     const [content, setContent] = useState('')
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
@@ -67,15 +68,19 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     }
 
     const slashSkillsModeRef = useRef<string | undefined>(undefined)
+    const slashDisabledSkillsRef = useRef<string | undefined>(undefined)
 
     async function loadCommands() {
-      // Cache: only refetch if CWD or skillsMode changed
-      if (slashCwdRef.current === (cwd ?? null) && slashSkillsModeRef.current === skillsMode && slashCommands.length > 0) return
+      const disabledKey = disabledSkills ? JSON.stringify(disabledSkills) : undefined
+      // Cache: only refetch if CWD, skillsMode, or disabledSkills changed
+      if (slashCwdRef.current === (cwd ?? null) && slashSkillsModeRef.current === skillsMode && slashDisabledSkillsRef.current === disabledKey && slashCommands.length > 0) return
       try {
         const cmds = await window.agent.commands.list(cwd ?? undefined, skillsMode)
-        setSlashCommands(cmds)
+        const filtered = cmds.filter((c: import('../../../shared/types').SlashCommand) => c.source !== 'skill' || !disabledSkills?.includes(c.name))
+        setSlashCommands(filtered)
         slashCwdRef.current = cwd ?? null
         slashSkillsModeRef.current = skillsMode
+        slashDisabledSkillsRef.current = disabledKey
       } catch {
         setSlashCommands([])
       }

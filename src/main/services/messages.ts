@@ -248,7 +248,7 @@ function filterMcpServers(
 }
 
 export function getAISettings(db: Database.Database, conversationId: number): AISettings {
-  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills']
+  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills']
   const rows = db
     .prepare(`SELECT key, value FROM settings WHERE key IN (${keys.map(() => '?').join(',')})`)
     .all(...keys) as { key: string; value: string }[]
@@ -341,7 +341,9 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     mcpServers: filterMcpServers(mcpServers, map['ai_mcpDisabled']),
     cwdRestrictionEnabled: (map['hooks_cwdRestriction'] ?? 'true') === 'true',
     writableKnowledgePaths,
-    skills: (map['ai_skills'] as 'off' | 'user' | 'project') || 'off',
+    skills: (map['ai_skills'] as 'off' | 'user' | 'project' | 'local') || 'off',
+    skillsEnabled: (map['ai_skillsEnabled'] ?? 'true') === 'true',
+    disabledSkills: safeJsonParse<string[]>(map['ai_disabledSkills'] || '[]', []),
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { MODEL_OPTIONS, DEFAULT_MODEL, SKILLS_OPTIONS } from '../../../shared/constants'
+import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS } from '../../../shared/constants'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 
 export function AISettings() {
@@ -18,8 +18,23 @@ export function AISettings() {
   const skills = settings['ai_skills'] ?? 'off'
   const cwdRestriction = settings['hooks_cwdRestriction'] ?? 'true'
   const defaultSystemPrompt = settings['ai_defaultSystemPrompt'] ?? ''
+  const skillsEnabled = settings['ai_skillsEnabled'] ?? 'true'
+  const disabledSkills: string[] = (() => {
+    try { const arr = JSON.parse(settings['ai_disabledSkills'] || '[]'); return Array.isArray(arr) ? arr : [] } catch { return [] }
+  })()
+  const [discoveredSkills, setDiscoveredSkills] = useState<import('../../../shared/types').SlashCommand[]>([])
   const [confirmDisable, setConfirmDisable] = useState(false)
   const [showPromptEditor, setShowPromptEditor] = useState(false)
+
+  useEffect(() => {
+    if (skills === 'off') {
+      setDiscoveredSkills([])
+      return
+    }
+    window.agent.commands.list(undefined, skills).then((cmds: import('../../../shared/types').SlashCommand[]) => {
+      setDiscoveredSkills(cmds.filter(c => c.source === 'skill'))
+    }).catch(() => setDiscoveredSkills([]))
+  }, [skills])
 
   return (
     <div className="flex flex-col gap-1">
@@ -164,14 +179,14 @@ export function AISettings() {
         </select>
       </div>
 
-      {/* Skills */}
+      {/* Setting Sources */}
       <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
         <div className="flex flex-col gap-0.5 pr-4">
           <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            Skills
+            Setting Sources
           </span>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Load Claude Code skills from filesystem directories.
+            Load Claude Code configuration from filesystem (settings.json, CLAUDE.md, skills, commands, hooks).
           </span>
         </div>
         <select
@@ -182,15 +197,85 @@ export function AISettings() {
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',
           }}
-          aria-label="Select skills mode"
+          aria-label="Select setting sources"
         >
-          {SKILLS_OPTIONS.map((opt) => (
+          {SETTING_SOURCES_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
         </select>
       </div>
+
+      {/* Skills Toggle */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)', opacity: skills === 'off' ? 0.5 : 1 }}>
+            Skills
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)', opacity: skills === 'off' ? 0.5 : 1 }}>
+            Allow the AI to invoke discovered skills.
+          </span>
+        </div>
+        <button
+          onClick={() => setSetting('ai_skillsEnabled', skillsEnabled === 'true' ? 'false' : 'true')}
+          disabled={skills === 'off'}
+          className="relative w-10 h-5 rounded-full transition-colors"
+          style={{
+            backgroundColor: skillsEnabled === 'true' && skills !== 'off' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            opacity: skills === 'off' ? 0.3 : (skillsEnabled === 'true' ? 1 : 0.4),
+          }}
+          role="switch"
+          aria-checked={skillsEnabled === 'true' && skills !== 'off'}
+          aria-label="Toggle skills"
+        >
+          <span
+            className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+            style={{
+              left: skillsEnabled === 'true' && skills !== 'off' ? '1.25rem' : '0.125rem',
+            }}
+          />
+        </button>
+      </div>
+
+      {/* Per-Skill List */}
+      {skills !== 'off' && skillsEnabled === 'true' && discoveredSkills.length > 0 && (
+        <div className="py-3 border-b border-[var(--color-text-muted)]/10">
+          <span className="text-xs font-medium mb-2 block" style={{ color: 'var(--color-text-muted)' }}>
+            Discovered Skills
+          </span>
+          <div className="flex flex-col gap-1 max-h-[120px] overflow-y-auto">
+            {discoveredSkills.map((skill) => {
+              const isDisabled = disabledSkills.includes(skill.name)
+              return (
+                <label
+                  key={skill.name}
+                  className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:opacity-80"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!isDisabled}
+                    onChange={() => {
+                      const newDisabled = isDisabled
+                        ? disabledSkills.filter(n => n !== skill.name)
+                        : [...disabledSkills, skill.name]
+                      setSetting('ai_disabledSkills', JSON.stringify(newDisabled))
+                    }}
+                    className="rounded"
+                  />
+                  <span className="truncate">{skill.name}</span>
+                  {skill.description && (
+                    <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                      — {skill.description}
+                    </span>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* CWD Restriction Hook */}
       <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">

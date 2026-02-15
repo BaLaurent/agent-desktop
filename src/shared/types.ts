@@ -11,6 +11,8 @@ export interface AIOverrides {
   ai_mcpDisabled?: string
   ai_knowledgeFolders?: string
   ai_skills?: string
+  ai_skillsEnabled?: string    // 'true' | 'false'
+  ai_disabledSkills?: string   // JSON string[] of disabled skill names
   hooks_cwdRestriction?: string
   files_excludePatterns?: string
 }

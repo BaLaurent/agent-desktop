@@ -55,6 +55,8 @@ function seedSettings(db: Database.Database): void {
     ['whisper_autoSend', 'false'],
     ['hooks_cwdRestriction', 'true'],
     ['ai_skills', 'off'],
+    ['ai_skillsEnabled', 'true'],
+    ['ai_disabledSkills', '[]'],
     ['files_excludePatterns', DEFAULT_EXCLUDE_PATTERNS],
     ['notificationConfig', JSON.stringify(DEFAULT_NOTIFICATION_CONFIG)],
     ['notificationDesktopMode', 'unfocused'],

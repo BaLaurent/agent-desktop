@@ -87,7 +87,9 @@ export interface AISettings {
   mcpServers?: Record<string, { command: string; args: string[]; env?: Record<string, string> } | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> }>
   cwdRestrictionEnabled?: boolean
   writableKnowledgePaths?: string[]
-  skills?: 'off' | 'user' | 'project'
+  skills?: 'off' | 'user' | 'project' | 'local'
+  skillsEnabled?: boolean
+  disabledSkills?: string[]
 }
 
 interface StreamEventMessage {
@@ -232,6 +234,14 @@ export async function streamMessage(
         }
       }
 
+      // Deny disabled skills (checked before bypass mode — even bypass can't override)
+      if (toolName === 'Skill' && aiSettings?.disabledSkills?.length) {
+        const skillName = (input.skill || input.name || '') as string
+        if (skillName && aiSettings.disabledSkills.includes(skillName)) {
+          return { behavior: 'deny' as const, message: `Skill "${skillName}" is disabled` }
+        }
+      }
+
       // Bypass mode: auto-approve everything else immediately
       if (permMode === 'bypassPermissions') {
         return { behavior: 'allow' as const, updatedInput: input }
@@ -289,9 +299,14 @@ export async function streamMessage(
       ]
     }
 
-    // Skills: set settingSources + add 'Skill' to allowedTools
+    // Setting Sources: load configuration from filesystem (independent of skills toggle)
     if (aiSettings?.skills && aiSettings.skills !== 'off') {
-      queryOptions.settingSources = aiSettings.skills === 'user' ? ['user'] : ['user', 'project']
+      const sourceMap: Record<string, string[]> = { user: ['user'], project: ['user', 'project'], local: ['user', 'project', 'local'] }
+      queryOptions.settingSources = sourceMap[aiSettings.skills] || ['user']
+    }
+
+    // Skills tool: only add when sources are active AND skills toggle is ON
+    if (aiSettings?.skills && aiSettings.skills !== 'off' && aiSettings?.skillsEnabled !== false) {
       queryOptions.allowedTools = [
         ...(Array.isArray(queryOptions.allowedTools) ? queryOptions.allowedTools as string[] : []),
         'Skill',

@@ -155,7 +155,7 @@ export function registerHandlers(ipcMain: IpcMain): void {
       }
 
       // Project skills (only in 'project' mode)
-      if (skillsMode === 'project' && cwd && typeof cwd === 'string') {
+      if ((skillsMode === 'project' || skillsMode === 'local') && cwd && typeof cwd === 'string') {
         try {
           const safeCwd = validatePathSafe(cwd)
           const projectSkillsDir = path.join(safeCwd, '.claude', 'skills')

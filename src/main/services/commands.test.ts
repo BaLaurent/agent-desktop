@@ -211,4 +211,18 @@ describe('commands service', () => {
     const result = await handlers['commands:list'](undefined, 'user') as { name: string }[]
     expect(result.find((c) => c.name === 'unnamed-skill')).toBeDefined()
   })
+
+  it('scans project skills when skillsMode is local (like project)', async () => {
+    mockReaddir
+      .mockResolvedValueOnce([])  // user commands dir
+      .mockResolvedValueOnce([])  // project commands dir
+      .mockResolvedValueOnce([])  // user skills dir
+      .mockResolvedValueOnce([dirent('local-skill', true)])  // project skills dir
+    mockOpen.mockResolvedValue(mkFd('---\nname: local-skill\ndescription: Local skill\n---\n'))
+
+    const result = await handlers['commands:list']('/tmp/proj', 'local') as { name: string; source: string }[]
+    const skill = result.find((c) => c.name === 'local-skill')
+    expect(skill).toBeDefined()
+    expect(skill!.source).toBe('skill')
+  })
 })

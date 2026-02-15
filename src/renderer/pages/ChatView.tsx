@@ -111,6 +111,13 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [] } catch { return [] }
   }, [effectiveSettings])
 
+  // Disabled skills — parse from effective settings
+  const disabledSkills = useMemo<string[]>(() => {
+    const raw = effectiveSettings['ai_disabledSkills']
+    if (!raw) return []
+    try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [] } catch { return [] }
+  }, [effectiveSettings])
+
   // File exclude patterns — resolve from cascade
   const excludePatterns = useMemo(() => {
     const raw = effectiveSettings['files_excludePatterns'] || DEFAULT_EXCLUDE_PATTERNS
@@ -446,6 +453,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
               cwd={displayCwd}
               excludePatterns={excludePatterns}
               skillsMode={effectiveSettings['ai_skills'] ?? 'off'}
+              disabledSkills={disabledSkills}
               onCanSendChange={setCanSend}
             />
             <button
