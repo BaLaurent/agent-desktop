@@ -39,7 +39,18 @@ function showWindow(): void {
   }
   if (isAlive(win)) {
     win.show()
+    if (win.isMinimized()) win.restore()
     win.focus()
+  }
+}
+
+/** Toggle app window visibility — shared by tray click, context menu, and global shortcut. */
+export function toggleAppWindow(): void {
+  const win = getWindowFn?.() ?? null
+  if (isAlive(win) && win.isVisible() && win.isFocused()) {
+    win.hide()
+  } else {
+    showWindow()
   }
 }
 
@@ -47,14 +58,7 @@ function buildContextMenu(): Menu {
   const items: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'Show/Hide',
-      click: (): void => {
-        const win = getWindowFn?.() ?? null
-        if (isAlive(win) && win.isVisible()) {
-          win.hide()
-        } else {
-          showWindow()
-        }
-      },
+      click: (): void => toggleAppWindow(),
     },
     {
       label: 'New Conversation',
@@ -131,14 +135,7 @@ export function createTray(
   trayInstance.setToolTip('Agent Desktop')
   trayInstance.setContextMenu(buildContextMenu())
 
-  trayInstance.on('click', () => {
-    const win = getWindowFn?.() ?? null
-    if (isAlive(win) && win.isVisible()) {
-      win.hide()
-    } else {
-      showWindow()
-    }
-  })
+  trayInstance.on('click', () => toggleAppWindow())
 
   // Swap icon when system theme changes (Linux/Windows)
   if (process.platform !== 'darwin') {

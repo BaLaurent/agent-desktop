@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { getDatabase, closeDatabase } from './db/database'
 import { registerAllHandlers } from './ipc'
-import { createTray, setTrayUpdateCallbacks, rebuildTrayMenu } from './services/tray'
+import { createTray, setTrayUpdateCallbacks, rebuildTrayMenu, toggleAppWindow } from './services/tray'
 import { initAutoUpdater, stopAutoUpdater, checkForUpdates, installUpdate } from './services/updater'
 import { setupDeepLinks } from './services/deeplink'
 import { registerPreviewScheme, registerPreviewProtocol } from './services/protocol'
@@ -111,20 +111,7 @@ if (!gotLock) {
     registerGlobalShortcuts(db, {
       onQuickChat: () => showOverlay('text'),
       onQuickVoice: () => showOverlay('voice'),
-      onShowApp: () => {
-        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-          mainWindow.hide()
-        } else {
-          if (!mainWindow || mainWindow.isDestroyed()) {
-            createWindow()
-          }
-          if (mainWindow) {
-            mainWindow.show()
-            if (mainWindow.isMinimized()) mainWindow.restore()
-            mainWindow.focus()
-          }
-        }
-      },
+      onShowApp: () => toggleAppWindow(),
     })
 
     createTray(getMainWindow, createWindow)
