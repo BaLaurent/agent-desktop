@@ -41,6 +41,7 @@ export function initAutoUpdater(
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.logger = null // suppress verbose console logging
 
   autoUpdater.on('checking-for-update', () => {
     sendStatus({ state: 'checking' })
@@ -72,6 +73,11 @@ export function initAutoUpdater(
   })
 
   autoUpdater.on('error', (err) => {
+    // 404 for latest-*.yml is expected when no release metadata exists yet
+    if (err.message?.includes('latest-linux.yml') || err.message?.includes('latest-mac.yml') || err.message?.includes('latest.yml')) {
+      sendStatus({ state: 'not-available' })
+      return
+    }
     sendStatus({ state: 'error', message: err.message })
   })
 

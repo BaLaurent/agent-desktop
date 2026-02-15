@@ -144,12 +144,13 @@ describe('Updater Service', () => {
   })
 
   describe('initAutoUpdater', () => {
-    it('configures autoDownload=false and registers event listeners', () => {
+    it('configures autoDownload=false, suppresses logger, and registers event listeners', () => {
       const getWindow = vi.fn(() => null)
       initAutoUpdater(getWindow)
 
       expect(autoUpdater.autoDownload).toBe(false)
       expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
+      expect(autoUpdater.logger).toBeNull()
       expect(autoUpdater.on).toHaveBeenCalledWith('checking-for-update', expect.any(Function))
       expect(autoUpdater.on).toHaveBeenCalledWith('update-available', expect.any(Function))
       expect(autoUpdater.on).toHaveBeenCalledWith('update-not-available', expect.any(Function))

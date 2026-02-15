@@ -54,10 +54,13 @@
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
 - **Permission Mode**: `ai_permissionMode` setting; `allowDangerouslySkipPermissions` only set when `bypassPermissions`
 - **Allowed Tools**: `ai_tools` = `'preset:claude_code'` (all) or JSON array; see `SDK_TOOLS` in `src/main/services/tools.ts`
-- **Skills**: `ai_skills` = `'off'`|`'user'`|`'project'`; non-off modes add `'Skill'` to `allowedTools` and set `settingSources`
-  - `'user'` discovers `~/.claude/skills/`, `'project'` also discovers `.claude/skills/` in CWD
+- **Setting Sources** (was "Skills"): `ai_skills` = `'off'`|`'user'`|`'project'`|`'local'`; controls `settingSources` for SDK (settings.json, CLAUDE.md, commands, hooks, skills)
+  - `'user'` → `['user']`, `'project'` → `['user','project']`, `'local'` → `['user','project','local']`
+  - **Skills toggle** (`ai_skillsEnabled`): independent of setting sources — controls whether `'Skill'` is added to `allowedTools`
+  - **Per-skill disable** (`ai_disabledSkills`): JSON `string[]` of skill names; denied in `canUseTool` BEFORE bypass mode check
+  - `'user'` discovers `~/.claude/skills/`, `'project'`/`'local'` also discovers `.claude/skills/` in CWD
 - **maxTurns**: 0 = unlimited (SDK receives `undefined`); no upper cap in UI
-- Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `files_excludePatterns`
+- Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `ai_skillsEnabled`, `ai_disabledSkills`, `files_excludePatterns`
 - **System prompt editor**: `SystemPromptEditorModal` — full-screen Monaco editor modal, shared by global AI settings and folder/conversation override forms ("Expand" button on textarea fields)
 - See `src/shared/constants.ts` for `SETTING_DEFS`, `MODEL_OPTIONS`, `PERMISSION_OPTIONS`
 
@@ -150,6 +153,12 @@
 
 ## Keyboard Shortcuts & Deep Links
 - Dynamic shortcuts stored in `keyboard_shortcuts` table; parsed via `shortcutMatcher.ts`
+- **Modifier handling**: `Ctrl` and `Super` (metaKey) are independent modifiers — NOT conflated via `CommandOrControl`
+  - `parseAccelerator()`: `CommandOrControl`/`Ctrl`/`Control` → `ctrl`; `Super`/`Meta`/`Command`/`Cmd` → `meta`; `Option` → `alt`
+  - `matchesEvent()`: checks `ctrlKey` and `metaKey` separately (no `||`)
+  - `keyEventToAccelerator()`: records `Ctrl` and `Super` as separate parts
+  - `formatKeybinding()`: converts legacy `CommandOrControl` → `Ctrl` for display
+  - **Backward compat**: existing DB entries with `CommandOrControl` still parse correctly (maps to `ctrl`)
 - Global shortcuts (`quick_chat`, `quick_voice`, `show_app`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
 - Deep link: `agent://conversation/{id}`; tray "New Conversation" sends `tray:newConversation` IPC
 
@@ -164,7 +173,7 @@
 - Advanced params: sparse JSON persistence (only non-default values stored); `buildAdvancedArgs()` emits CLI flags
 - **Auto-send**: `whisper_autoSend` setting — transcribed text sent immediately; `externalText` set to `undefined` to prevent double injection
 - `MessageInput` accepts `externalText` prop for text injection with smart separator
-- IPC timeout: 45s (> 30s backend timeout); keyboard shortcut: `CommandOrControl+Shift+V`
+- IPC timeout: 45s (> 30s backend timeout); keyboard shortcut: `Ctrl+Shift+V`
 - `seedShortcuts` uses `INSERT OR IGNORE` (existing users get new shortcuts without reset)
 
 ## Security
@@ -189,8 +198,24 @@
 - Auth pre-checks `~/.claude/.credentials.json` existence before SDK call (fast fail); diagnostics panel on failure
 - **Root cause** of asar issue: SDK resolves `cli.js` via `import.meta.url` → lands inside `app.asar` → system `node` can't read asar. Fix: `asar: false`
 
+## Auto-Update (electron-updater)
+- Uses `electron-updater` with GitHub Releases as update source; `publish` config in `electron-builder.yml`
+- `initAutoUpdater(getWindow, onUpdateReady)` — wires events, first check after 10s, then every 4h
+- `autoDownload = false` (user must opt-in via UI), `autoInstallOnAppQuit = true`
+- IPC: `updates:check`, `updates:download`, `updates:install`, `updates:getStatus` — no db needed (registered like themes/commands)
+- Real-time status via `updates:status` event to renderer (`UpdateStatus` discriminated union: idle/checking/available/downloading/downloaded/error)
+- **deb detection**: `process.platform === 'linux' && !process.env.APPIMAGE` → `shell.openExternal` to GitHub releases (deb doesn't support delta updates)
+- **Guard**: `app.isPackaged` check — updater not initialized in dev mode
+- Native `Notification` on update-available and update-downloaded
+- Tray wired via `setTrayUpdateCallbacks(checkForUpdates, installUpdate)` from `index.ts` to avoid circular imports
+- `autoUpdater.logger = null` — suppresses verbose console logging (stack traces on check failure)
+- **Gotcha**: 404 for `latest-linux.yml` is expected when no release metadata exists; error handler treats it as `not-available` instead of showing an error
+- **Publishing**: releases must use `electron-builder --publish always` to auto-generate and upload `latest-linux.yml`; manual AppImage uploads won't include update metadata
+- AboutSection subscribes to `onStatus()` for real-time UI (progress bar, state-specific buttons)
+
 ## Tray
-- `createTray(getWindow, ensureWindow)` — accepts closures, not direct `BrowserWindow` ref
+- `createTray(getWindow, ensureWindow)` — stores closures at module scope for dynamic menu rebuilds
+- `setTrayUpdateCallbacks(onCheck, onInstall)` — wires update actions; `rebuildTrayMenu(updateReady)` swaps "Check for Updates" ↔ "Restart to Update"
 - **Gotcha**: `isAlive(win)` guard needed — fixes null mainWindow race condition at startup
 - **Platform icons**: macOS uses template image (auto dark/light); Linux/Windows use explicit `trayDark.png`/`trayLight.png` based on `nativeTheme.shouldUseDarkColors`
 - Theme listener: `nativeTheme.on('updated')` swaps icon on Linux/Windows (macOS excluded — template image handles it)
