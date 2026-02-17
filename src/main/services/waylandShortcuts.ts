@@ -294,6 +294,8 @@ async function tryRegister(
     let successCount = 0
     for (const s of shortcuts) {
       const { mods, key } = toHyprlandBind(s.accelerator)
+      // Remove any stale binding for this key combo (survives app restarts)
+      try { await hyprctl(['keyword', 'unbind', `${mods},${key}`]) } catch { /* may not exist */ }
       const bindArgs = `${mods},${key},global,:${s.id}`
       try {
         const out = await hyprctl(['keyword', 'bind', bindArgs])
@@ -375,6 +377,8 @@ export async function rebindWaylandShortcuts(
   let successCount = 0
   for (const s of shortcuts) {
     const { mods, key } = toHyprlandBind(s.accelerator)
+    // Remove any stale binding for this key combo (survives app restarts)
+    try { await hyprctl(['keyword', 'unbind', `${mods},${key}`]) } catch { /* may not exist */ }
     const bindArgs = `${mods},${key},global,:${s.id}`
     try {
       const out = await hyprctl(['keyword', 'bind', bindArgs])
