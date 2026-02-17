@@ -8,6 +8,7 @@ const originalEnv = { ...process.env }
 vi.mock('fs', () => ({
   existsSync: vi.fn(() => false),
   accessSync: vi.fn(() => { throw new Error('ENOENT') }),
+  readdirSync: vi.fn(() => { throw new Error('ENOENT') }),
   constants: { X_OK: 1, R_OK: 4 },
 }))
 
@@ -173,6 +174,92 @@ describe('env utility', () => {
       expect(process.env.LD_PRELOAD).toBe('/usr/lib/libbar.so')
       expect(process.env.LD_PRELOAD_APPIMAGE).toContain('/tmp/.mount_AgentABCDEF')
     })
+
+    it('sets DBUS_SESSION_BUS_ADDRESS from XDG_RUNTIME_DIR/bus when missing', () => {
+      delete process.env.DBUS_SESSION_BUS_ADDRESS
+      process.env.XDG_RUNTIME_DIR = '/run/user/1000'
+      vi.mocked(fs.accessSync).mockImplementation((p) => {
+        if (p === '/run/user/1000/bus') return undefined
+        throw new Error('ENOENT')
+      })
+
+      enrichEnvironment()
+
+      expect(process.env.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/run/user/1000/bus')
+    })
+
+    it('does not overwrite existing DBUS_SESSION_BUS_ADDRESS', () => {
+      process.env.DBUS_SESSION_BUS_ADDRESS = 'unix:path=/custom/bus'
+      process.env.XDG_RUNTIME_DIR = '/run/user/1000'
+
+      enrichEnvironment()
+
+      expect(process.env.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/custom/bus')
+    })
+
+    it('warns when XDG_RUNTIME_DIR not available for D-Bus resolution', () => {
+      delete process.env.DBUS_SESSION_BUS_ADDRESS
+      delete process.env.XDG_RUNTIME_DIR
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      enrichEnvironment()
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('XDG_RUNTIME_DIR not set')
+      )
+      expect(process.env.DBUS_SESSION_BUS_ADDRESS).toBeUndefined()
+      warnSpy.mockRestore()
+    })
+
+    it('sets WAYLAND_DISPLAY from XDG_RUNTIME_DIR/wayland-* scan when missing', () => {
+      delete process.env.WAYLAND_DISPLAY
+      process.env.XDG_RUNTIME_DIR = '/run/user/1000'
+      vi.mocked(fs.readdirSync).mockImplementation((p) => {
+        if (p === '/run/user/1000') return ['bus', 'wayland-1', 'hypr', 'pulse'] as unknown as ReturnType<typeof fs.readdirSync>
+        throw new Error('ENOENT')
+      })
+
+      enrichEnvironment()
+
+      expect(process.env.WAYLAND_DISPLAY).toBe('wayland-1')
+    })
+
+    it('does not overwrite existing WAYLAND_DISPLAY', () => {
+      process.env.WAYLAND_DISPLAY = 'wayland-0'
+      process.env.XDG_RUNTIME_DIR = '/run/user/1000'
+      vi.mocked(fs.readdirSync).mockImplementation(() => {
+        return ['wayland-1'] as unknown as ReturnType<typeof fs.readdirSync>
+      })
+
+      enrichEnvironment()
+
+      expect(process.env.WAYLAND_DISPLAY).toBe('wayland-0')
+    })
+
+    it('sets HYPRLAND_INSTANCE_SIGNATURE from XDG_RUNTIME_DIR/hypr/ scan', () => {
+      delete process.env.HYPRLAND_INSTANCE_SIGNATURE
+      process.env.XDG_RUNTIME_DIR = '/run/user/1000'
+      vi.mocked(fs.readdirSync).mockImplementation((p) => {
+        if (p === path.join('/run/user/1000', 'hypr')) return ['abc123def'] as unknown as ReturnType<typeof fs.readdirSync>
+        throw new Error('ENOENT')
+      })
+
+      enrichEnvironment()
+
+      expect(process.env.HYPRLAND_INSTANCE_SIGNATURE).toBe('abc123def')
+    })
+
+    it('does not overwrite existing HYPRLAND_INSTANCE_SIGNATURE', () => {
+      process.env.HYPRLAND_INSTANCE_SIGNATURE = 'existing_sig'
+      process.env.XDG_RUNTIME_DIR = '/run/user/1000'
+      vi.mocked(fs.readdirSync).mockImplementation(() => {
+        return ['new_sig'] as unknown as ReturnType<typeof fs.readdirSync>
+      })
+
+      enrichEnvironment()
+
+      expect(process.env.HYPRLAND_INSTANCE_SIGNATURE).toBe('existing_sig')
+    })
   })
 
   describe('getSessionType', () => {
@@ -187,15 +274,25 @@ describe('env utility', () => {
       expect(getSessionType()).toBe('wayland')
     })
 
+    it('returns wayland when HYPRLAND_INSTANCE_SIGNATURE is set (TTY-started Hyprland)', () => {
+      delete process.env.XDG_SESSION_TYPE
+      delete process.env.WAYLAND_DISPLAY
+      process.env.HYPRLAND_INSTANCE_SIGNATURE = 'abc123'
+      process.env.DISPLAY = ':1'
+      expect(getSessionType()).toBe('wayland')
+    })
+
     it('returns x11 when XDG_SESSION_TYPE is x11', () => {
       process.env.XDG_SESSION_TYPE = 'x11'
       delete process.env.WAYLAND_DISPLAY
+      delete process.env.HYPRLAND_INSTANCE_SIGNATURE
       expect(getSessionType()).toBe('x11')
     })
 
     it('returns x11 when DISPLAY is set without XDG_SESSION_TYPE or WAYLAND_DISPLAY', () => {
       delete process.env.XDG_SESSION_TYPE
       delete process.env.WAYLAND_DISPLAY
+      delete process.env.HYPRLAND_INSTANCE_SIGNATURE
       process.env.DISPLAY = ':0'
       expect(getSessionType()).toBe('x11')
     })
@@ -203,6 +300,7 @@ describe('env utility', () => {
     it('returns unknown when no session variables are set', () => {
       delete process.env.XDG_SESSION_TYPE
       delete process.env.WAYLAND_DISPLAY
+      delete process.env.HYPRLAND_INSTANCE_SIGNATURE
       delete process.env.DISPLAY
       expect(getSessionType()).toBe('unknown')
     })

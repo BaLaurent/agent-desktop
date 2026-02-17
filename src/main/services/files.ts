@@ -14,7 +14,7 @@ export { mimeToExt } from '../utils/mime'
 const MAX_DEPTH = 10
 const MAX_FILES = 500
 const MAX_PASTE_SIZE = 5_000_000 // 5MB — clipboard paste limit
-const LARGE_FILE_THRESHOLD = 100_000_000 // 100MB — show warning above this
+const MAX_PREVIEW_SIZE = 10 * 1024 * 1024 // 10MB — hard limit for file preview
 
 export function classifyFileExt(ext: string): string | null {
   switch (ext) {
@@ -139,6 +139,21 @@ async function generateCopyPath(originalPath: string): Promise<string> {
   throw new Error('Could not generate unique copy name')
 }
 
+export async function cleanupPastedFiles(): Promise<void> {
+  const tmpDir = join(os.tmpdir(), 'agent-paste')
+  try {
+    const files = await fsp.readdir(tmpDir)
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000 // 24h
+    for (const file of files) {
+      const filePath = join(tmpDir, file)
+      try {
+        const stats = await fsp.stat(filePath)
+        if (stats.mtimeMs < cutoff) await fsp.unlink(filePath)
+      } catch { /* ignore per-file errors */ }
+    }
+  } catch { /* dir may not exist yet */ }
+}
+
 export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void {
   ipcMain.handle('files:listTree', async (_event, basePath: string, excludePatterns?: string[]) => {
     validateString(basePath, 'basePath')
@@ -162,22 +177,22 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
 
     const ext = extname(resolved).slice(1).toLowerCase()
     const stat = await fsp.stat(resolved)
-    const warning = stat.size > LARGE_FILE_THRESHOLD
-      ? `Large file (${Math.round(stat.size / 1_000_000)}MB) — loading may be slow`
-      : undefined
+    if (stat.size > MAX_PREVIEW_SIZE) {
+      throw new Error(`File too large to preview (${(stat.size / 1024 / 1024).toFixed(1)}MB, max ${MAX_PREVIEW_SIZE / 1024 / 1024}MB)`)
+    }
 
     // Images: read as binary → base64 data URL
     if (IMAGE_EXTS.has(ext)) {
       const buffer = await fsp.readFile(resolved)
       const dataUrl = `data:${getImageMime(ext)};base64,${buffer.toString('base64')}`
-      return { content: dataUrl, language: 'image' as const, warning }
+      return { content: dataUrl, language: 'image' as const }
     }
 
     // Text files
     const content = await fsp.readFile(resolved, 'utf-8')
     const language = classifyFileExt(ext)
 
-    return { content, language, warning }
+    return { content, language }
   })
 
   ipcMain.handle('files:revealInFileManager', async (_event, filePath: string) => {
@@ -306,13 +321,12 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     const target = join(resolvedDir, name)
     validatePathSafe(target)
     try {
-      await fsp.access(target)
-      throw new Error('A file or folder with that name already exists')
+      const handle = await fsp.open(target, 'wx') // O_CREAT | O_EXCL — atomic
+      await handle.close()
     } catch (err: any) {
-      if (err.message?.includes('already exists')) throw err
-      // Doesn't exist — good
+      if (err.code === 'EEXIST') throw new Error('A file or folder with that name already exists')
+      throw err
     }
-    await fsp.writeFile(target, '', 'utf-8')
     return target
   })
 
@@ -327,12 +341,11 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     const target = join(resolvedDir, name)
     validatePathSafe(target)
     try {
-      await fsp.access(target)
-      throw new Error('A file or folder with that name already exists')
+      await fsp.mkdir(target) // throws EEXIST if exists
     } catch (err: any) {
-      if (err.message?.includes('already exists')) throw err
+      if (err.code === 'EEXIST') throw new Error('A file or folder with that name already exists')
+      throw err
     }
-    await fsp.mkdir(target)
     return target
   })
 

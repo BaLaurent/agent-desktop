@@ -43,6 +43,8 @@ describe('seedDefaults', () => {
     expect(map.ai_permissionMode).toBe('bypassPermissions')
     expect(map.ai_tools).toBe('preset:claude_code')
     expect(map.hooks_cwdRestriction).toBe('true')
+    expect(map.ai_skillsEnabled).toBe('true')
+    expect(map.ai_disabledSkills).toBe('[]')
   })
 
   it('does not duplicate on second call', () => {

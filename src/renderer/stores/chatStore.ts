@@ -145,7 +145,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   stopGeneration: async () => {
-    await window.agent.messages.stop()
+    const convId = get().activeConversationId
+    if (convId) await window.agent.messages.stop(convId)
   },
 
   regenerateLastResponse: async (conversationId: number) => {

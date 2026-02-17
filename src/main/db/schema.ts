@@ -116,50 +116,50 @@ function runMigrations(db: Database.Database): void {
   // Add cwd column to conversations (working directory per conversation)
   const convCols = db.pragma('table_info(conversations)') as { name: string }[]
   if (!convCols.some((c) => c.name === 'cwd')) {
-    db.exec('ALTER TABLE conversations ADD COLUMN cwd TEXT')
+    try { db.exec('ALTER TABLE conversations ADD COLUMN cwd TEXT') } catch (e) { console.warn('[migration] conversations.cwd:', e) }
   }
 
   // Add ai_overrides column to conversations and folders (cascading settings)
   if (!convCols.some((c) => c.name === 'ai_overrides')) {
-    db.exec('ALTER TABLE conversations ADD COLUMN ai_overrides TEXT')
+    try { db.exec('ALTER TABLE conversations ADD COLUMN ai_overrides TEXT') } catch (e) { console.warn('[migration] conversations.ai_overrides:', e) }
   }
   const folderCols = db.pragma('table_info(folders)') as { name: string }[]
   if (!folderCols.some((c) => c.name === 'ai_overrides')) {
-    db.exec('ALTER TABLE folders ADD COLUMN ai_overrides TEXT')
+    try { db.exec('ALTER TABLE folders ADD COLUMN ai_overrides TEXT') } catch (e) { console.warn('[migration] folders.ai_overrides:', e) }
   }
 
   // Add tool_calls column to messages (persisted tool call data)
   const msgCols = db.pragma('table_info(messages)') as { name: string }[]
   if (!msgCols.some((c) => c.name === 'tool_calls')) {
-    db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT')
+    try { db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT') } catch (e) { console.warn('[migration] messages.tool_calls:', e) }
   }
 
   // Add HTTP/SSE transport columns to mcp_servers
   const mcpCols = db.pragma('table_info(mcp_servers)') as { name: string }[]
   if (!mcpCols.some((c) => c.name === 'type')) {
-    db.exec("ALTER TABLE mcp_servers ADD COLUMN type TEXT DEFAULT 'stdio'")
+    try { db.exec("ALTER TABLE mcp_servers ADD COLUMN type TEXT DEFAULT 'stdio'") } catch (e) { console.warn('[migration] mcp_servers.type:', e) }
   }
   if (!mcpCols.some((c) => c.name === 'url')) {
-    db.exec('ALTER TABLE mcp_servers ADD COLUMN url TEXT')
+    try { db.exec('ALTER TABLE mcp_servers ADD COLUMN url TEXT') } catch (e) { console.warn('[migration] mcp_servers.url:', e) }
   }
   if (!mcpCols.some((c) => c.name === 'headers')) {
-    db.exec("ALTER TABLE mcp_servers ADD COLUMN headers TEXT DEFAULT '{}'")
+    try { db.exec("ALTER TABLE mcp_servers ADD COLUMN headers TEXT DEFAULT '{}'") } catch (e) { console.warn('[migration] mcp_servers.headers:', e) }
   }
 
   // Drop unused artifacts table (legacy from old Artifacts Pipeline)
-  db.exec('DROP TABLE IF EXISTS artifacts')
+  try { db.exec('DROP TABLE IF EXISTS artifacts') } catch (e) { console.warn('[migration] artifacts drop:', e) }
 
   // Drop themes table (themes now stored as CSS files in ~/.agent-desktop/themes/)
-  db.exec('DROP TABLE IF EXISTS themes')
+  try { db.exec('DROP TABLE IF EXISTS themes') } catch (e) { console.warn('[migration] themes drop:', e) }
 
   // Add default_cwd column to folders (default working directory for new conversations)
   const folderCols2 = db.pragma('table_info(folders)') as { name: string }[]
   if (!folderCols2.some((c) => c.name === 'default_cwd')) {
-    db.exec('ALTER TABLE folders ADD COLUMN default_cwd TEXT')
+    try { db.exec('ALTER TABLE folders ADD COLUMN default_cwd TEXT') } catch (e) { console.warn('[migration] folders.default_cwd:', e) }
   }
 
   // Add cleared_at column to conversations (context boundary for /clear command)
   if (!convCols.some((c) => c.name === 'cleared_at')) {
-    db.exec('ALTER TABLE conversations ADD COLUMN cleared_at TEXT')
+    try { db.exec('ALTER TABLE conversations ADD COLUMN cleared_at TEXT') } catch (e) { console.warn('[migration] conversations.cleared_at:', e) }
   }
 }

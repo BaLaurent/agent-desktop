@@ -42,7 +42,7 @@ export interface AgentAPI {
   }
   messages: {
     send(conversationId: number, content: string, attachments?: Attachment[]): Promise<Message | null>
-    stop(): Promise<void>
+    stop(conversationId?: number): Promise<void>
     regenerate(conversationId: number): Promise<void>
     edit(messageId: number, content: string): Promise<void>
     respondToApproval(requestId: string, response: ToolApprovalResponse | AskUserResponse): Promise<void>

@@ -26,9 +26,13 @@ describe('Settings Service', () => {
   })
 
   it('set new key adds to settings', async () => {
-    await ipc.invoke('settings:set', 'custom_key', 'custom_value')
+    await ipc.invoke('settings:set', 'hooks_cwdRestriction', 'false')
     const settings = await ipc.invoke('settings:get') as Record<string, string>
-    expect(settings.custom_key).toBe('custom_value')
+    expect(settings.hooks_cwdRestriction).toBe('false')
+  })
+
+  it('rejects unknown setting key', async () => {
+    await expect(ipc.invoke('settings:set', 'custom_key', 'custom_value')).rejects.toThrow('Unknown setting key')
   })
 
   it('set existing key updates value', async () => {

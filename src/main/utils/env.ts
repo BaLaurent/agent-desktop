@@ -1,7 +1,7 @@
 import * as os from 'os'
 import * as path from 'path'
 import * as fs from 'fs'
-import { execSync, spawnSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 
 /** Check if running inside an AppImage */
 export function isAppImage(): boolean {
@@ -98,6 +98,63 @@ export function enrichEnvironment(): void {
     console.log('[env] Set CLAUDE_CONFIG_DIR =', process.env.CLAUDE_CONFIG_DIR)
   }
 
+  // Ensure DBUS_SESSION_BUS_ADDRESS for Wayland portal access (used by global shortcuts).
+  // On modern Arch/systemd, the socket is at $XDG_RUNTIME_DIR/bus.
+  // In AppImage launched from a .desktop file, this env var may not be inherited.
+  if (!process.env.DBUS_SESSION_BUS_ADDRESS) {
+    const xdgRuntime = process.env.XDG_RUNTIME_DIR
+    if (xdgRuntime) {
+      const busSocket = path.join(xdgRuntime, 'bus')
+      try {
+        fs.accessSync(busSocket)
+        process.env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${busSocket}`
+        console.log('[env] Set DBUS_SESSION_BUS_ADDRESS =', process.env.DBUS_SESSION_BUS_ADDRESS)
+      } catch {
+        console.warn('[env] D-Bus session bus socket not found at', busSocket)
+      }
+    } else {
+      console.warn('[env] XDG_RUNTIME_DIR not set — cannot resolve D-Bus session bus address')
+    }
+  }
+
+  // Ensure WAYLAND_DISPLAY when a Wayland compositor is running but the var isn't inherited.
+  // Common when Hyprland is started from a TTY — child processes from other TTYs or services
+  // don't inherit WAYLAND_DISPLAY even though the compositor is active.
+  // Scan $XDG_RUNTIME_DIR for wayland-* sockets.
+  if (!process.env.WAYLAND_DISPLAY) {
+    const xdgRuntime = process.env.XDG_RUNTIME_DIR
+    if (xdgRuntime) {
+      try {
+        const entries = fs.readdirSync(xdgRuntime)
+        const waylandSocket = entries.find(e => e.startsWith('wayland-'))
+        if (waylandSocket) {
+          process.env.WAYLAND_DISPLAY = waylandSocket
+          console.log('[env] Set WAYLAND_DISPLAY =', waylandSocket)
+        }
+      } catch {
+        // can't read XDG_RUNTIME_DIR — skip
+      }
+    }
+  }
+
+  // Ensure HYPRLAND_INSTANCE_SIGNATURE for hyprctl socket discovery.
+  // hyprctl needs this to find the compositor socket at $XDG_RUNTIME_DIR/hypr/{signature}/
+  if (!process.env.HYPRLAND_INSTANCE_SIGNATURE) {
+    const xdgRuntime = process.env.XDG_RUNTIME_DIR
+    if (xdgRuntime) {
+      const hyprDir = path.join(xdgRuntime, 'hypr')
+      try {
+        const entries = fs.readdirSync(hyprDir)
+        if (entries.length > 0) {
+          process.env.HYPRLAND_INSTANCE_SIGNATURE = entries[0]
+          console.log('[env] Set HYPRLAND_INSTANCE_SIGNATURE =', entries[0])
+        }
+      } catch {
+        // hypr directory doesn't exist — not Hyprland or not yet started
+      }
+    }
+  }
+
   // Append common binary locations to PATH if they exist and aren't already included
   const extraDirs = [
     path.join(home, '.local', 'bin'),
@@ -155,10 +212,9 @@ export function enrichEnvironment(): void {
   if (process.platform === 'darwin' && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     try {
       const username = process.env.USER || os.userInfo().username
-      const credJson = execSync(
-        `security find-generic-password -a "${username}" -s "Claude Code-credentials" -w`,
-        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
-      ).trim()
+      const credJson = execFileSync('security', [
+        'find-generic-password', '-a', username, '-s', 'Claude Code-credentials', '-w'
+      ], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
       const creds = JSON.parse(credJson)
       const accessToken = creds?.claudeAiOauth?.accessToken
       if (accessToken) {
@@ -177,6 +233,17 @@ export function enrichEnvironment(): void {
   if (isAppImage()) {
     console.log('[env] Running inside AppImage:', process.env.APPIMAGE)
     sanitizeAppImageEnv()
+  }
+
+  // Wayland diagnostic logging — helps debug shortcut issues in AppImage
+  if (getSessionType() === 'wayland') {
+    console.log('[env] Wayland session detected — diagnostic env vars:', {
+      DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS || '(unset)',
+      XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || '(unset)',
+      WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY || '(unset)',
+      HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE || '(unset)',
+      DISPLAY: process.env.DISPLAY || '(unset)',
+    })
   }
 }
 
@@ -219,10 +286,9 @@ export async function ensureFreshMacOSToken(): Promise<void> {
 
   try {
     const username = process.env.USER || os.userInfo().username
-    const credJson = execSync(
-      `security find-generic-password -a "${username}" -s "Claude Code-credentials" -w`,
-      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
-    ).trim()
+    const credJson = execFileSync('security', [
+      'find-generic-password', '-a', username, '-s', 'Claude Code-credentials', '-w'
+    ], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
 
     const creds = JSON.parse(credJson)
     const oauth = creds?.claudeAiOauth
@@ -307,6 +373,9 @@ export function getSessionType(): 'wayland' | 'x11' | 'unknown' {
   // WAYLAND_DISPLAY being set means Wayland is active, even if DISPLAY is
   // also set (XWayland). Hyprland/Sway/KDE all set both.
   if (process.env.WAYLAND_DISPLAY) return 'wayland'
+  // Hyprland compositor detected (via env or enrichEnvironment() scan) —
+  // treat as Wayland even if WAYLAND_DISPLAY wasn't inherited (TTY-started sessions)
+  if (process.env.HYPRLAND_INSTANCE_SIGNATURE) return 'wayland'
   if (process.env.XDG_SESSION_TYPE === 'x11') return 'x11'
   if (process.env.DISPLAY) return 'x11'
   return 'unknown'

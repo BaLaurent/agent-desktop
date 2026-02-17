@@ -200,8 +200,8 @@ export async function getSystemPrompt(db: Database.Database, conversationId: num
   return prompt
 }
 
-const CWD_CACHE_MAX = 1000
-const cwdCache = new Map<number, string>()
+import { CWD_CACHE_MAX, cwdCache, invalidateCwdCache } from './cwdCache'
+export { invalidateCwdCache }
 
 function getConversationCwd(db: Database.Database, conversationId: number): string {
   const cached = cwdCache.get(conversationId)
@@ -494,8 +494,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     }
   )
 
-  ipcMain.handle('messages:stop', async () => {
-    abortStream()
+  ipcMain.handle('messages:stop', async (_event, conversationId?: number) => {
+    if (conversationId != null) validatePositiveInt(conversationId, 'conversationId')
+    abortStream(conversationId)
   })
 
   ipcMain.handle(
@@ -555,17 +556,17 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     if (!msg) throw new Error('Message not found')
 
-    // Update message content
-    db.prepare('UPDATE messages SET content = ?, updated_at = ? WHERE id = ?').run(
-      content,
-      new Date().toISOString(),
-      messageId
-    )
-
-    // Delete all messages after this one in the conversation
-    db.prepare(
-      'DELETE FROM messages WHERE conversation_id = ? AND created_at > ?'
-    ).run(msg.conversation_id, msg.created_at)
+    // Atomically update message content and delete all subsequent messages
+    db.transaction(() => {
+      db.prepare('UPDATE messages SET content = ?, updated_at = ? WHERE id = ?').run(
+        content,
+        new Date().toISOString(),
+        messageId
+      )
+      db.prepare(
+        'DELETE FROM messages WHERE conversation_id = ? AND id > ?'
+      ).run(msg.conversation_id, msg.id)
+    })()
 
     // Re-send with updated history
     const history = buildMessageHistory(db, msg.conversation_id)

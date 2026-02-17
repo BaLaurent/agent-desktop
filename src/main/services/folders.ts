@@ -31,6 +31,19 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       if (data.name !== undefined) validateString(data.name as string, 'name', 500)
       if (data.ai_overrides !== undefined && data.ai_overrides !== null) validateString(data.ai_overrides as string, 'ai_overrides', 10_000)
       if (data.default_cwd !== undefined && data.default_cwd !== null) validateString(data.default_cwd as string, 'default_cwd', 1000)
+      if ('parent_id' in data && data.parent_id !== null && data.parent_id !== undefined) {
+        validatePositiveInt(data.parent_id as number, 'parent_id')
+        if (data.parent_id === id) throw new Error('Folder cannot be its own parent')
+        // Walk ancestors to detect cycle
+        let current = data.parent_id as number
+        const visited = new Set<number>([id])
+        while (current) {
+          if (visited.has(current)) throw new Error('Circular folder reference detected')
+          visited.add(current)
+          const parent = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(current) as { parent_id: number | null } | undefined
+          current = parent?.parent_id ?? 0
+        }
+      }
       const allowed = ['name', 'parent_id', 'ai_overrides', 'default_cwd']
       const fields: string[] = []
       const values: unknown[] = []

@@ -32,9 +32,12 @@ export function registerPreviewScheme(): void {
 export function registerPreviewProtocol(): void {
   protocol.handle('agent-preview', (request) => {
     let filePath: string
+    let allowedBase: string | null = null
     try {
       const url = new URL(request.url)
       filePath = decodeURIComponent(url.pathname)
+      allowedBase = url.searchParams.get('base')
+      if (allowedBase) allowedBase = decodeURIComponent(allowedBase)
     } catch {
       return new Response('Bad request', { status: 400 })
     }
@@ -45,6 +48,14 @@ export function registerPreviewProtocol(): void {
       validatePathSafe(filePath)
     } catch {
       return new Response('Forbidden', { status: 403 })
+    }
+
+    // If base directory specified, restrict to that subtree
+    if (allowedBase) {
+      const resolvedBase = resolve(allowedBase)
+      if (!filePath.startsWith(resolvedBase + '/') && filePath !== resolvedBase) {
+        return new Response('Forbidden', { status: 403 })
+      }
     }
 
     // Delegate to Electron's net module — it handles MIME detection from extension

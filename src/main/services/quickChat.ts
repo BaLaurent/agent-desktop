@@ -134,7 +134,8 @@ export function showOverlay(mode: 'text' | 'voice'): void {
 
 export function hideOverlay(): void {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.hide()
+    overlayWindow.destroy()
+    // 'closed' handler resets overlayWindow = null and headlessActive = false
   }
 }
 

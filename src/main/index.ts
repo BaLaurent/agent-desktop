@@ -7,22 +7,30 @@ import { initAutoUpdater, stopAutoUpdater, checkForUpdates, installUpdate } from
 import { setupDeepLinks } from './services/deeplink'
 import { registerPreviewScheme, registerPreviewProtocol } from './services/protocol'
 import { registerStreamWindow } from './services/streaming'
+import { cleanupPastedFiles } from './services/files'
 import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } from './services/globalShortcuts'
 import { showOverlay } from './services/quickChat'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
 
+// Enrich PATH/HOME for AppImage and non-standard environments — before GPU flags
+// (enrichEnvironment discovers WAYLAND_DISPLAY which affects Ozone platform choice)
+import { enrichEnvironment } from './utils/env'
+enrichEnvironment()
+
 // GPU flags — Linux only (Ozone/EGL/VAAPI are not available on macOS)
 if (process.platform === 'linux') {
-  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+  // Force Wayland backend when a Wayland compositor is running.
+  // 'auto' hint tries X11 first when DISPLAY is set (XWayland), which is wrong on Hyprland/Sway.
+  if (process.env.WAYLAND_DISPLAY) {
+    app.commandLine.appendSwitch('ozone-platform', 'wayland')
+  } else {
+    app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+  }
   app.commandLine.appendSwitch('use-gl', 'egl')
   app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL')
 }
-
-// Enrich PATH/HOME for AppImage and non-standard environments — before app.ready
-import { enrichEnvironment } from './utils/env'
-enrichEnvironment()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -105,6 +113,7 @@ if (!gotLock) {
     registerPreviewProtocol()
     const db = getDatabase()
     registerAllHandlers(ipcMain, db)
+    cleanupPastedFiles().catch(() => {}) // fire-and-forget: remove stale paste temp files
     setupDeepLinks(app)
     createWindow()
     registerStreamWindow(mainWindow!)
@@ -120,6 +129,11 @@ if (!gotLock) {
       setTrayUpdateCallbacks(checkForUpdates, installUpdate)
       initAutoUpdater(getMainWindow, () => rebuildTrayMenu(true))
     }
+  }).catch((err) => {
+    // dialog must be required inline — not available if app.ready fails
+    const { dialog } = require('electron')
+    dialog.showErrorBoxSync('Startup Failed', err.message || String(err))
+    app.quit()
   })
 
   app.on('before-quit', () => {

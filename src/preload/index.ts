@@ -30,7 +30,7 @@ const api: AgentAPI = {
   messages: {
     send: (conversationId, content, attachments?) =>
       withTimeout(ipcRenderer.invoke('messages:send', conversationId, content, attachments), 300000),
-    stop: () => withTimeout(ipcRenderer.invoke('messages:stop')),
+    stop: (conversationId?: number) => withTimeout(ipcRenderer.invoke('messages:stop', conversationId)),
     regenerate: (conversationId) => withTimeout(ipcRenderer.invoke('messages:regenerate', conversationId), 300000),
     edit: (messageId, content) => withTimeout(ipcRenderer.invoke('messages:edit', messageId, content), 300000),
     respondToApproval: (requestId, response) =>

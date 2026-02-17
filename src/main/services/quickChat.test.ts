@@ -325,14 +325,14 @@ describe('QuickChat Service', () => {
   })
 
   describe('hideOverlay', () => {
-    it('hides the overlay window', async () => {
+    it('destroys the overlay window', async () => {
       const { registerHandlers, showOverlay, hideOverlay } = await import('./quickChat')
       registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb())
 
       showOverlay('text')
       hideOverlay()
 
-      expect(mockOverlayWin.hide).toHaveBeenCalled()
+      expect(mockOverlayWin.destroy).toHaveBeenCalled()
     })
 
     it('does nothing if no overlay exists', async () => {

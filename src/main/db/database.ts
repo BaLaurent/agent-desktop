@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import { createTables } from './schema'
 import { runMigrations } from './migrations'
@@ -11,15 +12,24 @@ export function getDatabase(): Database.Database {
   if (db) return db
 
   const dbPath = path.join(app.getPath('userData'), 'agent.db')
-  db = new Database(dbPath)
-
-  // WAL mode for better concurrent read performance
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-
-  createTables(db)
-  runMigrations(db)
-  seedDefaults(db)
+  try {
+    db = new Database(dbPath)
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    createTables(db)
+    runMigrations(db)
+    seedDefaults(db)
+  } catch (err) {
+    // Backup corrupted DB, recreate from scratch
+    const backupPath = dbPath + '.corrupt.' + Date.now()
+    try { fs.renameSync(dbPath, backupPath) } catch {}
+    db = new Database(dbPath)
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    createTables(db)
+    seedDefaults(db)
+    console.error('[database] Recreated after corruption. Backup:', backupPath)
+  }
 
   return db
 }

@@ -49,10 +49,12 @@ export function initAutoUpdater(
 
   autoUpdater.on('update-available', (info) => {
     sendStatus({ state: 'available', version: info.version, releaseDate: info.releaseDate })
-    new Notification({
-      title: 'Update Available',
-      body: `Version ${info.version} is available`,
-    }).show()
+    try {
+      new Notification({
+        title: 'Update Available',
+        body: `Version ${info.version} is available`,
+      }).show()
+    } catch {}
   })
 
   autoUpdater.on('update-not-available', () => {
@@ -65,10 +67,12 @@ export function initAutoUpdater(
 
   autoUpdater.on('update-downloaded', (info) => {
     sendStatus({ state: 'downloaded', version: info.version })
-    new Notification({
-      title: 'Update Ready',
-      body: `Version ${info.version} will be installed on restart`,
-    }).show()
+    try {
+      new Notification({
+        title: 'Update Ready',
+        body: `Version ${info.version} will be installed on restart`,
+      }).show()
+    } catch {}
     onUpdateReadyCallback?.()
   })
 
@@ -115,11 +119,15 @@ export function registerHandlers(ipcMain: IpcMain): void {
   })
 
   ipcMain.handle('updates:download', async () => {
-    if (isDebInstall()) {
-      await shell.openExternal('https://github.com/BaLaurent/agent-desktop/releases/latest')
-      return
+    try {
+      if (isDebInstall()) {
+        await shell.openExternal('https://github.com/BaLaurent/agent-desktop/releases/latest')
+        return
+      }
+      await autoUpdater.downloadUpdate()
+    } catch (err) {
+      sendStatus({ state: 'error', message: err instanceof Error ? err.message : 'Download failed' })
     }
-    await autoUpdater.downloadUpdate()
   })
 
   ipcMain.handle('updates:install', () => {

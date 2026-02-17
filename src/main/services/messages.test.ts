@@ -347,6 +347,36 @@ describe('Messages Service', () => {
     expect(settings.skills).toBe('project')
   })
 
+  it('getAISettings returns skillsEnabled true by default', () => {
+    const settings = getAISettings(db, convId)
+    expect(settings.skillsEnabled).toBe(true)
+  })
+
+  it('getAISettings reads skillsEnabled from global settings', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_skillsEnabled', 'false')").run()
+    const settings = getAISettings(db, convId)
+    expect(settings.skillsEnabled).toBe(false)
+  })
+
+  it('getAISettings returns empty disabledSkills by default', () => {
+    const settings = getAISettings(db, convId)
+    expect(settings.disabledSkills).toEqual([])
+  })
+
+  it('getAISettings parses disabledSkills from settings', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_disabledSkills', ?)").run(
+      JSON.stringify(['weather-wttr', 'godot-docs'])
+    )
+    const settings = getAISettings(db, convId)
+    expect(settings.disabledSkills).toEqual(['weather-wttr', 'godot-docs'])
+  })
+
+  it('getAISettings supports skills=local', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_skills', 'local')").run()
+    const settings = getAISettings(db, convId)
+    expect(settings.skills).toBe('local')
+  })
+
   it('saveMessage inserts and returns message with id', () => {
     const msg = saveMessage(db, convId, 'user', 'Hello world')
     expect(msg.id).toBeGreaterThan(0)

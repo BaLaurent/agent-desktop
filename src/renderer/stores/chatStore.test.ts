@@ -75,9 +75,16 @@ describe('chatStore', () => {
     expect(useChatStore.getState().streamBuffers).not.toHaveProperty('1')
   })
 
-  it('stopGeneration calls window.agent.messages.stop', async () => {
+  it('stopGeneration calls window.agent.messages.stop with conversationId', async () => {
+    useChatStore.setState({ activeConversationId: 42 })
     await useChatStore.getState().stopGeneration()
-    expect(mockAgent.messages.stop).toHaveBeenCalled()
+    expect(mockAgent.messages.stop).toHaveBeenCalledWith(42)
+  })
+
+  it('stopGeneration does nothing when no active conversation', async () => {
+    useChatStore.setState({ activeConversationId: null })
+    await useChatStore.getState().stopGeneration()
+    expect(mockAgent.messages.stop).not.toHaveBeenCalled()
   })
 
   it('loadMessages populates messages from API', async () => {

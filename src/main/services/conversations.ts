@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'
 import { validateString, validatePositiveInt } from '../utils/validate'
 import { DEFAULT_MODEL } from '../../shared/constants'
+import { invalidateCwdCache } from './cwdCache'
 
 const SEARCH_RESULTS_LIMIT = 50
 
@@ -56,6 +57,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       if (data.cwd !== undefined && data.cwd !== null) validateString(data.cwd as string, 'cwd', 1000)
       if (data.ai_overrides !== undefined && data.ai_overrides !== null) validateString(data.ai_overrides as string, 'ai_overrides', 10_000)
       if (data.cleared_at !== undefined && data.cleared_at !== null) validateString(data.cleared_at as string, 'cleared_at', 50)
+      if (data.folder_id !== undefined && data.folder_id !== null) validatePositiveInt(data.folder_id as number, 'folderId')
       const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides', 'cleared_at']
       const fields: string[] = []
       const values: unknown[] = []
@@ -71,6 +73,8 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       db.prepare(`UPDATE conversations SET ${fields.join(', ')} WHERE id = ?`).run(
         ...values
       )
+      // Invalidate CWD cache when cwd changes so next stream picks up the new value
+      if ('cwd' in data) invalidateCwdCache(id)
     }
   )
 
@@ -110,8 +114,18 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
   ipcMain.handle('conversations:import', (_e, data: string) => {
     validateString(data, 'data', 10_000_000)
-    const parsed = JSON.parse(data)
+
+    let parsed: any
+    try { parsed = JSON.parse(data) }
+    catch { throw new Error('Invalid JSON format') }
+
     const { conversation, messages } = parsed
+
+    // Validate fields
+    const title = typeof conversation?.title === 'string' ? conversation.title.slice(0, 500) : 'Imported Conversation'
+    const model = typeof conversation?.model === 'string' ? conversation.model.slice(0, 200) : DEFAULT_MODEL
+    const systemPrompt = (typeof conversation?.system_prompt === 'string') ? conversation.system_prompt : null
+    const kbEnabled = conversation?.kb_enabled === 1 ? 1 : 0
 
     const insertConv = db.prepare(
       `INSERT INTO conversations (title, model, system_prompt, kb_enabled, updated_at)
@@ -122,29 +136,32 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
        VALUES (?, ?, ?, ?, ?)`
     )
 
-    const result = insertConv.run(
-      conversation.title || 'Imported Conversation',
-      conversation.model || DEFAULT_MODEL,
-      conversation.system_prompt || null,
-      conversation.kb_enabled || 0
-    )
-    const newId = result.lastInsertRowid
+    // Wrap in transaction for atomicity
+    const importConv = db.transaction(() => {
+      const result = insertConv.run(title, model, systemPrompt, kbEnabled)
+      const newId = result.lastInsertRowid
 
-    if (Array.isArray(messages)) {
-      for (const msg of messages) {
-        insertMsg.run(
-          newId,
-          msg.role,
-          msg.content,
-          msg.attachments || '[]',
-          msg.created_at || new Date().toISOString()
-        )
+      if (Array.isArray(messages)) {
+        for (const msg of messages) {
+          // Skip invalid roles
+          if (msg.role !== 'user' && msg.role !== 'assistant') continue
+          const content = typeof msg.content === 'string' ? msg.content : ''
+          const attachments = typeof msg.attachments === 'string' ? msg.attachments : '[]'
+          // Normalize created_at to ISO format
+          let createdAt: string
+          try {
+            createdAt = new Date(msg.created_at).toISOString()
+          } catch {
+            createdAt = new Date().toISOString()
+          }
+          insertMsg.run(newId, msg.role, content, attachments, createdAt)
+        }
       }
-    }
+      return newId
+    })
 
-    return db
-      .prepare('SELECT * FROM conversations WHERE id = ?')
-      .get(newId)
+    const newId = importConv()
+    return db.prepare('SELECT * FROM conversations WHERE id = ?').get(newId)
   })
 
   ipcMain.handle('conversations:search', (_e, query: string) => {

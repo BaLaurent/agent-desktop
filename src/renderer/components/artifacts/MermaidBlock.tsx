@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mermaid from 'mermaid'
+import DOMPurify from 'dompurify'
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark' })
 
@@ -167,7 +168,14 @@ export function MermaidBlock({ content }: MermaidBlockProps) {
     setSvgHtml(null)
 
     mermaid.render(id, content.trim())
-      .then(({ svg }) => setSvgHtml(svg))
+      .then(({ svg }) => {
+        const sanitized = DOMPurify.sanitize(svg, {
+          USE_PROFILES: { svg: true, svgFilters: true },
+          FORBID_TAGS: ['script', 'foreignObject', 'use'],
+          FORBID_ATTR: ['xlink:href'],
+        })
+        setSvgHtml(sanitized)
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [content])
 

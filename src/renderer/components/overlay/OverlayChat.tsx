@@ -80,6 +80,19 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Voice toggle: when OverlayVoice is unmounted (voiceSent=true) and the user
+  // presses the voice shortcut again, hide the overlay so a fresh one is created.
+  // Without this, the stopRecording event has no listener after OverlayVoice unmounts.
+  useEffect(() => {
+    if (!voiceMode) return
+    const unsub = window.agent.events.onOverlayStopRecording(() => {
+      if (voiceSent) {
+        window.agent.quickChat.hide()
+      }
+    })
+    return unsub
+  }, [voiceMode, voiceSent])
+
   // Capture last non-empty streaming content for bubble persistence
   useEffect(() => {
     if (streamingContent) {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
@@ -10,8 +11,7 @@ import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall }
 const abortControllers = new Map<number, AbortController>()
 
 // Deferred promise map for tool approval / ask-user responses from the renderer
-const pendingRequests = new Map<string, { resolve: (value: unknown) => void }>()
-let requestCounter = 0
+const pendingRequests = new Map<string, { resolve: (value: unknown) => void; conversationId?: number }>()
 
 export function respondToApproval(requestId: string, response: ToolApprovalResponse | AskUserResponse): void {
   const pending = pendingRequests.get(requestId)
@@ -25,6 +25,15 @@ function denyAllPending(): void {
   for (const [id, entry] of pendingRequests) {
     entry.resolve({ behavior: 'deny', message: 'Request cancelled' } as ToolApprovalResponse)
     pendingRequests.delete(id)
+  }
+}
+
+function denyPendingForConversation(conversationId?: number): void {
+  for (const [id, entry] of pendingRequests) {
+    if (conversationId == null || entry.conversationId === conversationId) {
+      entry.resolve({ behavior: 'deny', message: 'Request cancelled' } as ToolApprovalResponse)
+      pendingRequests.delete(id)
+    }
   }
 }
 
@@ -133,8 +142,13 @@ export async function streamMessage(
 
   const sdk = await loadAgentSDK()
 
-  const abortController = new AbortController()
   const convKey = conversationId ?? -1
+
+  // Abort any existing stream for this conversation before starting new one
+  const existing = abortControllers.get(convKey)
+  if (existing) existing.abort()
+
+  const abortController = new AbortController()
   abortControllers.set(convKey, abortController)
 
   let fullContent = ''
@@ -206,7 +220,7 @@ export async function streamMessage(
     queryOptions.canUseTool = async (toolName: string, input: Record<string, unknown>) => {
       // AskUserQuestion: always interactive, regardless of permission mode
       if (toolName === 'AskUserQuestion') {
-        const requestId = `req_${Date.now()}_${++requestCounter}`
+        const requestId = randomUUID()
         pendingApprovalCount++
 
         try {
@@ -218,7 +232,7 @@ export async function streamMessage(
           })
 
           const response = await new Promise<unknown>((resolve) => {
-            pendingRequests.set(requestId, { resolve })
+            pendingRequests.set(requestId, { resolve, conversationId: convKey })
           })
 
           const askResponse = response as AskUserResponse
@@ -248,7 +262,7 @@ export async function streamMessage(
       }
 
       // Non-bypass: existing tool approval flow
-      const requestId = `req_${Date.now()}_${++requestCounter}`
+      const requestId = randomUUID()
       pendingApprovalCount++
 
       try {
@@ -260,7 +274,7 @@ export async function streamMessage(
         })
 
         const response = await new Promise<unknown>((resolve) => {
-          pendingRequests.set(requestId, { resolve })
+          pendingRequests.set(requestId, { resolve, conversationId: convKey })
         })
 
         const approvalResponse = response as ToolApprovalResponse
@@ -459,15 +473,18 @@ export async function streamMessage(
       sendChunk('error', errorMsg, convExtra)
     }
   } finally {
-    abortControllers.delete(convKey)
-    denyAllPending()
+    // Only delete if this is still our controller (another stream may have replaced it)
+    if (abortControllers.get(convKey) === abortController) {
+      abortControllers.delete(convKey)
+    }
+    denyPendingForConversation(convKey)
   }
 
   return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted }
 }
 
 export function abortStream(conversationId?: number): void {
-  denyAllPending()
+  denyPendingForConversation(conversationId)
   if (conversationId != null) {
     const controller = abortControllers.get(conversationId)
     if (controller) {
