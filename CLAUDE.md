@@ -150,6 +150,7 @@
 - **Gotcha**: `getProxyObject()` fails on portal Request paths — Hyprland doesn't expose `org.freedesktop.portal.Request` for introspection
 - **Gotcha**: do NOT include `preferred_trigger` in `BindShortcuts` — Hyprland portal ignores/warns on unknown data types
 - **Hyprland-specific**: portal doesn't auto-assign keybindings; must `hyprctl keyword bind MODS,key,global,:shortcut-id` (colon prefix = empty appid)
+- **Gotcha**: always `unbind` before `bind` in hyprctl — `keyword bind` accumulates at runtime; app restarts without compositor restarts leave stale bindings that cause duplicate `Activated` signals
 - **Gotcha**: re-registration must NOT tear down D-Bus session when only key combos change — `rebindWaylandShortcuts()` updates hyprctl binds only; full session rebuild causes portal race condition (Activated signals routed to dead session)
 - Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`); re-registered via `quickChat:reregisterShortcuts` IPC
 - Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
