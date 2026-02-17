@@ -137,6 +137,8 @@
 - Overlay components in `src/renderer/components/overlay/` — `OverlayChat` (container), `OverlayInput`, `OverlayResponse`, `OverlayVoice`
 - Settings in `QuickChatSettings.tsx`: response notification toggle, response bubble toggle, purge history
 - **Gotcha**: shortcut re-toggle while visible → voice mode sends `overlay:stopRecording`, text mode hides; only creates new window if hidden/destroyed
+- **Gotcha**: `hideOverlay()` calls `destroy()` not `hide()` — `headlessActive` only resets on `closed` event; `hide()` created zombie windows that blocked subsequent shortcut activations
+- **Gotcha**: `OverlayChat` must also listen for `overlay:stopRecording` (when `voiceSent=true`) — after transcription, `OverlayVoice` unmounts and its listener is cleaned up; without the fallback listener the overlay gets stuck
 - **Gotcha**: `ready-to-show` never fires for transparent BrowserWindows on Linux/Wayland — must use `webContents.did-finish-load` instead
 - **Gotcha**: overlay must use `h-screen` not `h-full` — `html`/`body`/`#root` lack `height: 100%`, so `h-full` resolves to `auto` and breaks `overflow-y-auto` scrolling
 
@@ -148,6 +150,7 @@
 - **Gotcha**: `getProxyObject()` fails on portal Request paths — Hyprland doesn't expose `org.freedesktop.portal.Request` for introspection
 - **Gotcha**: do NOT include `preferred_trigger` in `BindShortcuts` — Hyprland portal ignores/warns on unknown data types
 - **Hyprland-specific**: portal doesn't auto-assign keybindings; must `hyprctl keyword bind MODS,key,global,:shortcut-id` (colon prefix = empty appid)
+- **Gotcha**: re-registration must NOT tear down D-Bus session when only key combos change — `rebindWaylandShortcuts()` updates hyprctl binds only; full session rebuild causes portal race condition (Activated signals routed to dead session)
 - Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`); re-registered via `quickChat:reregisterShortcuts` IPC
 - Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
 
