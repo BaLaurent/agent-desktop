@@ -245,5 +245,6 @@
 - **If Ctrl+C interrupts tests**: run `npm run posttest` to restore Electron binary before `npm run dev`
 
 ## IPC Timeout
-- All `ipcRenderer.invoke()` wrapped with `withTimeout()` (default 30s)
-- Streaming calls (`messages:send`, `messages:regenerate`, `messages:edit`) get 300s timeout
+- All `ipcRenderer.invoke()` wrapped with `withTimeout()` (default 30s); `ms <= 0` disables timeout
+- Streaming calls (`messages:send`, `messages:regenerate`, `messages:edit`) use `_streamingTimeoutMs` (default 300s)
+- **Configurable**: `streamingTimeoutSeconds` setting (Settings > General); 0 = no timeout; synced to preload via `setStreamingTimeout()`

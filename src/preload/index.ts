@@ -1,7 +1,10 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AgentAPI } from './api'
 
+let _streamingTimeoutMs = 300000
+
 function withTimeout<T>(promise: Promise<T>, ms = 30000): Promise<T> {
+  if (ms <= 0) return promise
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -29,10 +32,10 @@ const api: AgentAPI = {
   },
   messages: {
     send: (conversationId, content, attachments?) =>
-      withTimeout(ipcRenderer.invoke('messages:send', conversationId, content, attachments), 300000),
+      withTimeout(ipcRenderer.invoke('messages:send', conversationId, content, attachments), _streamingTimeoutMs),
     stop: (conversationId?: number) => withTimeout(ipcRenderer.invoke('messages:stop', conversationId)),
-    regenerate: (conversationId) => withTimeout(ipcRenderer.invoke('messages:regenerate', conversationId), 300000),
-    edit: (messageId, content) => withTimeout(ipcRenderer.invoke('messages:edit', messageId, content), 300000),
+    regenerate: (conversationId) => withTimeout(ipcRenderer.invoke('messages:regenerate', conversationId), _streamingTimeoutMs),
+    edit: (messageId, content) => withTimeout(ipcRenderer.invoke('messages:edit', messageId, content), _streamingTimeoutMs),
     respondToApproval: (requestId, response) =>
       withTimeout(ipcRenderer.invoke('messages:respondToApproval', requestId, response)),
     onStream: (callback) => {
@@ -87,6 +90,7 @@ const api: AgentAPI = {
   settings: {
     get: () => withTimeout(ipcRenderer.invoke('settings:get')),
     set: (key, value) => withTimeout(ipcRenderer.invoke('settings:set', key, value)),
+    setStreamingTimeout: (ms: number) => { _streamingTimeoutMs = ms },
   },
   themes: {
     list: () => withTimeout(ipcRenderer.invoke('themes:list')),

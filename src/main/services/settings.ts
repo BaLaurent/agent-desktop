@@ -43,6 +43,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'html_jsTrustAll',
   // CWD restriction
   'hooks_cwdRestriction',
+  // Streaming timeout
+  'streamingTimeoutSeconds',
 ])
 
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {

@@ -91,6 +91,7 @@ export interface AgentAPI {
   settings: {
     get(): Promise<Record<string, string>>
     set(key: string, value: string): Promise<void>
+    setStreamingTimeout(ms: number): void
   }
   themes: {
     list(): Promise<ThemeFile[]>

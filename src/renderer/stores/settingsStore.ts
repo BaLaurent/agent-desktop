@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { ThemeFile } from '../../shared/types'
 
+function syncStreamingTimeout(settings: Record<string, string>): void {
+  const seconds = parseInt(settings.streamingTimeoutSeconds ?? '300', 10)
+  const ms = isNaN(seconds) || seconds < 0 ? 300000 : seconds * 1000
+  window.agent.settings.setStreamingTimeout(ms)
+}
+
 interface SettingsState {
   settings: Record<string, string>
   themes: ThemeFile[]
@@ -23,6 +29,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       const settings = await window.agent.settings.get()
       const activeTheme = settings.activeTheme || null
+      syncStreamingTimeout(settings)
       set({ settings, activeTheme, isLoading: false })
     } catch (err) {
       console.error('[settings] Failed to load settings:', err)
@@ -33,6 +40,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setSetting: async (key: string, value: string) => {
     try {
       await window.agent.settings.set(key, value)
+      const newSettings = { ...get().settings, [key]: value }
+      if (key === 'streamingTimeoutSeconds') {
+        syncStreamingTimeout(newSettings)
+      }
       set((state) => ({
         settings: { ...state.settings, [key]: value },
         activeTheme: key === 'activeTheme' ? value : state.activeTheme,

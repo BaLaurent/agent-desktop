@@ -218,6 +218,27 @@ export function GeneralSettings() {
           )}
         </div>
       ))}
+
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Response timeout
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Seconds before a streaming response times out. 0 = no timeout.
+          </span>
+        </div>
+        <input
+          type="number"
+          min={0}
+          step={30}
+          value={settings.streamingTimeoutSeconds ?? '300'}
+          onChange={(e) => setSetting('streamingTimeoutSeconds', e.target.value)}
+          className="w-24 text-sm rounded px-2 py-1 border border-[var(--color-text-muted)]/20 text-right"
+          style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)' }}
+          aria-label="Response timeout in seconds"
+        />
+      </div>
     </div>
   )
 }
