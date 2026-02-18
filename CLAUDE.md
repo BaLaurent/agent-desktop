@@ -149,9 +149,10 @@
 - **Gotcha**: `bus.name` is null until D-Bus Hello handshake completes — must `await bus.once('connect')` before accessing
 - **Gotcha**: `getProxyObject()` fails on portal Request paths — Hyprland doesn't expose `org.freedesktop.portal.Request` for introspection
 - **Gotcha**: do NOT include `preferred_trigger` in `BindShortcuts` — Hyprland portal ignores/warns on unknown data types
-- **Hyprland-specific**: portal doesn't auto-assign keybindings; must `hyprctl keyword bind MODS,key,global,:shortcut-id` (colon prefix = empty appid)
-- **Gotcha**: always `unbind` before `bind` in hyprctl — `keyword bind` accumulates at runtime; app restarts without compositor restarts leave stale bindings that cause duplicate `Activated` signals
-- **Gotcha**: re-registration must NOT tear down D-Bus session when only key combos change — `rebindWaylandShortcuts()` updates hyprctl binds only; full session rebuild causes portal race condition (Activated signals routed to dead session)
+- **Hyprland shortcut dispatch**: uses FIFO (named pipe) at `$XDG_RUNTIME_DIR/agent-desktop-shortcuts.pipe` + `hyprctl keyword bind MODS,key,exec,echo ID > pipe`. D-Bus `Activated` signals from the portal never work in Electron's event loop (`dbus-next` signal delivery is broken). Non-Hyprland compositors (GNOME/KDE) still use the portal D-Bus path.
+- **Gotcha**: FIFO must be opened with `O_RDWR` only (no `O_NONBLOCK`) — `O_NONBLOCK` causes `EAGAIN` errors with `createReadStream`; `O_RDWR` alone prevents blocking on `open()` and prevents EOF when writers disconnect
+- **Gotcha**: always `unbind` before `bind` in hyprctl — `keyword bind` accumulates at runtime; app restarts without compositor restarts leave stale bindings
+- **Gotcha**: re-registration keeps FIFO alive and only updates hyprctl binds — `rebindWaylandShortcuts()` avoids teardown/rebuild
 - Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`); re-registered via `quickChat:reregisterShortcuts` IPC
 - Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
 
