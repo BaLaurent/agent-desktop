@@ -6,6 +6,7 @@ import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
 import { SvgPreview } from '../artifacts/SvgPreview'
 import { CodeEditorModal } from './CodeEditorModal'
+import { PreviewModal } from './PreviewModal'
 import type { FileNode } from '../../../shared/types'
 import { useSettingsStore } from '../../stores/settingsStore'
 
@@ -504,7 +505,7 @@ function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand }
   const name = getBasename(filePath)
   const showApplyTheme = isThemesCwd && getFileExtension(filePath) === 'css'
   const showJsToggle = viewMode === 'preview' && HTML_EXTENSIONS.has(getFileExtension(filePath))
-  const showExpand = isMonacoActive(fileLanguage, filePath, viewMode)
+  const showExpand = fileLanguage === 'image' || isMonacoActive(fileLanguage, filePath, viewMode) || (viewMode === 'preview' && PREVIEW_EXTENSIONS.has(getFileExtension(filePath)))
 
   return (
     <div
@@ -550,7 +551,7 @@ function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand }
             color: 'var(--color-text-muted)',
             border: '1px solid color-mix(in srgb, var(--color-text-muted) 20%, transparent)',
           }}
-          aria-label="Expand code editor"
+          aria-label="Expand preview"
         >
           Expand ↗
         </button>
@@ -736,6 +737,7 @@ export function FileExplorerPanel() {
   const [jsEnabled, setJsEnabled] = useState(false)
   const [jsPromptDismissed, setJsPromptDismissed] = useState(false)
   const [showCodeModal, setShowCodeModal] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
 
   // DnD state
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
@@ -763,6 +765,7 @@ export function FileExplorerPanel() {
     }
     setJsPromptDismissed(false)
     setShowCodeModal(false)
+    setShowPreviewModal(false)
   }, [selectedFilePath])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
@@ -992,7 +995,13 @@ export function FileExplorerPanel() {
                 isThemesCwd={themesCwd}
                 jsEnabled={jsEnabled}
                 onToggleJs={() => setJsEnabled((v) => !v)}
-                onExpand={() => setShowCodeModal(true)}
+                onExpand={() => {
+                  if (isMonacoActive(fileLanguage, selectedFilePath, viewMode)) {
+                    setShowCodeModal(true)
+                  } else {
+                    setShowPreviewModal(true)
+                  }
+                }}
               />
               {fileWarning && (
                 <div className="px-3 py-1.5 text-xs flex-shrink-0 bg-warning" style={{ color: '#000' }} role="alert">
@@ -1050,6 +1059,16 @@ export function FileExplorerPanel() {
           onClose={() => setShowCodeModal(false)}
           language={fileLanguage}
           filename={getBasename(selectedFilePath)}
+        />
+      )}
+
+      {showPreviewModal && selectedFilePath && fileContent !== null && (
+        <PreviewModal
+          filePath={selectedFilePath}
+          content={fileContent}
+          language={fileLanguage}
+          allowScripts={jsEnabled}
+          onClose={() => setShowPreviewModal(false)}
         />
       )}
     </div>
