@@ -38,6 +38,10 @@
 - Theme apply: when CWD is `~/.agent-desktop/themes/`, `.css` files show Apply/Active buttons
 - Context menu: Open Default App, Reveal, Copy Path, Rename (inline), Duplicate, Move to Trash
 - `@mention` uses VS Code-style fuzzy matching (`src/renderer/utils/fuzzyMatch.ts`)
+- **Expand button**: "Expand" button routes to `CodeEditorModal` (source/code mode) or `PreviewModal` (preview/images); visible for all file types
+- **Markdown anchor links**: headings get slugified `id` attributes; `#` links scroll within container instead of calling `openExternal`
+  - **Gotcha**: browser URL-encodes accented chars in href (`é` → `%C3%A9`) — must `decodeURIComponent` before slugifying
+  - **Gotcha**: `slugify` uses Unicode `\p{L}\p{N}` (not `\w`) to preserve accented characters
 
 ## CWD & Working Directory
 - Each conversation has `cwd` column (nullable, defaults to `~/.agent-desktop/sessions-folder/{id}/`)
