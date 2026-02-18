@@ -383,6 +383,30 @@ function updateConversationTimestamp(db: Database.Database, conversationId: numb
   )
 }
 
+async function streamAndSave(
+  db: Database.Database,
+  conversationId: number
+): Promise<Message | null> {
+  const history = buildMessageHistory(db, conversationId)
+  const aiSettings = getAISettings(db, conversationId)
+  const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
+  try {
+    const { content: responseContent, toolCalls } = await streamMessage(
+      history, systemPrompt, aiSettings, conversationId
+    )
+    if (responseContent) {
+      const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
+      if (!exists) return null
+      const assistantMsg = saveMessage(db, conversationId, 'assistant', responseContent, [], toolCalls)
+      updateConversationTimestamp(db, conversationId)
+      return assistantMsg
+    }
+  } catch (err) {
+    console.error('[messages] Stream error:', err instanceof Error ? err.message : String(err))
+  }
+  return null
+}
+
 async function generateConversationTitle(
   db: Database.Database,
   conversationId: number,
@@ -456,41 +480,26 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       saveMessage(db, conversationId, 'user', finalContent, savedAttachments)
       updateConversationTimestamp(db, conversationId)
 
-      // Build history and stream response
-      const history = buildMessageHistory(db, conversationId)
-      const aiSettings = getAISettings(db, conversationId)
-      const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
-      try {
-        const { content: responseContent, toolCalls } = await streamMessage(history, systemPrompt, aiSettings, conversationId)
+      // Stream response and save
+      const assistantMsg = await streamAndSave(db, conversationId)
 
-        if (responseContent) {
-          const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
-          if (!exists) return null
-          const assistantMsg = saveMessage(db, conversationId, 'assistant', responseContent, [], toolCalls)
-          updateConversationTimestamp(db, conversationId)
-
-          // Auto-title on first assistant response (fire-and-forget)
-          // Skip for Quick Chat conversation — its title stays fixed
-          const quickChatRow = db.prepare("SELECT value FROM settings WHERE key = 'quickChat_conversationId'").get() as { value: string } | undefined
-          const isQuickChat = quickChatRow?.value === String(conversationId)
-          if (!isQuickChat) {
-            const assistantCount = db.prepare(
-              "SELECT COUNT(*) as c FROM messages WHERE conversation_id = ? AND role = 'assistant'"
-            ).get(conversationId) as { c: number }
-            if (assistantCount.c === 1) {
-              generateConversationTitle(db, conversationId, content, responseContent)
-                .catch(err => console.error('[messages] Auto-title error:', err))
-            }
+      // Auto-title on first assistant response (fire-and-forget)
+      // Skip for Quick Chat conversation — its title stays fixed
+      if (assistantMsg) {
+        const quickChatRow = db.prepare("SELECT value FROM settings WHERE key = 'quickChat_conversationId'").get() as { value: string } | undefined
+        const isQuickChat = quickChatRow?.value === String(conversationId)
+        if (!isQuickChat) {
+          const assistantCount = db.prepare(
+            "SELECT COUNT(*) as c FROM messages WHERE conversation_id = ? AND role = 'assistant'"
+          ).get(conversationId) as { c: number }
+          if (assistantCount.c === 1) {
+            generateConversationTitle(db, conversationId, content, assistantMsg.content)
+              .catch(err => console.error('[messages] Auto-title error:', err))
           }
-
-          return assistantMsg
         }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err)
-        console.error('[messages] Stream error:', errorMsg)
       }
 
-      return null
+      return assistantMsg
     }
   )
 
@@ -523,25 +532,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     }
 
     // Re-send: build history (now without last assistant), stream new response
-    const history = buildMessageHistory(db, conversationId)
-    const aiSettings = getAISettings(db, conversationId)
-    const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
-
-    try {
-      const { content: responseContent, toolCalls } = await streamMessage(history, systemPrompt, aiSettings, conversationId)
-      if (responseContent) {
-        const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
-        if (!exists) return null
-        const assistantMsg = saveMessage(db, conversationId, 'assistant', responseContent, [], toolCalls)
-        updateConversationTimestamp(db, conversationId)
-        return assistantMsg
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-        console.error('[messages] Stream error:', errorMsg)
-    }
-
-    return null
+    return streamAndSave(db, conversationId)
   })
 
   ipcMain.handle('messages:edit', async (_event, messageId: number, content: string) => {
@@ -569,25 +560,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     })()
 
     // Re-send with updated history
-    const history = buildMessageHistory(db, msg.conversation_id)
-    const aiSettings = getAISettings(db, msg.conversation_id)
-    const systemPrompt = await getSystemPrompt(db, msg.conversation_id, aiSettings.cwd!)
-
-    try {
-      const { content: responseContent, toolCalls } = await streamMessage(history, systemPrompt, aiSettings, msg.conversation_id)
-      if (responseContent) {
-        const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(msg.conversation_id)
-        if (!exists) return null
-        const assistantMsg = saveMessage(db, msg.conversation_id, 'assistant', responseContent, [], toolCalls)
-        updateConversationTimestamp(db, msg.conversation_id)
-        return assistantMsg
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-        console.error('[messages] Stream error:', errorMsg)
-    }
-
-    return null
+    return streamAndSave(db, msg.conversation_id)
   })
 
   ipcMain.handle('conversations:generateTitle', async (_event, conversationId: number) => {

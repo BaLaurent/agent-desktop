@@ -84,6 +84,27 @@ function cleanupStreamBuffer(
   }
 }
 
+async function streamOperation(
+  get: () => ChatState,
+  set: (partial: Partial<ChatState>) => void,
+  conversationId: number,
+  ipcCall: () => Promise<unknown>,
+  errorLabel: string
+): Promise<void> {
+  try {
+    await ipcCall()
+    await new Promise((r) => setTimeout(r, 50))
+    if (get().activeConversationId === conversationId) {
+      await get().loadMessages(conversationId)
+    }
+    set(cleanupStreamBuffer(get(), conversationId))
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : errorLabel
+    const cleanup = cleanupStreamBuffer(get(), conversationId)
+    set(get().activeConversationId === conversationId ? { error: msg, ...cleanup } : cleanup)
+  }
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   clearedAt: null,
@@ -127,21 +148,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeConversationId: conversationId,
     }))
 
-    try {
-      await window.agent.messages.send(conversationId, content, attachments)
-      // Small delay to let stream listener process the 'done' chunk
-      await new Promise((r) => setTimeout(r, 50))
-      // Only update UI if this conversation is still active
-      if (get().activeConversationId === conversationId) {
-        await get().loadMessages(conversationId)
-      }
-      set(cleanupStreamBuffer(get(), conversationId))
-    } catch (err) {
-      console.error('sendMessage error:', err)
-      const msg = err instanceof Error ? err.message : 'Failed to send message'
-      const cleanup = cleanupStreamBuffer(get(), conversationId)
-      set(get().activeConversationId === conversationId ? { error: msg, ...cleanup } : cleanup)
-    }
+    await streamOperation(
+      get, set, conversationId,
+      () => window.agent.messages.send(conversationId, content, attachments),
+      'Failed to send message'
+    )
   },
 
   stopGeneration: async () => {
@@ -163,18 +174,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
     }))
 
-    try {
-      await window.agent.messages.regenerate(conversationId)
-      await new Promise((r) => setTimeout(r, 50))
-      if (get().activeConversationId === conversationId) {
-        await get().loadMessages(conversationId)
-      }
-      set(cleanupStreamBuffer(get(), conversationId))
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to regenerate'
-      const cleanup = cleanupStreamBuffer(get(), conversationId)
-      set(get().activeConversationId === conversationId ? { error: msg, ...cleanup } : cleanup)
-    }
+    await streamOperation(
+      get, set, conversationId,
+      () => window.agent.messages.regenerate(conversationId),
+      'Failed to regenerate'
+    )
   },
 
   editMessage: async (messageId: number, content: string) => {
@@ -198,23 +202,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     })
 
-    try {
-      await window.agent.messages.edit(messageId, content)
-      await new Promise((r) => setTimeout(r, 50))
-      if (convId && get().activeConversationId === convId) {
-        await get().loadMessages(convId)
-      }
-      if (convId != null) {
-        set(cleanupStreamBuffer(get(), convId))
-      } else {
+    if (convId != null) {
+      await streamOperation(
+        get, set, convId,
+        () => window.agent.messages.edit(messageId, content),
+        'Failed to edit message'
+      )
+    } else {
+      try {
+        await window.agent.messages.edit(messageId, content)
         set({ isStreaming: false, streamParts: [], streamingContent: '' })
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to edit message'
-      if (convId != null) {
-        const cleanup = cleanupStreamBuffer(get(), convId)
-        set(get().activeConversationId === convId ? { error: msg, ...cleanup } : cleanup)
-      } else {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to edit message'
         set({ error: msg, isStreaming: false })
       }
     }
