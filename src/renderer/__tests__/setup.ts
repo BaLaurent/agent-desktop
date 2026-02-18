@@ -75,6 +75,7 @@ export const mockAgent = {
   settings: {
     get: vi.fn().mockResolvedValue({}),
     set: vi.fn().mockResolvedValue(undefined),
+    setStreamingTimeout: vi.fn(),
   },
   themes: {
     list: vi.fn().mockResolvedValue([]),

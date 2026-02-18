@@ -41,6 +41,12 @@ describe('Settings Service', () => {
     expect(settings.theme).toBe('light')
   })
 
+  it('accepts streamingTimeoutSeconds setting key', async () => {
+    await ipc.invoke('settings:set', 'streamingTimeoutSeconds', '60')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.streamingTimeoutSeconds).toBe('60')
+  })
+
   it('get after set reflects new value', async () => {
     const before = await ipc.invoke('settings:get') as Record<string, string>
     expect(before.ai_maxTurns).toBe('50')
