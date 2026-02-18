@@ -1,5 +1,5 @@
 import dbus, { type MessageBus, type Message, MessageType, Variant } from 'dbus-next'
-import { execFile } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
 import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -20,6 +20,12 @@ let busName = ''
 let sessionPath: string | null = null
 let messageHandler: ((msg: Message) => void) | null = null
 let hyprlandBinds: string[] = []
+
+// FIFO-based shortcut activation (Hyprland only)
+let fifoPath: string | null = null
+let fifoFd: number | null = null
+let fifoStream: fs.ReadStream | null = null
+let fifoActive = false
 
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 5000
@@ -88,6 +94,93 @@ async function isHyprland(): Promise<boolean> {
   }
 }
 
+// ─── FIFO-based shortcut activation (bypasses D-Bus signal reception) ───
+
+/**
+ * Get the FIFO path for shortcut activation.
+ * Uses XDG_RUNTIME_DIR (/run/user/UID) — tmpfs, per-user, fast.
+ */
+function getFifoPath(): string {
+  const runtimeDir = process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`
+  return path.join(runtimeDir, 'agent-desktop-shortcuts.pipe')
+}
+
+/**
+ * Create a FIFO and open it for reading.
+ * Uses O_RDWR to prevent EOF when writers disconnect.
+ */
+function createShortcutPipe(onActivated: (shortcutId: string) => void): boolean {
+  const pipePath = getFifoPath()
+
+  try {
+    // Remove stale FIFO from previous run
+    try { fs.unlinkSync(pipePath) } catch { /* doesn't exist */ }
+
+    // Create FIFO (named pipe)
+    execFileSync('mkfifo', [pipePath], { timeout: 5000 })
+    logToFile(`FIFO created: ${pipePath}`)
+
+    // Open with O_RDWR only — keeps pipe open (no EOF when writers disconnect).
+    // Do NOT use O_NONBLOCK: it causes EAGAIN errors with createReadStream.
+    // O_RDWR on a FIFO never blocks on open() (both endpoints satisfied by same fd),
+    // and libuv handles async reads via its threadpool.
+    const fd = fs.openSync(pipePath, fs.constants.O_RDWR)
+
+    const stream = fs.createReadStream('', { fd, encoding: 'utf8', autoClose: false })
+    let buffer = ''
+
+    stream.on('data', (chunk: string) => {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // keep incomplete line in buffer
+      for (const line of lines) {
+        const id = line.trim()
+        if (id) {
+          console.log('[waylandShortcuts] FIFO activated:', id)
+          logToFile(`FIFO activated: ${id}`)
+          onActivated(id)
+        }
+      }
+    })
+
+    stream.on('error', (err) => {
+      console.error('[waylandShortcuts] FIFO read error:', err)
+      logToFile(`FIFO error: ${err}`)
+    })
+
+    fifoPath = pipePath
+    fifoFd = fd
+    fifoStream = stream
+    fifoActive = true
+
+    return true
+  } catch (err) {
+    console.error('[waylandShortcuts] Failed to create FIFO:', err)
+    logToFile(`FIFO creation FAILED: ${err}`)
+    return false
+  }
+}
+
+/** Close and remove the FIFO. */
+function destroyShortcutPipe(): void {
+  if (fifoStream) {
+    try { fifoStream.destroy() } catch { /* best effort */ }
+    fifoStream = null
+  }
+  if (fifoFd !== null) {
+    try { fs.closeSync(fifoFd) } catch { /* best effort */ }
+    fifoFd = null
+  }
+  if (fifoPath) {
+    try { fs.unlinkSync(fifoPath) } catch { /* best effort */ }
+    logToFile(`FIFO destroyed: ${fifoPath}`)
+    fifoPath = null
+  }
+  fifoActive = false
+}
+
+// ─── Portal-based registration (for non-Hyprland compositors) ───
+
 /**
  * Wait for a Portal Response signal on a specific request path.
  *
@@ -146,12 +239,15 @@ function waitForResponse(token: string): Promise<{ response: number; results: Re
   })
 }
 
+// ─── Registration entry points ───
+
 /**
  * Register global shortcuts via the XDG Desktop Portal (Wayland).
  *
- * On Hyprland, the portal doesn't auto-assign keybindings from preferred_trigger.
- * Instead, we register shortcut IDs with the portal, then use `hyprctl keyword bind`
- * to create the actual keybindings that dispatch to the portal via the `global` action.
+ * On Hyprland: bypasses D-Bus signal reception (broken in Electron's event loop)
+ * and uses a FIFO (named pipe) + hyprctl exec dispatcher instead.
+ *
+ * On non-Hyprland: uses the standard portal Activated signal via D-Bus.
  *
  * @returns true if the portal accepted the shortcuts, false if unavailable
  */
@@ -184,7 +280,79 @@ async function tryRegister(
   shortcuts: Array<{ id: string; accelerator: string; description: string }>,
   onActivated: (shortcutId: string) => void
 ): Promise<boolean> {
-  logToFile(`tryRegister: DBUS_SESSION_BUS_ADDRESS=${process.env.DBUS_SESSION_BUS_ADDRESS || '(unset)'}`)
+  const hypr = await isHyprland()
+  logToFile(`isHyprland: ${hypr}`)
+
+  if (hypr) {
+    return tryRegisterHyprland(shortcuts, onActivated)
+  }
+
+  return tryRegisterPortal(shortcuts, onActivated)
+}
+
+/**
+ * Hyprland path: FIFO + hyprctl exec dispatcher.
+ * Bypasses D-Bus signal reception entirely — the most reliable approach
+ * because dbus-next's signal handling doesn't work in Electron's event loop.
+ */
+async function tryRegisterHyprland(
+  shortcuts: Array<{ id: string; accelerator: string; description: string }>,
+  onActivated: (shortcutId: string) => void
+): Promise<boolean> {
+  const pipePath = getFifoPath()
+
+  // 1. Create FIFO for receiving shortcut activations
+  if (!createShortcutPipe(onActivated)) {
+    logToFile('Hyprland: FIFO creation failed, aborting')
+    return false
+  }
+
+  // 2. Bind shortcuts via hyprctl with exec dispatcher
+  //    When key is pressed, Hyprland runs: echo <shortcut-id> > <fifo-path>
+  let successCount = 0
+  for (const s of shortcuts) {
+    const { mods, key } = toHyprlandBind(s.accelerator)
+    // Remove any stale binding for this key combo (survives app restarts)
+    try { await hyprctl(['keyword', 'unbind', `${mods},${key}`]) } catch { /* may not exist */ }
+    // Use exec dispatcher with echo to write shortcut ID to FIFO
+    const bindArgs = `${mods},${key},exec,echo ${s.id} > ${pipePath}`
+    try {
+      const out = await hyprctl(['keyword', 'bind', bindArgs])
+      hyprlandBinds.push(`${mods},${key}`)
+      console.log('[waylandShortcuts] hyprctl bind (exec):', bindArgs)
+      logToFile(`hyprctl bind OK (exec): ${bindArgs} → ${out}`)
+      successCount++
+    } catch (err) {
+      console.warn('[waylandShortcuts] hyprctl bind failed:', bindArgs, err)
+      logToFile(`hyprctl bind FAILED: ${bindArgs} → ${err}`)
+    }
+  }
+
+  if (successCount === 0) {
+    console.error('[waylandShortcuts] All hyprctl binds failed — shortcuts will not work')
+    logToFile('All hyprctl binds failed')
+    destroyShortcutPipe()
+    return false
+  }
+  if (successCount < shortcuts.length) {
+    console.warn(`[waylandShortcuts] ${successCount}/${shortcuts.length} hyprctl binds succeeded (partial)`)
+    logToFile(`Partial: ${successCount}/${shortcuts.length} binds succeeded`)
+  }
+
+  console.log('[waylandShortcuts] Registered via Hyprland exec+FIFO:', shortcuts.map((s) => s.id).join(', '))
+  logToFile(`REGISTERED (Hyprland exec+FIFO): ${shortcuts.map((s) => s.id).join(', ')}`)
+  return true
+}
+
+/**
+ * Non-Hyprland path: standard XDG Desktop Portal with D-Bus Activated signal.
+ * Used for GNOME, KDE, Sway, etc. where the portal handles keybinding natively.
+ */
+async function tryRegisterPortal(
+  shortcuts: Array<{ id: string; accelerator: string; description: string }>,
+  onActivated: (shortcutId: string) => void
+): Promise<boolean> {
+  logToFile(`tryRegisterPortal: DBUS_SESSION_BUS_ADDRESS=${process.env.DBUS_SESSION_BUS_ADDRESS || '(unset)'}`)
   bus = dbus.sessionBus()
 
   // Wait for the D-Bus Hello handshake to complete — bus.name is null until then
@@ -219,7 +387,7 @@ async function tryRegister(
   if (!createResp || createResp.response !== 0) {
     console.warn('[waylandShortcuts] CreateSession failed, response:', createResp?.response)
     logToFile(`CreateSession FAILED: response=${createResp?.response ?? 'null (timeout)'}`)
-    cleanup()
+    cleanupBus()
     return false
   }
 
@@ -227,7 +395,7 @@ async function tryRegister(
   if (!sessionPath) {
     console.warn('[waylandShortcuts] CreateSession returned no session handle')
     logToFile('CreateSession returned no session handle')
-    cleanup()
+    cleanupBus()
     return false
   }
   console.log('[waylandShortcuts] Session:', sessionPath)
@@ -250,7 +418,7 @@ async function tryRegister(
   if (!bindResp || bindResp.response !== 0) {
     console.warn('[waylandShortcuts] BindShortcuts failed, response:', bindResp?.response)
     logToFile(`BindShortcuts FAILED: response=${bindResp?.response ?? 'null (timeout)'}`)
-    cleanup()
+    cleanupBus()
     return false
   }
   console.log('[waylandShortcuts] Bound', shortcuts.length, 'shortcuts')
@@ -285,46 +453,12 @@ async function tryRegister(
   }
   bus.on('message', messageHandler)
 
-  // 4. On Hyprland, configure keybindings via hyprctl so key presses
-  //    dispatch the `global` action to the portal. Format: `:shortcut-id`
-  //    (colon prefix = empty appid, matching our portal session).
-  const hypr = await isHyprland()
-  logToFile(`isHyprland: ${hypr}`)
-  if (hypr) {
-    let successCount = 0
-    for (const s of shortcuts) {
-      const { mods, key } = toHyprlandBind(s.accelerator)
-      // Remove any stale binding for this key combo (survives app restarts)
-      try { await hyprctl(['keyword', 'unbind', `${mods},${key}`]) } catch { /* may not exist */ }
-      const bindArgs = `${mods},${key},global,:${s.id}`
-      try {
-        const out = await hyprctl(['keyword', 'bind', bindArgs])
-        hyprlandBinds.push(`${mods},${key}`)
-        console.log('[waylandShortcuts] hyprctl bind:', bindArgs)
-        logToFile(`hyprctl bind OK: ${bindArgs} → ${out}`)
-        successCount++
-      } catch (err) {
-        console.warn('[waylandShortcuts] hyprctl bind failed:', bindArgs, err)
-        logToFile(`hyprctl bind FAILED: ${bindArgs} → ${err}`)
-      }
-    }
-    if (successCount === 0) {
-      console.error('[waylandShortcuts] All hyprctl binds failed — shortcuts will not work')
-      logToFile('All hyprctl binds failed')
-      cleanup()
-      return false
-    } else if (successCount < shortcuts.length) {
-      console.warn(`[waylandShortcuts] ${successCount}/${shortcuts.length} hyprctl binds succeeded (partial)`)
-      logToFile(`Partial: ${successCount}/${shortcuts.length} binds succeeded`)
-    }
-  }
-
   console.log('[waylandShortcuts] Registered via XDG Portal:', shortcuts.map((s) => s.id).join(', '))
-  logToFile(`REGISTERED: ${shortcuts.map((s) => s.id).join(', ')}`)
+  logToFile(`REGISTERED (Portal): ${shortcuts.map((s) => s.id).join(', ')}`)
   return true
 }
 
-function cleanup(): void {
+function cleanupBus(): void {
   if (messageHandler && bus) {
     bus.removeListener('message', messageHandler)
     messageHandler = null
@@ -355,31 +489,37 @@ async function removeHyprlandBinds(): Promise<void> {
 }
 
 /**
- * Rebind Hyprland keybindings without recreating the D-Bus session.
+ * Rebind Hyprland keybindings without recreating the FIFO or D-Bus session.
  *
  * When only the key combinations change (not the shortcut IDs), we can skip
- * the full session teardown/rebuild. The portal session and Activated signal
- * listener stay intact — only the hyprctl `global` bindings are updated.
+ * the full teardown/rebuild. The FIFO (or portal session) stays intact — only
+ * the hyprctl bindings are updated.
  *
  * @returns true if rebind succeeded, false if no active session exists
  */
 export async function rebindWaylandShortcuts(
   shortcuts: Array<{ id: string; accelerator: string }>
 ): Promise<boolean> {
-  if (!sessionPath || !bus) return false
+  // Need either FIFO or portal session active
+  if (!fifoActive && !sessionPath) return false
 
   await removeHyprlandBinds()
 
   const hypr = await isHyprland()
   if (!hypr) return true // non-Hyprland Wayland — portal handles bindings natively
 
-  logToFile(`rebindWaylandShortcuts: updating ${shortcuts.length} hyprctl binds (session intact)`)
+  const pipePath = fifoActive ? getFifoPath() : null
+
+  logToFile(`rebindWaylandShortcuts: updating ${shortcuts.length} hyprctl binds (fifo=${!!pipePath})`)
   let successCount = 0
   for (const s of shortcuts) {
     const { mods, key } = toHyprlandBind(s.accelerator)
     // Remove any stale binding for this key combo (survives app restarts)
     try { await hyprctl(['keyword', 'unbind', `${mods},${key}`]) } catch { /* may not exist */ }
-    const bindArgs = `${mods},${key},global,:${s.id}`
+    // Use exec+FIFO if active, otherwise global+portal
+    const bindArgs = pipePath
+      ? `${mods},${key},exec,echo ${s.id} > ${pipePath}`
+      : `${mods},${key},global,:${s.id}`
     try {
       const out = await hyprctl(['keyword', 'bind', bindArgs])
       hyprlandBinds.push(`${mods},${key}`)
@@ -404,8 +544,9 @@ export async function rebindWaylandShortcuts(
   return true
 }
 
-/** Unregister all Wayland shortcuts and disconnect from D-Bus. */
+/** Unregister all Wayland shortcuts and clean up resources. */
 export async function unregisterWaylandShortcuts(): Promise<void> {
   await removeHyprlandBinds()
-  cleanup()
+  destroyShortcutPipe()
+  cleanupBus()
 }

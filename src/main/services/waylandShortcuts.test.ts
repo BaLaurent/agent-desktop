@@ -8,16 +8,36 @@ const mockExecFile = vi.fn((_bin: string, _args: string[], _opts: object, cb: (e
   // Auto-succeed by default
   cb(null, 'ok')
 })
+const mockExecFileSync = vi.fn(() => '')
 
 vi.mock('child_process', () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args as [string, string[], object, (err: Error | null, stdout: string) => void]),
+  execFileSync: (...args: unknown[]) => mockExecFileSync(...args as [string, string[]]),
 }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp' },
 }))
 
-vi.mock('fs', () => ({ appendFileSync: vi.fn() }))
+// Track fs operations for FIFO testing
+const mockAppendFileSync = vi.fn()
+const mockUnlinkSync = vi.fn()
+const mockOpenSync = vi.fn(() => 42) // fake fd
+const mockCloseSync = vi.fn()
+const mockCreateReadStream = vi.fn(() => ({
+  on: vi.fn(),
+  destroy: vi.fn(),
+}))
+
+vi.mock('fs', () => ({
+  appendFileSync: (...args: unknown[]) => mockAppendFileSync(...args),
+  unlinkSync: (...args: unknown[]) => mockUnlinkSync(...args),
+  openSync: (...args: unknown[]) => mockOpenSync(...args),
+  closeSync: (...args: unknown[]) => mockCloseSync(...args),
+  createReadStream: (...args: unknown[]) => mockCreateReadStream(...args),
+  constants: { O_RDWR: 2, O_NONBLOCK: 2048 },
+}))
+
 vi.mock('path', () => ({ join: (...parts: string[]) => parts.join('/') }))
 
 // Mock findBinaryInPath to return a fake hyprctl path
@@ -69,19 +89,78 @@ describe('waylandShortcuts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    // Set XDG_RUNTIME_DIR for FIFO path resolution
+    process.env.XDG_RUNTIME_DIR = '/run/user/1000'
   })
 
-  describe('toHyprlandBind (via integration)', () => {
-    it('registers hyprctl binds with correct modifier format', async () => {
-      // We test toHyprlandBind indirectly through registerWaylandShortcuts
-      // by inspecting the hyprctl calls made
+  describe('Hyprland exec+FIFO path', () => {
+    it('creates FIFO and binds with exec dispatcher on Hyprland', async () => {
+      const { registerWaylandShortcuts } = await import('./waylandShortcuts')
+      const onActivated = vi.fn()
+
+      const ok = await registerWaylandShortcuts(
+        [
+          { id: 'quick-chat', accelerator: 'Alt+Space', description: 'Quick Chat' },
+          { id: 'quick-voice', accelerator: 'Super+E', description: 'Quick Voice' },
+        ],
+        onActivated
+      )
+
+      expect(ok).toBe(true)
+
+      // FIFO should be created via mkfifo
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'mkfifo',
+        ['/run/user/1000/agent-desktop-shortcuts.pipe'],
+        expect.any(Object)
+      )
+
+      // FIFO should be opened with O_RDWR only (no O_NONBLOCK — causes EAGAIN)
+      expect(mockOpenSync).toHaveBeenCalledWith(
+        '/run/user/1000/agent-desktop-shortcuts.pipe',
+        2 // O_RDWR
+      )
+
+      // hyprctl calls: version check + (unbind + bind) per shortcut
+      const hyprctlCalls = mockExecFile.mock.calls.filter(c => c[0] === '/usr/bin/hyprctl')
+      expect(hyprctlCalls.length).toBeGreaterThanOrEqual(3) // version + at least 2 binds
+
+      // Verify exec dispatcher is used (not global)
+      const bindCalls = hyprctlCalls.filter(c =>
+        c[1][0] === 'keyword' && c[1][1] === 'bind'
+      )
+      for (const call of bindCalls) {
+        const bindArgs = call[1][2] as string
+        expect(bindArgs).toContain(',exec,echo ')
+        expect(bindArgs).toContain('agent-desktop-shortcuts.pipe')
+      }
+    })
+
+    it('cleans up stale FIFO before creating new one', async () => {
       const { registerWaylandShortcuts } = await import('./waylandShortcuts')
 
-      // Mock the portal response — simulate CreateSession and BindShortcuts success
-      // by triggering the Response signal. This is complex, so we test the simpler
-      // rebind path instead (see rebindWaylandShortcuts tests below).
-      // For now, just verify the module loads correctly.
-      expect(registerWaylandShortcuts).toBeDefined()
+      await registerWaylandShortcuts(
+        [{ id: 'test', accelerator: 'Alt+T', description: 'Test' }],
+        vi.fn()
+      )
+
+      // unlinkSync should be called to remove stale FIFO
+      expect(mockUnlinkSync).toHaveBeenCalledWith('/run/user/1000/agent-desktop-shortcuts.pipe')
+    })
+
+    it('creates read stream on FIFO fd', async () => {
+      const { registerWaylandShortcuts } = await import('./waylandShortcuts')
+
+      await registerWaylandShortcuts(
+        [{ id: 'test', accelerator: 'Alt+T', description: 'Test' }],
+        vi.fn()
+      )
+
+      expect(mockCreateReadStream).toHaveBeenCalledWith('', {
+        fd: 42,
+        encoding: 'utf8',
+        autoClose: false,
+      })
     })
   })
 
@@ -89,12 +168,37 @@ describe('waylandShortcuts', () => {
     it('returns false when no active session exists', async () => {
       const { rebindWaylandShortcuts } = await import('./waylandShortcuts')
 
-      // No session has been created, so rebind should fail gracefully
       const ok = await rebindWaylandShortcuts([
         { id: 'quick-chat', accelerator: 'Alt+Space' },
       ])
 
       expect(ok).toBe(false)
+    })
+
+    it('rebinds with exec+FIFO args after Hyprland registration', async () => {
+      const { registerWaylandShortcuts, rebindWaylandShortcuts } = await import('./waylandShortcuts')
+
+      // First register (creates FIFO + binds)
+      await registerWaylandShortcuts(
+        [{ id: 'quick-chat', accelerator: 'Alt+Space', description: 'Quick Chat' }],
+        vi.fn()
+      )
+
+      vi.clearAllMocks()
+
+      // Rebind with new key
+      const ok = await rebindWaylandShortcuts([
+        { id: 'quick-chat', accelerator: 'Ctrl+Space' },
+      ])
+
+      expect(ok).toBe(true)
+
+      // Should use exec dispatcher with FIFO path
+      const bindCalls = mockExecFile.mock.calls.filter(c =>
+        c[0] === '/usr/bin/hyprctl' && c[1][0] === 'keyword' && c[1][1] === 'bind'
+      )
+      expect(bindCalls.length).toBe(1)
+      expect(bindCalls[0][1][2]).toContain('CTRL,space,exec,echo quick-chat')
     })
 
     it('is exported alongside registerWaylandShortcuts', async () => {
@@ -110,6 +214,53 @@ describe('waylandShortcuts', () => {
       const { unregisterWaylandShortcuts } = await import('./waylandShortcuts')
       // Should not throw
       await unregisterWaylandShortcuts()
+    })
+
+    it('destroys FIFO and unbinds shortcuts on cleanup', async () => {
+      const { registerWaylandShortcuts, unregisterWaylandShortcuts } = await import('./waylandShortcuts')
+
+      await registerWaylandShortcuts(
+        [{ id: 'test', accelerator: 'Alt+T', description: 'Test' }],
+        vi.fn()
+      )
+
+      vi.clearAllMocks()
+
+      await unregisterWaylandShortcuts()
+
+      // FIFO should be closed and unlinked
+      expect(mockCloseSync).toHaveBeenCalledWith(42)
+      expect(mockUnlinkSync).toHaveBeenCalledWith('/run/user/1000/agent-desktop-shortcuts.pipe')
+
+      // hyprctl unbind should be called
+      const unbindCalls = mockExecFile.mock.calls.filter(c =>
+        c[0] === '/usr/bin/hyprctl' && c[1][0] === 'keyword' && c[1][1] === 'unbind'
+      )
+      expect(unbindCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe('toHyprlandBind (via integration)', () => {
+    it('correctly maps modifier keys in hyprctl bind args', async () => {
+      const { registerWaylandShortcuts } = await import('./waylandShortcuts')
+
+      await registerWaylandShortcuts(
+        [
+          { id: 'test1', accelerator: 'Alt+Shift+Space', description: 'Test 1' },
+          { id: 'test2', accelerator: 'Ctrl+A', description: 'Test 2' },
+          { id: 'test3', accelerator: 'Super+Z', description: 'Test 3' },
+        ],
+        vi.fn()
+      )
+
+      const bindCalls = mockExecFile.mock.calls.filter(c =>
+        c[0] === '/usr/bin/hyprctl' && c[1][0] === 'keyword' && c[1][1] === 'bind'
+      )
+
+      const bindArgs = bindCalls.map(c => c[1][2] as string)
+      expect(bindArgs).toContainEqual(expect.stringContaining('ALT SHIFT,space,exec,echo test1'))
+      expect(bindArgs).toContainEqual(expect.stringContaining('CTRL,a,exec,echo test2'))
+      expect(bindArgs).toContainEqual(expect.stringContaining('SUPER,z,exec,echo test3'))
     })
   })
 })
