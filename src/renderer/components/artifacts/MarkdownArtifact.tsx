@@ -30,7 +30,8 @@ export function MarkdownArtifact({ content }: MarkdownArtifactProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const scrollToAnchor = (id: string) => {
-    const el = containerRef.current?.querySelector(`#${CSS.escape(id)}`)
+    const slug = slugify(id)
+    const el = containerRef.current?.querySelector(`#${CSS.escape(slug)}`)
     if (el) el.scrollIntoView({ behavior: 'smooth' })
   }
 
