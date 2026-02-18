@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { MermaidBlock } from './MermaidBlock'
@@ -6,9 +7,36 @@ interface MarkdownArtifactProps {
   content: string
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function extractText(children: React.ReactNode): string {
+  if (typeof children === 'string') return children
+  if (typeof children === 'number') return String(children)
+  if (Array.isArray(children)) return children.map(extractText).join('')
+  if (children && typeof children === 'object' && 'props' in children) {
+    return extractText((children as any).props.children)
+  }
+  return ''
+}
+
 export function MarkdownArtifact({ content }: MarkdownArtifactProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const scrollToAnchor = (id: string) => {
+    const el = containerRef.current?.querySelector(`#${CSS.escape(id)}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth' })
+  }
+
   return (
     <div
+      ref={containerRef}
       className="h-full overflow-auto p-4 leading-relaxed"
       style={{ color: 'var(--color-text)' }}
     >
@@ -16,13 +44,13 @@ export function MarkdownArtifact({ content }: MarkdownArtifactProps) {
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="text-2xl font-bold mt-6 mb-3">{children}</h1>
+            <h1 id={slugify(extractText(children))} className="text-2xl font-bold mt-6 mb-3">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-xl font-bold mt-5 mb-2">{children}</h2>
+            <h2 id={slugify(extractText(children))} className="text-xl font-bold mt-5 mb-2">{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-lg font-semibold mt-4 mb-2">{children}</h3>
+            <h3 id={slugify(extractText(children))} className="text-lg font-semibold mt-4 mb-2">{children}</h3>
           ),
           p: ({ children }) => (
             <p className="my-2 leading-relaxed">{children}</p>
@@ -83,7 +111,12 @@ export function MarkdownArtifact({ content }: MarkdownArtifactProps) {
               style={{ color: 'var(--color-primary)' }}
               onClick={(e) => {
                 e.preventDefault()
-                if (href) window.agent.system.openExternal(href)
+                if (!href) return
+                if (href.startsWith('#')) {
+                  scrollToAnchor(href.slice(1))
+                } else {
+                  window.agent.system.openExternal(href)
+                }
               }}
             >
               {children}
