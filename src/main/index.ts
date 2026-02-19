@@ -10,6 +10,7 @@ import { registerStreamWindow } from './services/streaming'
 import { cleanupPastedFiles } from './services/files'
 import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } from './services/globalShortcuts'
 import { showOverlay } from './services/quickChat'
+import { startScheduler, stopScheduler } from './services/scheduler'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
@@ -123,6 +124,7 @@ if (!gotLock) {
       onShowApp: () => toggleAppWindow(),
     })
 
+    startScheduler(db)
     createTray(getMainWindow, createWindow)
 
     if (app.isPackaged) {
@@ -138,6 +140,7 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    stopScheduler()
     unregisterGlobalShortcuts()
     stopAutoUpdater()
     closeDatabase()

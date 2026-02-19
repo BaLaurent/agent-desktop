@@ -21,6 +21,8 @@ import type {
   AskUserResponse,
   UpdateInfo,
   UpdateStatus,
+  ScheduledTask,
+  CreateScheduledTask,
 } from '../shared/types'
 
 export interface AgentAPI {
@@ -124,6 +126,17 @@ export interface AgentAPI {
     compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
     validateConfig(): Promise<{ binaryFound: boolean; binaryPath: string; version: string }>
     exportStl(scadFilePath: string): Promise<string | null>
+  }
+  scheduler: {
+    list(): Promise<ScheduledTask[]>
+    get(id: number): Promise<ScheduledTask | null>
+    create(data: CreateScheduledTask): Promise<ScheduledTask>
+    update(id: number, data: Partial<CreateScheduledTask>): Promise<void>
+    delete(id: number): Promise<void>
+    toggle(id: number, enabled: boolean): Promise<void>
+    runNow(id: number): Promise<void>
+    conversationTasks(conversationId: number): Promise<number[]>
+    onTaskUpdate(callback: (task: ScheduledTask) => void): () => void
   }
   updates: {
     check(): Promise<UpdateInfo>

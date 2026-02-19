@@ -3,7 +3,7 @@ import { useConversationsStore } from '../../stores/conversationsStore'
 import { SearchBar } from './SearchBar'
 import { SidebarTree } from './FolderTree'
 
-export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: () => void; onOpenScheduler?: () => void }) {
   const { loadConversations, loadFolders, createConversation, createFolder } =
     useConversationsStore()
 
@@ -70,6 +70,30 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
                   strokeLinejoin="round"
                   strokeWidth={2}
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+            </button>
+          )}
+          {onOpenScheduler && (
+            <button
+              onClick={onOpenScheduler}
+              title="Scheduled Tasks"
+              className="p-1 rounded transition-colors"
+              style={{ color: 'var(--color-text-muted)' }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = 'transparent')
+              }
+              aria-label="Open scheduled tasks"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
             </button>

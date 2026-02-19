@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Conversation, Folder } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
+import { useSchedulerStore } from '../../stores/schedulerStore'
 
 interface Props {
   conversation: Conversation & { folder_name?: string }
@@ -11,6 +12,7 @@ interface Props {
 export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
   const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders } =
     useConversationsStore()
+  const hasScheduledTask = useSchedulerStore((s) => s.tasks.some((t) => t.conversation_id === conversation.id))
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(conversation.title)
   const [showMenu, setShowMenu] = useState(false)
@@ -142,11 +144,25 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           />
         ) : (
           <>
-            <div
-              className="text-sm truncate font-medium"
-              style={{ color: 'var(--color-text)' }}
-            >
-              {conversation.title}
+            <div className="flex items-center gap-1.5">
+              <div
+                className="text-sm truncate font-medium"
+                style={{ color: 'var(--color-text)' }}
+              >
+                {conversation.title}
+              </div>
+              {hasScheduledTask && (
+                <svg
+                  className="w-3 h-3 flex-shrink-0"
+                  style={{ color: 'var(--color-primary)' }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-label="Has scheduled task"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
             </div>
             <div
               className="text-xs mt-0.5 truncate"

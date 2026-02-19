@@ -151,6 +151,45 @@ export interface SlashCommand {
   source: 'builtin' | 'user' | 'project' | 'skill'
 }
 
+// ─── Scheduled Tasks ─────────────────────────────────────────
+
+export type IntervalUnit = 'minutes' | 'hours' | 'days'
+export type TaskStatus = 'success' | 'error' | 'running'
+
+export interface ScheduledTask {
+  id: number
+  name: string
+  prompt: string
+  conversation_id: number
+  conversation_title?: string
+  enabled: boolean
+  interval_value: number
+  interval_unit: IntervalUnit
+  schedule_time: string | null
+  catch_up: boolean
+  last_run_at: string | null
+  next_run_at: string | null
+  last_status: TaskStatus | null
+  last_error: string | null
+  run_count: number
+  notify_desktop: boolean
+  notify_voice: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateScheduledTask {
+  name: string
+  prompt: string
+  conversation_id?: number          // omit to auto-create a new conversation
+  interval_value: number
+  interval_unit: IntervalUnit
+  schedule_time?: string
+  catch_up?: boolean
+  notify_desktop?: boolean
+  notify_voice?: boolean
+}
+
 // ─── Tool Approval / AskUserQuestion Types ───────────────────
 
 export interface AskUserOption {

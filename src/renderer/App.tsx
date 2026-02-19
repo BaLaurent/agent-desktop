@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { parseAccelerator, matchesEvent } from './utils/shortcutMatcher'
 import { parseOverrides, resolveEffectiveSettings } from './utils/resolveAISettings'
 import { OverlayChat } from './components/overlay/OverlayChat'
+import { SchedulerPage } from './components/scheduler/SchedulerPage'
 
 const params = new URLSearchParams(window.location.search)
 const isOverlay = params.get('mode') === 'overlay'
@@ -23,9 +24,12 @@ export default function App() {
   }
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [schedulerOpen, setSchedulerOpen] = useState(false)
 
   const openSettings = useCallback(() => setSettingsOpen(true), [])
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
+  const openScheduler = useCallback(() => setSchedulerOpen(true), [])
+  const closeScheduler = useCallback(() => setSchedulerOpen(false), [])
 
   // Initial data loading + apply saved theme
   useEffect(() => {
@@ -132,9 +136,13 @@ export default function App() {
         />
       )}
       <AuthGuard>
-        <MainLayout onOpenSettings={!showTitlebar ? openSettings : undefined} />
+        <MainLayout
+          onOpenSettings={!showTitlebar ? openSettings : undefined}
+          onOpenScheduler={openScheduler}
+        />
       </AuthGuard>
       {settingsOpen && <SettingsPage onClose={closeSettings} />}
+      {schedulerOpen && <SchedulerPage onClose={closeScheduler} />}
     </div>
   )
 }

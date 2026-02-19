@@ -124,6 +124,21 @@ const api: AgentAPI = {
     validateConfig: () => withTimeout(ipcRenderer.invoke('openscad:validateConfig')),
     exportStl: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:exportStl', scadFilePath), 75000),
   },
+  scheduler: {
+    list: () => withTimeout(ipcRenderer.invoke('scheduler:list')),
+    get: (id: number) => withTimeout(ipcRenderer.invoke('scheduler:get', id)),
+    create: (data: unknown) => withTimeout(ipcRenderer.invoke('scheduler:create', data)),
+    update: (id: number, data: unknown) => withTimeout(ipcRenderer.invoke('scheduler:update', id, data)),
+    delete: (id: number) => withTimeout(ipcRenderer.invoke('scheduler:delete', id)),
+    toggle: (id: number, enabled: boolean) => withTimeout(ipcRenderer.invoke('scheduler:toggle', id, enabled)),
+    runNow: (id: number) => withTimeout(ipcRenderer.invoke('scheduler:runNow', id)),
+    conversationTasks: (conversationId: number) => withTimeout(ipcRenderer.invoke('scheduler:conversationTasks', conversationId)),
+    onTaskUpdate: (callback: (task: unknown) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, task: unknown) => callback(task)
+      ipcRenderer.on('scheduler:taskUpdate', handler)
+      return () => { ipcRenderer.removeListener('scheduler:taskUpdate', handler) }
+    },
+  },
   updates: {
     check: () => withTimeout(ipcRenderer.invoke('updates:check')),
     download: () => withTimeout(ipcRenderer.invoke('updates:download'), 300000),

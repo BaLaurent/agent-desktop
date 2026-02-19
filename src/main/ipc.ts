@@ -20,6 +20,7 @@ import { registerHandlers as whisperHandlers } from './services/whisper'
 import { registerHandlers as openscadHandlers } from './services/openscad'
 import { registerHandlers as commandsHandlers } from './services/commands'
 import { registerHandlers as quickChatHandlers } from './services/quickChat'
+import { registerHandlers as schedulerHandlers } from './services/scheduler'
 import { registerHandlers as updaterHandlers } from './services/updater'
 
 const serviceModules = [
@@ -39,6 +40,7 @@ const serviceModules = [
   whisperHandlers,
   openscadHandlers,
   quickChatHandlers,
+  schedulerHandlers,
 ]
 
 /**

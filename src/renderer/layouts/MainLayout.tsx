@@ -75,7 +75,7 @@ function PanelEdgeButton({ side, isOpen, onClick, radiusPct, alwaysVisible }: {
   )
 }
 
-export function MainLayout({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: () => void; onOpenScheduler?: () => void }) {
   const { sidebarVisible, panelVisible, toggleSidebar, togglePanel } = useUiStore()
   const panelButtonRadiusPct = Number(useSettingsStore((s) => s.settings.panelButtonRadius)) || DEFAULT_RADIUS_PCT
   const panelButtonAlwaysVisible = useSettingsStore((s) => s.settings.panelButtonAlwaysVisible) === 'true'
@@ -140,7 +140,7 @@ export function MainLayout({ onOpenSettings }: { onOpenSettings?: () => void }) 
             }}
           >
             <ErrorBoundary>
-              <Sidebar onOpenSettings={onOpenSettings} />
+              <Sidebar onOpenSettings={onOpenSettings} onOpenScheduler={onOpenScheduler} />
             </ErrorBoundary>
           </div>
 

@@ -92,6 +92,28 @@ const TABLES = [
     created_at DATETIME DEFAULT (datetime('now')),
     updated_at DATETIME DEFAULT (datetime('now'))
   )`,
+
+  `CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    interval_value INTEGER NOT NULL DEFAULT 1,
+    interval_unit TEXT NOT NULL DEFAULT 'hours',
+    schedule_time TEXT,
+    catch_up INTEGER DEFAULT 1,
+    last_run_at TEXT,
+    next_run_at TEXT,
+    last_status TEXT,
+    last_error TEXT,
+    run_count INTEGER DEFAULT 0,
+    notify_desktop INTEGER DEFAULT 1,
+    notify_voice INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT (datetime('now')),
+    updated_at DATETIME DEFAULT (datetime('now')),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  )`,
 ]
 
 const INDEXES = [
@@ -100,6 +122,7 @@ const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_conversations_folder_id ON conversations(folder_id)',
   'CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at)',
   'CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)',
+  'CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(enabled, next_run_at)',
 ]
 
 export function createTables(db: Database.Database): void {
