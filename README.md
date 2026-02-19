@@ -169,7 +169,7 @@ src/
 
 Have ideas, feature requests, or just want to chat about the project? Join us on Discord — we'd love to hear from you.
 
-[![Discord](https://img.shields.io/discord/1332757770099806208?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/qfeDTu65SX)
+[![Discord](https://img.shields.io/discord/1441514110893424735?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/qfeDTu65SX)
 
 ## License
 
