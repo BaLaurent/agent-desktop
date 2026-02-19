@@ -18,6 +18,7 @@
 - DB: SQLite WAL mode, at `~/.config/agent-desktop/agent.db`
 - Vite 5.x required (electron-vite peer dep)
 - **asar: false** in electron-builder.yml — required because Agent SDK resolves `cli.js` via `import.meta.url` which lands inside `app.asar`; system `node` cannot read asar archives
+- **Fonts**: `@fontsource/jetbrains-mono` bundled (imported in `main.tsx`) — ensures monospace code rendering works regardless of system fonts; critical for box-drawing chars in ASCII diagrams
 
 ## Theming System
 - CSS custom properties (`--color-*`) in theme `.css` files at `~/.agent-desktop/themes/`; Tailwind maps to them in `tailwind.config.ts`
@@ -132,6 +133,7 @@
 - **Sidebar**: unified tree in `FolderTree.tsx`; DnD conversations onto folders; folder delete offers "Delete all" vs "Keep conversations"
 - **Code blocks**: auto-collapsed >10 lines, expanded <=10; `defaultCollapsed` prop overrides
 - **Markdown**: `react-markdown` + `remark-gfm` (NO `rehype-highlight`); `extractText()` required because children can be element arrays, not strings — without it, code blocks render `[object Object]`
+  - **Gotcha**: block vs inline code detection MUST happen in the `pre` handler, not `code` — code fences without a language (```` ``` ````) have no `className`, so the `code` handler can't distinguish them from inline code. The `pre` handler extracts language from the hast node (`node.children[0].properties.className`)
 - **General Settings**: `sendOnEnter`, `autoScroll`, `minimizeToTray`, `notificationSounds` — behavior in setting name
 
 ## Quick Chat
