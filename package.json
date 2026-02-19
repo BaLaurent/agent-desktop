@@ -1,6 +1,6 @@
 {
   "name": "agent-desktop",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Open-source Linux desktop client for Claude AI",
   "main": "./out/main/index.js",
   "scripts": {
