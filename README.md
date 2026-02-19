@@ -4,6 +4,13 @@ Open-source desktop client for Claude AI — Linux, macOS, and Windows.
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/0599fa5f-3470-4ed3-a1b8-5dd983c4a0af" />
 
+## Community
+
+Have ideas, feature requests, or just want to chat about the project? Join us on Discord — we'd love to hear from you.
+
+[![Discord](https://discord.com/api/guilds/1441514110893424735/widget.png?style=banner4)](https://discord.gg/qfeDTu65SX)
+
+
 ## Features
 
 ### Chat & Conversations
@@ -165,12 +172,8 @@ src/
 - **Database**: SQLite WAL mode at `~/.config/agent-desktop/agent.db`
 - **AI settings cascade**: Conversation > Folder > Global (with JSON overrides)
 
-## Community
-
-Have ideas, feature requests, or just want to chat about the project? Join us on Discord — we'd love to hear from you.
-
-[![Discord](https://img.shields.io/discord/1441514110893424735?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/qfeDTu65SX)
 
 ## License
+
 
 [GPL-3.0](LICENSE)
