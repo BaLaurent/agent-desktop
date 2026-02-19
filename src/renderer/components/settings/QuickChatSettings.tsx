@@ -53,6 +53,34 @@ export function QuickChatSettings() {
         </label>
       </div>
 
+      {/* Voice Volume */}
+      <div className="flex flex-col gap-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+          Voice Volume
+        </h4>
+
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={Number(settings.voice_volumeDuck) || 0}
+            onChange={(e) => setSetting('voice_volumeDuck', e.target.value)}
+            className="flex-1 accent-[var(--color-primary)]"
+          />
+          <span
+            className="text-sm w-10 text-right"
+            style={{ color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}
+          >
+            {Number(settings.voice_volumeDuck) || 0}%
+          </span>
+        </div>
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Reduces system volume by this percentage during voice recording. 0 = disabled.
+        </span>
+      </div>
+
       {/* Conversations */}
       <div className="flex flex-col gap-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>

@@ -28,6 +28,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'whisper_modelPath',
   'whisper_advancedParams',
   'whisper_autoSend',
+  // Voice ducking
+  'voice_volumeDuck',
   // Quick Chat
   'quickChat_conversationId',
   'quickChat_voiceConversationId',

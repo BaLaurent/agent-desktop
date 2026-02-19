@@ -6,6 +6,7 @@ import { registerStreamWindow } from './streaming'
 import { reregister } from './globalShortcuts'
 import { getMainWindow } from '../index'
 import { DEFAULT_MODEL } from '../../shared/constants'
+import { duckVolume, restoreVolume } from '../utils/volume'
 
 let overlayWindow: BrowserWindow | null = null
 let headlessActive = false
@@ -104,7 +105,7 @@ function createOverlay(voice: boolean, headless = false): BrowserWindow {
   }
 
   win.loadURL(url)
-  win.on('closed', () => { overlayWindow = null; headlessActive = false })
+  win.on('closed', () => { overlayWindow = null; headlessActive = false; restoreVolume() })
 
   registerStreamWindow(win)
   return win
@@ -130,6 +131,11 @@ export function showOverlay(mode: 'text' | 'voice'): void {
 
   headlessActive = !!isHeadless
   overlayWindow = createOverlay(mode === 'voice', isHeadless)
+
+  if (mode === 'voice') {
+    const duck = Number(getSetting('voice_volumeDuck')) || 0
+    if (duck > 0) duckVolume(duck)
+  }
 }
 
 export function hideOverlay(): void {
