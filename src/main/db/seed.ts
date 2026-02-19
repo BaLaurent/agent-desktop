@@ -53,6 +53,7 @@ function seedSettings(db: Database.Database): void {
     ['whisper_modelPath', ''],
     ['whisper_advancedParams', ''],
     ['whisper_autoSend', 'false'],
+    ['openscad_binaryPath', 'openscad'],
     ['hooks_cwdRestriction', 'true'],
     ['ai_skills', 'off'],
     ['ai_skillsEnabled', 'true'],

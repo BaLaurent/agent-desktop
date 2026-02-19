@@ -120,6 +120,10 @@ export interface AgentAPI {
     transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
     validateConfig(): Promise<{ binaryFound: boolean; modelFound: boolean; binaryPath: string; modelPath: string }>
   }
+  openscad: {
+    compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
+    validateConfig(): Promise<{ binaryFound: boolean; binaryPath: string; version: string }>
+  }
   updates: {
     check(): Promise<UpdateInfo>
     download(): Promise<void>

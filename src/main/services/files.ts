@@ -33,6 +33,7 @@ export function classifyFileExt(ext: string): string | null {
     case 'toml': return 'toml'
     case 'sql': return 'sql'
     case 'xml': return 'xml'
+    case 'scad': return 'scad'
     default: return ext || null
   }
 }

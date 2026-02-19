@@ -303,6 +303,22 @@ describe('QuickChat Service', () => {
       expect(mockWebContents.send).toHaveBeenCalledWith('overlay:stopRecording')
     })
 
+    it('restores volume when stopRecording is sent on second voice trigger', async () => {
+      const { registerHandlers, showOverlay } = await import('./quickChat')
+      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
+        'voice_volumeDuck': '30',
+      }))
+
+      showOverlay('voice')
+      mockOverlayWin.isVisible.mockReturnValue(true)
+      vi.mocked(restoreVolume).mockClear()
+
+      showOverlay('voice')
+
+      expect(mockWebContents.send).toHaveBeenCalledWith('overlay:stopRecording')
+      expect(vi.mocked(restoreVolume)).toHaveBeenCalled()
+    })
+
     it('destroys stale invisible overlay and creates new one', async () => {
       const { registerHandlers, showOverlay } = await import('./quickChat')
       registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb())

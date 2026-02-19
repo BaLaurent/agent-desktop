@@ -116,6 +116,7 @@ export function showOverlay(mode: 'text' | 'voice'): void {
     if (overlayWindow.isVisible() || headlessActive) {
       if (mode === 'voice') {
         overlayWindow.webContents.send('overlay:stopRecording')
+        restoreVolume()
       } else {
         overlayWindow.hide()
       }

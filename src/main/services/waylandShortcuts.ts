@@ -27,6 +27,8 @@ let fifoFd: number | null = null
 let fifoStream: fs.ReadStream | null = null
 let fifoActive = false
 
+const FIFO_DEBOUNCE_MS = 150
+
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 5000
 const RESPONSE_TIMEOUT_MS = 10000
@@ -111,6 +113,7 @@ function getFifoPath(): string {
  */
 function createShortcutPipe(onActivated: (shortcutId: string) => void): boolean {
   const pipePath = getFifoPath()
+  const lastActivation = new Map<string, number>()
 
   try {
     // Remove stale FIFO from previous run
@@ -136,6 +139,14 @@ function createShortcutPipe(onActivated: (shortcutId: string) => void): boolean 
       for (const line of lines) {
         const id = line.trim()
         if (id) {
+          const now = Date.now()
+          const last = lastActivation.get(id) || 0
+          if (now - last < FIFO_DEBOUNCE_MS) {
+            console.log('[waylandShortcuts] FIFO debounced:', id)
+            logToFile(`FIFO debounced: ${id}`)
+            continue
+          }
+          lastActivation.set(id, now)
           console.log('[waylandShortcuts] FIFO activated:', id)
           logToFile(`FIFO activated: ${id}`)
           onActivated(id)

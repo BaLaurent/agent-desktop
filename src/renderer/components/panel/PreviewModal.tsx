@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react'
 import { HtmlPreview } from '../artifacts/HtmlPreview'
 import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
+import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 
 interface PreviewModalProps {
@@ -66,6 +67,8 @@ export function PreviewModal({ filePath, content, language, allowScripts, onClos
         <MermaidBlock content={content} />
       </div>
     )
+  } else if (ext === 'scad') {
+    viewer = <ScadPreview filePath={filePath} lastSavedAt={0} />
   } else {
     viewer = (
       <div className="h-full flex items-center justify-center text-sm text-muted">

@@ -164,6 +164,68 @@ describe('waylandShortcuts', () => {
     })
   })
 
+  describe('FIFO debounce', () => {
+    it('suppresses rapid double-fire on the same shortcut id', async () => {
+      vi.useFakeTimers()
+      const { registerWaylandShortcuts } = await import('./waylandShortcuts')
+      const onActivated = vi.fn()
+
+      await registerWaylandShortcuts(
+        [{ id: 'quick-voice', accelerator: 'Alt+Shift+Space', description: 'Quick Voice' }],
+        onActivated
+      )
+
+      // Get the data handler registered on the stream mock
+      const streamMock = mockCreateReadStream.mock.results[0].value
+      const dataCall = streamMock.on.mock.calls.find((c: any[]) => c[0] === 'data')
+      expect(dataCall).toBeDefined()
+      const dataHandler = dataCall![1]
+
+      // Simulate two rapid FIFO activations (double-fire, <150ms apart)
+      dataHandler('quick-voice\n')
+      dataHandler('quick-voice\n')
+
+      expect(onActivated).toHaveBeenCalledTimes(1)
+      expect(onActivated).toHaveBeenCalledWith('quick-voice')
+
+      // After debounce period expires, next activation should pass through
+      vi.advanceTimersByTime(200)
+      dataHandler('quick-voice\n')
+
+      expect(onActivated).toHaveBeenCalledTimes(2)
+
+      vi.useRealTimers()
+    })
+
+    it('allows different shortcut ids to fire independently', async () => {
+      vi.useFakeTimers()
+      const { registerWaylandShortcuts } = await import('./waylandShortcuts')
+      const onActivated = vi.fn()
+
+      await registerWaylandShortcuts(
+        [
+          { id: 'quick-chat', accelerator: 'Alt+Space', description: 'Quick Chat' },
+          { id: 'quick-voice', accelerator: 'Alt+Shift+Space', description: 'Quick Voice' },
+        ],
+        onActivated
+      )
+
+      const streamMock = mockCreateReadStream.mock.results[0].value
+      const dataCall = streamMock.on.mock.calls.find((c: any[]) => c[0] === 'data')
+      const dataHandler = dataCall![1]
+
+      // Two different IDs in rapid succession — both should pass
+      dataHandler('quick-chat\n')
+      dataHandler('quick-voice\n')
+
+      expect(onActivated).toHaveBeenCalledTimes(2)
+      expect(onActivated).toHaveBeenCalledWith('quick-chat')
+      expect(onActivated).toHaveBeenCalledWith('quick-voice')
+
+      vi.useRealTimers()
+    })
+  })
+
   describe('rebindWaylandShortcuts', () => {
     it('returns false when no active session exists', async () => {
       const { rebindWaylandShortcuts } = await import('./waylandShortcuts')

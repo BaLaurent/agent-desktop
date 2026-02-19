@@ -26,6 +26,8 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.37",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "@types/dompurify": "^3.0.5",
     "better-sqlite3": "^11.7.0",
     "dbus-next": "^0.10.2",
@@ -37,6 +39,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.3",
     "remark-gfm": "^4.0.0",
+    "three": "^0.183.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -47,6 +50,7 @@
     "@types/better-sqlite3": "^7.6.12",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.183.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "electron": "^33.3.1",

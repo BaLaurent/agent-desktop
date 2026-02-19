@@ -10,6 +10,7 @@ import { McpServerList } from '../components/mcp/McpServerList'
 import { KnowledgeManager } from '../components/knowledge/KnowledgeManager'
 import { VoiceInputSettings } from '../components/settings/VoiceInputSettings'
 import { QuickChatSettings } from '../components/settings/QuickChatSettings'
+import { OpenSCADSettings } from '../components/settings/OpenSCADSettings'
 
 interface SettingsPageProps {
   onClose: () => void
@@ -22,6 +23,7 @@ const categories = [
   'Shortcuts',
   'Voice Input',
   'Quick Chat',
+  'OpenSCAD',
   'MCP Servers',
   'Allowed Tools',
   'Knowledge Base',
@@ -38,6 +40,7 @@ const categoryComponents: Record<Category, React.FC | null> = {
   Shortcuts: ShortcutSettings,
   'Voice Input': VoiceInputSettings,
   'Quick Chat': QuickChatSettings,
+  'OpenSCAD': OpenSCADSettings,
   'MCP Servers': McpServerList,
   'Allowed Tools': ToolList,
   'Knowledge Base': KnowledgeManager,

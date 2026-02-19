@@ -132,7 +132,8 @@ if (!gotLock) {
   }).catch((err) => {
     // dialog must be required inline — not available if app.ready fails
     const { dialog } = require('electron')
-    dialog.showErrorBoxSync('Startup Failed', err.message || String(err))
+    console.error('[startup] Fatal:', err)
+    dialog.showErrorBox('Startup Failed', err.message || String(err))
     app.quit()
   })
 

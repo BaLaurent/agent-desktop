@@ -119,6 +119,10 @@ const api: AgentAPI = {
     transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('whisper:transcribe', wavBuffer), 45000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('whisper:validateConfig')),
   },
+  openscad: {
+    compile: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:compile', scadFilePath), 75000),
+    validateConfig: () => withTimeout(ipcRenderer.invoke('openscad:validateConfig')),
+  },
   updates: {
     check: () => withTimeout(ipcRenderer.invoke('updates:check')),
     download: () => withTimeout(ipcRenderer.invoke('updates:download'), 300000),

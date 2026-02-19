@@ -155,6 +155,8 @@
 - Duck on `showOverlay('voice')` (fire-and-forget), restore on overlay `closed` event
 - **Double-duck guard**: `savedVolume !== null` prevents overwriting the original volume on rapid re-trigger
 - Silent on error (log + skip, never throw) — same pattern as `hyprctl()` in `waylandShortcuts.ts`
+- **Gotcha**: FIFO double-fire (Hyprland `echo > pipe` can deliver two lines per keypress) — debounced per shortcut-id (150ms) in `createShortcutPipe()`
+- **Gotcha**: `restoreVolume()` called both at `overlay:stopRecording` (toggle) AND `closed` event — idempotent via `savedVolume === null` guard
 - Setting: `voice_volumeDuck` in settings table; slider in Settings > Quick Chat > Voice Volume
 
 ## Global Shortcuts (Wayland/X11)

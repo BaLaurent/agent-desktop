@@ -4,6 +4,7 @@ import { useFileExplorerStore } from '../../stores/fileExplorerStore'
 import { HtmlPreview } from '../artifacts/HtmlPreview'
 import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
+import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 import { CodeEditorModal } from './CodeEditorModal'
 import { PreviewModal } from './PreviewModal'
@@ -21,7 +22,7 @@ function getBasename(filePath: string): string {
   return idx === -1 ? filePath : filePath.slice(idx + 1)
 }
 
-const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd'])
+const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad'])
 
 function isThemesDirectory(cwd: string | null): boolean {
   if (!cwd) return false
@@ -581,8 +582,8 @@ function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand }
 
 // ── File Viewer ───────────────────────────────────────────────
 
-function FileViewer({ filePath, content, language, allowScripts }: {
-  filePath: string; content: string; language: string | null; allowScripts?: boolean
+function FileViewer({ filePath, content, language, allowScripts, lastSavedAt }: {
+  filePath: string; content: string; language: string | null; allowScripts?: boolean; lastSavedAt?: number
 }) {
   const { viewMode } = useFileExplorerStore()
   const ext = getFileExtension(filePath)
@@ -613,6 +614,7 @@ function FileViewer({ filePath, content, language, allowScripts }: {
         </div>
       )
     }
+    if (ext === 'scad') return <ScadPreview filePath={filePath} lastSavedAt={lastSavedAt ?? 0} />
   }
 
   // Everything else (code files, or source mode) → Monaco
@@ -745,6 +747,17 @@ export function FileExplorerPanel() {
 
   // Create state: { kind, dirPath } — dirPath is where to create
   const [creating, setCreating] = useState<{ kind: 'file' | 'folder'; dirPath: string } | null>(null)
+
+  // Track .scad saves for recompilation
+  const [lastSavedAt, setLastSavedAt] = useState(0)
+  const isDirty = useFileExplorerStore(s => s.isDirty)
+  const prevDirtyRef = useRef(isDirty)
+  useEffect(() => {
+    if (prevDirtyRef.current && !isDirty && selectedFilePath && getFileExtension(selectedFilePath) === 'scad') {
+      setLastSavedAt(Date.now())
+    }
+    prevDirtyRef.current = isDirty
+  }, [isDirty, selectedFilePath])
 
   // Load JS trust settings on mount
   useEffect(() => {
@@ -1024,7 +1037,7 @@ export function FileExplorerPanel() {
                     onDismiss={() => setJsPromptDismissed(true)}
                   />
                 ) : (
-                  <FileViewer filePath={selectedFilePath} content={fileContent} language={fileLanguage} allowScripts={jsEnabled} />
+                  <FileViewer filePath={selectedFilePath} content={fileContent} language={fileLanguage} allowScripts={jsEnabled} lastSavedAt={lastSavedAt} />
                 )}
               </div>
             </>
