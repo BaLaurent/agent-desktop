@@ -19,6 +19,7 @@ vi.mock('./anthropic', () => ({
 vi.mock('./streaming', () => ({
   streamMessage: vi.fn().mockResolvedValue({ content: 'AI response', toolCalls: [], aborted: false }),
   abortStream: vi.fn(),
+  injectApiKeyEnv: vi.fn(() => null),
 }))
 
 vi.mock('fs', async () => {

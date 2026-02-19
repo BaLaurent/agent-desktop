@@ -47,6 +47,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'hooks_cwdRestriction',
   // Streaming timeout
   'streamingTimeoutSeconds',
+  // API Key auth (global only, not cascadable)
+  'ai_apiKey',
+  'ai_baseUrl',
+  'ai_customModel',
 ])
 
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {

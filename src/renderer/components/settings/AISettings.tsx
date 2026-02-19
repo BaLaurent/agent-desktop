@@ -1,16 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useAuthStore } from '../../stores/authStore'
 import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS } from '../../../shared/constants'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 
 export function AISettings() {
   const { settings, loadSettings, setSetting } = useSettingsStore()
+  const { checkAuth } = useAuthStore()
 
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
 
+  const apiKey = settings['ai_apiKey'] ?? ''
+  const baseUrl = settings['ai_baseUrl'] ?? ''
+  const customModel = settings['ai_customModel'] ?? ''
+  const [showApiKey, setShowApiKey] = useState(false)
+
+  const handleApiKeyChange = useCallback((value: string) => {
+    setSetting('ai_apiKey', value)
+    // Re-check auth status after a brief delay (API key auth is instant)
+    setTimeout(() => checkAuth(), 300)
+  }, [setSetting, checkAuth])
+
   const model = settings['ai_model'] ?? DEFAULT_MODEL
+  const isCustomModel = !!customModel
   const maxTurns = settings['ai_maxTurns'] ?? '1'
   const maxThinkingTokens = settings['ai_maxThinkingTokens'] ?? '0'
   const maxBudgetUsd = settings['ai_maxBudgetUsd'] ?? '0'
@@ -38,6 +52,67 @@ export function AISettings() {
 
   return (
     <div className="flex flex-col gap-1">
+      {/* API Key */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            API Key
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Anthropic API key. Bypasses OAuth when set.
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <input
+            type={showApiKey ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => handleApiKeyChange(e.target.value)}
+            placeholder="sk-ant-..."
+            className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+            }}
+            aria-label="API key"
+          />
+          <button
+            onClick={() => setShowApiKey((v) => !v)}
+            className="px-2 py-1.5 rounded text-xs transition-opacity hover:opacity-70"
+            style={{ color: 'var(--color-text-muted)' }}
+            aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+            title={showApiKey ? 'Hide' : 'Show'}
+          >
+            {showApiKey ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
+
+      {/* Base URL (only when API key is set) */}
+      {apiKey && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Base URL
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Custom API endpoint (OpenRouter, proxy, etc).
+            </span>
+          </div>
+          <input
+            type="text"
+            value={baseUrl}
+            onChange={(e) => setSetting('ai_baseUrl', e.target.value)}
+            placeholder="https://api.anthropic.com"
+            className="w-56 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+            }}
+            aria-label="Base URL"
+          />
+        </div>
+      )}
+
       {/* Model */}
       <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
         <div className="flex flex-col gap-0.5 pr-4">
@@ -48,22 +123,46 @@ export function AISettings() {
             Claude model used for responses.
           </span>
         </div>
-        <select
-          value={model}
-          onChange={(e) => setSetting('ai_model', e.target.value)}
-          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none"
-          style={{
-            backgroundColor: 'var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          aria-label="Select AI model"
-        >
-          {MODEL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col items-end gap-1">
+          <select
+            value={(isCustomModel || model === 'custom') ? 'custom' : model}
+            onChange={(e) => {
+              if (e.target.value === 'custom') {
+                setSetting('ai_model', 'custom')
+              } else {
+                setSetting('ai_model', e.target.value)
+                setSetting('ai_customModel', '') // clear custom model
+              }
+            }}
+            className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+            }}
+            aria-label="Select AI model"
+          >
+            {MODEL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+            <option value="custom">Other</option>
+          </select>
+          {(isCustomModel || model === 'custom') && (
+            <input
+              type="text"
+              value={customModel}
+              onChange={(e) => setSetting('ai_customModel', e.target.value)}
+              placeholder="anthropic/claude-3.5-sonnet"
+              className="w-48 px-3 py-1.5 rounded text-xs border border-[var(--color-text-muted)]/20 outline-none font-mono"
+              style={{
+                backgroundColor: 'var(--color-bg)',
+                color: 'var(--color-text)',
+              }}
+              aria-label="Custom model ID"
+            />
+          )}
+        </div>
       </div>
 
       {/* Max Turns */}

@@ -76,7 +76,22 @@ function runDiagnostics(sdkError?: string): AuthDiagnostics {
   }
 }
 
-async function getStatus(): Promise<AuthStatus> {
+async function getStatus(db?: Database.Database): Promise<AuthStatus> {
+  // Check for API key auth first — bypass OAuth entirely when set
+  if (db) {
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'ai_apiKey'").get() as { value: string } | undefined
+      if (row?.value) {
+        return {
+          authenticated: true,
+          user: { email: 'API Key', name: 'API Key User' },
+        }
+      }
+    } catch {
+      // settings table might not exist yet during initial setup
+    }
+  }
+
   // Pre-check: if credentials are not found (file or macOS Keychain), skip the SDK call
   const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
   const credentialsPath = path.join(configDir, '.credentials.json')
@@ -137,8 +152,8 @@ async function getStatus(): Promise<AuthStatus> {
   }
 }
 
-async function login(): Promise<AuthStatus> {
-  const status = await getStatus()
+async function login(db?: Database.Database): Promise<AuthStatus> {
+  const status = await getStatus(db)
   if (!status.authenticated) {
     throw new Error(status.error || 'Not logged in. Run `claude login` in your terminal first.')
   }
@@ -149,9 +164,9 @@ function logout(): AuthStatus {
   return { authenticated: false, user: null }
 }
 
-export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void {
-  ipcMain.handle('auth:getStatus', () => getStatus())
-  ipcMain.handle('auth:login', () => login())
+export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
+  ipcMain.handle('auth:getStatus', () => getStatus(db))
+  ipcMain.handle('auth:login', () => login(db))
   ipcMain.handle('auth:logout', () => logout())
 }
 

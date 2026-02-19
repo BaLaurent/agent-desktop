@@ -4,7 +4,7 @@ import { mkdirSync } from 'fs'
 import { promises as fsp } from 'fs'
 import { join, basename, extname, resolve, relative } from 'path'
 import { app } from 'electron'
-import { streamMessage, abortStream, respondToApproval } from './streaming'
+import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv } from './streaming'
 import { loadAgentSDK } from './anthropic'
 import { getMainWindow } from '../index'
 import type { AISettings } from './streaming'
@@ -248,7 +248,7 @@ function filterMcpServers(
 }
 
 export function getAISettings(db: Database.Database, conversationId: number): AISettings {
-  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills']
+  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel']
   const rows = db
     .prepare(`SELECT key, value FROM settings WHERE key IN (${keys.map(() => '?').join(',')})`)
     .all(...keys) as { key: string; value: string }[]
@@ -257,6 +257,12 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
   for (const row of rows) {
     map[row.key] = row.value
   }
+
+  // Grab global-only values before cascade (these are not overridable per-conversation/folder)
+  const globalApiKey = map['ai_apiKey'] || undefined
+  const globalBaseUrl = map['ai_baseUrl'] || undefined
+  const globalCustomModel = map['ai_customModel'] || undefined
+  const globalModel = map['ai_model'] || undefined
 
   // Cascade: folder overrides → conversation overrides
   const convRow = db
@@ -330,8 +336,15 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     }
   }
 
+  // Model priority: per-conversation/folder override > global custom model > global ai_model
+  // 'custom' is a UI sentinel, not a real model — filter it out
+  const cascadedModel = map['ai_model'] || undefined
+  const modelWasOverridden = cascadedModel !== globalModel
+  const rawModel = modelWasOverridden ? cascadedModel : (globalCustomModel || globalModel || undefined)
+  const finalModel = rawModel === 'custom' ? undefined : rawModel
+
   return {
-    model: map['ai_model'] || undefined,
+    model: finalModel,
     maxTurns: map['ai_maxTurns'] ? Number(map['ai_maxTurns']) : undefined,
     maxThinkingTokens: map['ai_maxThinkingTokens'] ? Number(map['ai_maxThinkingTokens']) : undefined,
     maxBudgetUsd: map['ai_maxBudgetUsd'] ? Number(map['ai_maxBudgetUsd']) : undefined,
@@ -344,6 +357,8 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     skills: (map['ai_skills'] as 'off' | 'user' | 'project' | 'local') || 'off',
     skillsEnabled: (map['ai_skillsEnabled'] ?? 'true') === 'true',
     disabledSkills: safeJsonParse<string[]>(map['ai_disabledSkills'] || '[]', []),
+    apiKey: globalApiKey,
+    baseUrl: globalBaseUrl,
   }
 }
 
@@ -416,6 +431,13 @@ async function generateConversationTitle(
   const userSnippet = userContent.slice(0, 200)
   const assistantSnippet = assistantContent.slice(0, 200)
 
+  // Inject API key env vars for title generation (same provider as main streaming)
+  const apiKeyRow = db.prepare("SELECT key, value FROM settings WHERE key IN ('ai_apiKey', 'ai_baseUrl')").all() as { key: string; value: string }[]
+  const apiMap: Record<string, string> = {}
+  for (const r of apiKeyRow) apiMap[r.key] = r.value
+  const restoreEnv = injectApiKeyEnv(apiMap['ai_apiKey'] || undefined, apiMap['ai_baseUrl'] || undefined)
+
+  try {
   const sdk = await loadAgentSDK()
 
   let title = ''
@@ -455,6 +477,9 @@ async function generateConversationTitle(
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('conversations:titleUpdated', { id: conversationId, title })
+  }
+  } finally {
+    restoreEnv?.()
   }
 }
 

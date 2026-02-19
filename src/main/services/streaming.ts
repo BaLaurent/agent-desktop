@@ -99,6 +99,30 @@ export interface AISettings {
   skills?: 'off' | 'user' | 'project' | 'local'
   skillsEnabled?: boolean
   disabledSkills?: string[]
+  apiKey?: string
+  baseUrl?: string
+}
+
+/**
+ * Inject ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL into process.env.
+ * Returns a cleanup function that restores original values, or null if no injection was needed.
+ */
+export function injectApiKeyEnv(apiKey?: string, baseUrl?: string): (() => void) | null {
+  if (!apiKey) return null
+  const savedApiKey = process.env.ANTHROPIC_API_KEY
+  const savedBaseUrl = process.env.ANTHROPIC_BASE_URL
+  process.env.ANTHROPIC_API_KEY = apiKey
+  if (baseUrl) {
+    process.env.ANTHROPIC_BASE_URL = baseUrl
+  } else {
+    delete process.env.ANTHROPIC_BASE_URL
+  }
+  return () => {
+    if (savedApiKey !== undefined) process.env.ANTHROPIC_API_KEY = savedApiKey
+    else delete process.env.ANTHROPIC_API_KEY
+    if (savedBaseUrl !== undefined) process.env.ANTHROPIC_BASE_URL = savedBaseUrl
+    else delete process.env.ANTHROPIC_BASE_URL
+  }
 }
 
 interface StreamEventMessage {
@@ -137,8 +161,13 @@ export async function streamMessage(
   aiSettings?: AISettings,
   conversationId?: number
 ): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean }> {
-  // Ensure the macOS OAuth token is fresh (refresh if expired) before every SDK call
-  await ensureFreshMacOSToken()
+  // Ensure the macOS OAuth token is fresh — skip when using API key auth
+  if (!aiSettings?.apiKey) {
+    await ensureFreshMacOSToken()
+  }
+
+  // Inject API key / base URL into process.env for the SDK subprocess
+  const restoreEnv = injectApiKeyEnv(aiSettings?.apiKey, aiSettings?.baseUrl)
 
   const sdk = await loadAgentSDK()
 
@@ -478,6 +507,8 @@ export async function streamMessage(
       abortControllers.delete(convKey)
     }
     denyPendingForConversation(convKey)
+    // Restore original env vars after streaming completes
+    restoreEnv?.()
   }
 
   return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted }

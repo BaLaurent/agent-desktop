@@ -21,6 +21,7 @@ const mockStreamMessage = vi.fn().mockResolvedValue({ content: 'AI response' })
 vi.mock('./streaming', () => ({
   streamMessage: (...args: unknown[]) => mockStreamMessage(...args),
   abortStream: vi.fn(),
+  injectApiKeyEnv: vi.fn(() => null),
 }))
 
 vi.mock('fs', async () => {
