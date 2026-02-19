@@ -18,7 +18,7 @@ vi.mock('@react-three/drei', () => ({
 vi.mock('three/examples/jsm/loaders/3MFLoader.js', () => {
   class MockThreeMFLoader {
     parse() {
-      return { position: { sub: () => {} } }
+      return { position: { sub: () => {} }, rotation: { x: 0, y: 0, z: 0 } }
     }
   }
   return { ThreeMFLoader: MockThreeMFLoader }

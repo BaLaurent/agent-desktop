@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react'
 import { HtmlPreview } from '../artifacts/HtmlPreview'
 import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
+import { ModelPreview } from '../artifacts/ModelPreview'
 import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 
@@ -24,6 +25,8 @@ function getBasename(filePath: string): string {
   return idx === -1 ? filePath : filePath.slice(idx + 1)
 }
 
+const MODEL_EXTENSIONS = new Set(['stl', 'obj', '3mf', 'ply'])
+
 export function PreviewModal({ filePath, content, language, allowScripts, onClose }: PreviewModalProps) {
   const handleClose = useCallback(() => {
     onClose()
@@ -44,7 +47,9 @@ export function PreviewModal({ filePath, content, language, allowScripts, onClos
   const filename = getBasename(filePath)
 
   let viewer: React.ReactNode
-  if (language === 'image') {
+  if (language === 'model' || MODEL_EXTENSIONS.has(ext)) {
+    viewer = <ModelPreview filePath={filePath} content={content} />
+  } else if (language === 'image') {
     viewer = (
       <div className="h-full w-full overflow-auto flex items-center justify-center p-4">
         <img

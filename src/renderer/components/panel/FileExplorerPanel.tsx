@@ -4,6 +4,7 @@ import { useFileExplorerStore } from '../../stores/fileExplorerStore'
 import { HtmlPreview } from '../artifacts/HtmlPreview'
 import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
+import { ModelPreview } from '../artifacts/ModelPreview'
 import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 import { CodeEditorModal } from './CodeEditorModal'
@@ -22,7 +23,9 @@ function getBasename(filePath: string): string {
   return idx === -1 ? filePath : filePath.slice(idx + 1)
 }
 
-const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad'])
+const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad', 'obj'])
+
+const MODEL_EXTENSIONS = new Set(['stl', 'obj', '3mf', 'ply'])
 
 function isThemesDirectory(cwd: string | null): boolean {
   if (!cwd) return false
@@ -36,7 +39,7 @@ function toMonacoLanguage(lang: string | null): string {
 }
 
 function hasPreviewMode(language: string | null, filePath: string): boolean {
-  if (language === 'image') return false
+  if (language === 'image' || language === 'model') return false
   const ext = getFileExtension(filePath)
   return PREVIEW_EXTENSIONS.has(ext)
 }
@@ -492,21 +495,22 @@ function MonacoFileEditor({ content, language }: { content: string; language: st
 const HTML_EXTENSIONS = new Set(['html', 'htm'])
 
 function isMonacoActive(fileLanguage: string | null, filePath: string, viewMode: string): boolean {
-  if (fileLanguage === 'image') return false
+  if (fileLanguage === 'image' || fileLanguage === 'model') return false
   const ext = getFileExtension(filePath)
   if (viewMode === 'preview' && PREVIEW_EXTENSIONS.has(ext)) return false
   return true
 }
 
-function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand }: {
-  filePath: string; isThemesCwd: boolean; jsEnabled: boolean; onToggleJs: () => void; onExpand: () => void
+function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand, onExportStl, exporting }: {
+  filePath: string; isThemesCwd: boolean; jsEnabled: boolean; onToggleJs: () => void; onExpand: () => void;
+  onExportStl?: () => void; exporting?: boolean
 }) {
   const { isDirty, viewMode, setViewMode, saveFile, fileLanguage } = useFileExplorerStore()
   const canToggle = hasPreviewMode(fileLanguage, filePath)
   const name = getBasename(filePath)
   const showApplyTheme = isThemesCwd && getFileExtension(filePath) === 'css'
   const showJsToggle = viewMode === 'preview' && HTML_EXTENSIONS.has(getFileExtension(filePath))
-  const showExpand = fileLanguage === 'image' || isMonacoActive(fileLanguage, filePath, viewMode) || (viewMode === 'preview' && PREVIEW_EXTENSIONS.has(getFileExtension(filePath)))
+  const showExpand = fileLanguage === 'image' || fileLanguage === 'model' || isMonacoActive(fileLanguage, filePath, viewMode) || (viewMode === 'preview' && PREVIEW_EXTENSIONS.has(getFileExtension(filePath)))
 
   return (
     <div
@@ -541,6 +545,18 @@ function ViewerHeader({ filePath, isThemesCwd, jsEnabled, onToggleJs, onExpand }
           aria-pressed={jsEnabled}
         >
           JS
+        </button>
+      )}
+      {onExportStl && (
+        <button
+          onClick={onExportStl}
+          disabled={exporting}
+          className="text-[10px] font-bold px-1.5 py-0.5 rounded transition-opacity hover:opacity-80 bg-tool text-contrast"
+          style={{ opacity: exporting ? 0.6 : 1 }}
+          title="Export as STL"
+          aria-label="Export as STL"
+        >
+          {exporting ? 'Exporting...' : 'Export STL'}
         </button>
       )}
       {showExpand && (
@@ -588,6 +604,11 @@ function FileViewer({ filePath, content, language, allowScripts, lastSavedAt }: 
   const { viewMode } = useFileExplorerStore()
   const ext = getFileExtension(filePath)
 
+  // Binary 3D models — always model preview (no source toggle)
+  if (language === 'model') {
+    return <ModelPreview filePath={filePath} content={content} />
+  }
+
   // Raster images — always image preview, no toggle
   if (language === 'image') {
     return (
@@ -615,6 +636,7 @@ function FileViewer({ filePath, content, language, allowScripts, lastSavedAt }: 
       )
     }
     if (ext === 'scad') return <ScadPreview filePath={filePath} lastSavedAt={lastSavedAt ?? 0} />
+    if (ext === 'obj') return <ModelPreview filePath={filePath} content={content} />
   }
 
   // Everything else (code files, or source mode) → Monaco
@@ -747,6 +769,9 @@ export function FileExplorerPanel() {
 
   // Create state: { kind, dirPath } — dirPath is where to create
   const [creating, setCreating] = useState<{ kind: 'file' | 'folder'; dirPath: string } | null>(null)
+
+  // Export STL state
+  const [exporting, setExporting] = useState(false)
 
   // Track .scad saves for recompilation
   const [lastSavedAt, setLastSavedAt] = useState(0)
@@ -887,6 +912,15 @@ export function FileExplorerPanel() {
     setCreating({ kind: 'folder', dirPath })
   }, [])
 
+  const handleExportStl = useCallback(async () => {
+    if (!selectedFilePath) return
+    setExporting(true)
+    try {
+      await window.agent.openscad.exportStl(selectedFilePath)
+    } catch { /* user cancelled or error */ }
+    finally { setExporting(false) }
+  }, [selectedFilePath])
+
   // Close context menu on tree scroll
   const treeRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -1015,6 +1049,8 @@ export function FileExplorerPanel() {
                     setShowPreviewModal(true)
                   }
                 }}
+                onExportStl={getFileExtension(selectedFilePath) === 'scad' ? handleExportStl : undefined}
+                exporting={exporting}
               />
               {fileWarning && (
                 <div className="px-3 py-1.5 text-xs flex-shrink-0 bg-warning" style={{ color: '#000' }} role="alert">

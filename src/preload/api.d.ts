@@ -123,6 +123,7 @@ export interface AgentAPI {
   openscad: {
     compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
     validateConfig(): Promise<{ binaryFound: boolean; binaryPath: string; version: string }>
+    exportStl(scadFilePath: string): Promise<string | null>
   }
   updates: {
     check(): Promise<UpdateInfo>

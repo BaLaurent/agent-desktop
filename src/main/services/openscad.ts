@@ -1,4 +1,4 @@
-import type { IpcMain } from 'electron'
+import { type IpcMain, BrowserWindow, dialog } from 'electron'
 import type Database from 'better-sqlite3'
 import { spawn } from 'child_process'
 import * as fs from 'fs/promises'
@@ -133,6 +133,41 @@ async function validateConfig(db: Database.Database): Promise<ValidateResult> {
   return { binaryFound, binaryPath, version }
 }
 
+async function exportStl(db: Database.Database, scadFilePath: string, outputPath: string): Promise<void> {
+  const binaryPath = getSetting(db, 'openscad_binaryPath') || 'openscad'
+
+  await new Promise<void>((resolve, reject) => {
+    const args = ['-o', outputPath, scadFilePath]
+    const proc = spawn(binaryPath, args, {
+      stdio: ['ignore', 'ignore', 'pipe'],
+      timeout: TIMEOUT_MS,
+      env: process.env,
+    })
+
+    let stderr = ''
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') {
+        reject(new Error(`OpenSCAD binary not found: "${binaryPath}". Configure in Settings > OpenSCAD.`))
+      } else {
+        reject(new Error(`Failed to start OpenSCAD: ${err.message}`))
+      }
+    })
+
+    proc.on('close', (code, signal) => {
+      if (signal === 'SIGTERM') {
+        reject(new Error('OpenSCAD export timed out (60s).'))
+      } else if (code !== 0) {
+        const detail = stderr.trim().slice(0, 500)
+        reject(new Error(`OpenSCAD exited with code ${code}${detail ? ': ' + detail : ''}`))
+      } else {
+        resolve()
+      }
+    })
+  })
+}
+
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('openscad:compile', async (_event, scadFilePath: string) => {
     validateString(scadFilePath, 'scadFilePath')
@@ -142,7 +177,19 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
   ipcMain.handle('openscad:validateConfig', async () => {
     return validateConfig(db)
   })
+
+  ipcMain.handle('openscad:exportStl', async (event, scadFilePath: string) => {
+    validateString(scadFilePath, 'scadFilePath')
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const { canceled, filePath: outputPath } = await dialog.showSaveDialog(win!, {
+      defaultPath: scadFilePath.replace(/\.scad$/i, '.stl'),
+      filters: [{ name: 'STL Files', extensions: ['stl'] }],
+    })
+    if (canceled || !outputPath) return null
+    await exportStl(db, scadFilePath, outputPath)
+    return outputPath
+  })
 }
 
 // Exported for testing
-export { compile, validateConfig, findBinary }
+export { compile, validateConfig, findBinary, exportStl }

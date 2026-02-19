@@ -122,6 +122,7 @@ const api: AgentAPI = {
   openscad: {
     compile: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:compile', scadFilePath), 75000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('openscad:validateConfig')),
+    exportStl: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:exportStl', scadFilePath), 75000),
   },
   updates: {
     check: () => withTimeout(ipcRenderer.invoke('updates:check')),

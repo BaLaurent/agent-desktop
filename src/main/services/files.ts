@@ -15,6 +15,7 @@ const MAX_DEPTH = 10
 const MAX_FILES = 500
 const MAX_PASTE_SIZE = 5_000_000 // 5MB — clipboard paste limit
 const MAX_PREVIEW_SIZE = 10 * 1024 * 1024 // 10MB — hard limit for file preview
+const BINARY_MODEL_EXTS = new Set(['stl', '3mf', 'ply'])
 
 export function classifyFileExt(ext: string): string | null {
   switch (ext) {
@@ -187,6 +188,12 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
       const buffer = await fsp.readFile(resolved)
       const dataUrl = `data:${getImageMime(ext)};base64,${buffer.toString('base64')}`
       return { content: dataUrl, language: 'image' as const }
+    }
+
+    // Binary 3D model files: read as binary → base64
+    if (BINARY_MODEL_EXTS.has(ext)) {
+      const buffer = await fsp.readFile(resolved)
+      return { content: buffer.toString('base64'), language: 'model' as const }
     }
 
     // Text files
