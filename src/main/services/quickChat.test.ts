@@ -49,6 +49,13 @@ vi.mock('../index', () => ({
   getMainWindow: vi.fn(() => null),
 }))
 
+vi.mock('../utils/volume', () => ({
+  duckVolume: vi.fn(),
+  restoreVolume: vi.fn(),
+}))
+
+import { duckVolume, restoreVolume } from '../utils/volume'
+
 // --- Helpers ---
 
 function makeMockDb(overrides: Record<string, any> = {}) {
@@ -123,6 +130,9 @@ describe('QuickChat Service', () => {
   let mockIpcMain: { handle: ReturnType<typeof vi.fn> }
 
   beforeEach(() => {
+    // Fire any pending closed callback to reset module state (overlayWindow, headlessActive)
+    // before clearing mocks so the cleanup call doesn't pollute test assertions
+    closedCb?.()
     vi.clearAllMocks()
     didFinishLoadCb = null
     closedCb = null
@@ -321,6 +331,53 @@ describe('QuickChat Service', () => {
       expect(mockOverlayWin.loadURL).toHaveBeenCalledWith(
         expect.stringContaining('headless=true')
       )
+    })
+  })
+
+  describe('audio ducking', () => {
+    it('calls duckVolume when voice mode and voice_volumeDuck > 0', async () => {
+      const { registerHandlers, showOverlay } = await import('./quickChat')
+      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
+        'voice_volumeDuck': '30',
+      }))
+
+      showOverlay('voice')
+
+      expect(vi.mocked(duckVolume)).toHaveBeenCalledWith(30)
+    })
+
+    it('does not call duckVolume in text mode', async () => {
+      const { registerHandlers, showOverlay } = await import('./quickChat')
+      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
+        'voice_volumeDuck': '30',
+      }))
+
+      showOverlay('text')
+
+      expect(vi.mocked(duckVolume)).not.toHaveBeenCalled()
+    })
+
+    it('does not call duckVolume when voice_volumeDuck is 0', async () => {
+      const { registerHandlers, showOverlay } = await import('./quickChat')
+      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
+        'voice_volumeDuck': '0',
+      }))
+
+      showOverlay('voice')
+
+      expect(vi.mocked(duckVolume)).not.toHaveBeenCalled()
+    })
+
+    it('calls restoreVolume when overlay window closes', async () => {
+      const { registerHandlers, showOverlay } = await import('./quickChat')
+      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb())
+
+      showOverlay('text')
+
+      // Simulate window close
+      closedCb?.()
+
+      expect(vi.mocked(restoreVolume)).toHaveBeenCalled()
     })
   })
 

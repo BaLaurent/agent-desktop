@@ -146,6 +146,15 @@
 - **Gotcha**: `ready-to-show` never fires for transparent BrowserWindows on Linux/Wayland — must use `webContents.did-finish-load` instead
 - **Gotcha**: overlay must use `h-screen` not `h-full` — `html`/`body`/`#root` lack `height: 100%`, so `h-full` resolves to `auto` and breaks `overflow-y-auto` scrolling
 
+## Audio Ducking
+- `src/main/utils/volume.ts` — auto-lowers system volume during Quick Voice recording
+- Backend detection: `wpctl` > `pactl` > `amixer` (cached after first lookup via `findBinaryInPath()`)
+- **Subtractive model**: setting `voice_volumeDuck` = 30 means "reduce by 30 points" (80% → 50%), clamped at 0
+- Duck on `showOverlay('voice')` (fire-and-forget), restore on overlay `closed` event
+- **Double-duck guard**: `savedVolume !== null` prevents overwriting the original volume on rapid re-trigger
+- Silent on error (log + skip, never throw) — same pattern as `hyprctl()` in `waylandShortcuts.ts`
+- Setting: `voice_volumeDuck` in settings table; slider in Settings > Quick Chat > Voice Volume
+
 ## Global Shortcuts (Wayland/X11)
 - Hybrid routing in `globalShortcuts.ts`: `getSessionType()` → X11 uses Electron `globalShortcut.register()`, Wayland uses XDG Desktop Portal
 - Session detection priority: `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` (both can be set under XWayland)

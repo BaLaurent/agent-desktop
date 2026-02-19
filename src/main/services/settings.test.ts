@@ -47,6 +47,12 @@ describe('Settings Service', () => {
     expect(settings.streamingTimeoutSeconds).toBe('60')
   })
 
+  it('accepts voice_volumeDuck setting key', async () => {
+    await ipc.invoke('settings:set', 'voice_volumeDuck', '30')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.voice_volumeDuck).toBe('30')
+  })
+
   it('get after set reflects new value', async () => {
     const before = await ipc.invoke('settings:get') as Record<string, string>
     expect(before.ai_maxTurns).toBe('50')
