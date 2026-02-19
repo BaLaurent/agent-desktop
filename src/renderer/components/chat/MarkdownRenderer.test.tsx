@@ -35,6 +35,16 @@ describe('MarkdownRenderer', () => {
     expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument()
   })
 
+  it('renders code blocks without language as block (not inline)', () => {
+    const md = '```\n┌──────┐\n│ test │\n└──────┘\n```'
+    const { container } = render(<MarkdownRenderer content={md} />)
+    // Should render in a CodeBlock (pre element), not as inline code
+    const pre = container.querySelector('pre')
+    expect(pre).toBeInTheDocument()
+    expect(pre!.textContent).toContain('┌──────┐')
+    expect(pre!.textContent).toContain('│ test │')
+  })
+
   it('shows language label on code blocks', () => {
     const md = '```python\nprint("hi")\n```'
     render(<MarkdownRenderer content={md} />)

@@ -22,35 +22,38 @@ interface MarkdownRendererProps {
 }
 
 const components: Components = {
-  code({ className, children, ...props }) {
-    const match = /language-(\w+)/.exec(className || '')
-    const isInline = !match && !className
-
-    if (isInline) {
-      return (
-        <code
-          className="px-1.5 py-0.5 rounded text-sm"
-          style={{
-            backgroundColor: 'var(--color-surface)',
-            color: 'var(--color-primary)',
-          }}
-          {...props}
-        >
-          {children}
-        </code>
-      )
-    }
-
+  code({ children, ...props }) {
+    // Only inline code reaches here — block code is handled by pre()
     return (
-      <CodeBlock language={match?.[1]}>
-        {extractText(children).replace(/\n$/, '')}
-      </CodeBlock>
+      <code
+        className="px-1.5 py-0.5 rounded text-sm"
+        style={{
+          backgroundColor: 'var(--color-surface)',
+          color: 'var(--color-primary)',
+        }}
+        {...props}
+      >
+        {children}
+      </code>
     )
   },
 
-  pre({ children }) {
-    // Let CodeBlock handle the wrapping
-    return <>{children}</>
+  pre({ children, node }) {
+    // Fenced code blocks: extract language from the hast <code> node
+    const codeNode = (node as any)?.children?.[0]
+    let language: string | undefined
+    if (codeNode?.tagName === 'code') {
+      const classNames = codeNode.properties?.className
+      if (Array.isArray(classNames)) {
+        const langClass = classNames.find((c: string) => c.startsWith('language-'))
+        if (langClass) language = langClass.replace('language-', '')
+      }
+    }
+    return (
+      <CodeBlock language={language}>
+        {extractText(children).replace(/\n$/, '')}
+      </CodeBlock>
+    )
   },
 
   a({ href, children }) {

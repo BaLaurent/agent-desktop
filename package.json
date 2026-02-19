@@ -24,6 +24,7 @@
   "license": "GPL-3.0-only",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.37",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
     "@types/dompurify": "^3.0.5",
     "better-sqlite3": "^11.7.0",

@@ -64,38 +64,44 @@ export function MarkdownArtifact({ content }: MarkdownArtifactProps) {
           ol: ({ children }) => (
             <ol className="list-decimal pl-6 my-2 space-y-1">{children}</ol>
           ),
-          code: ({ className, children }) => {
-            const isBlock = className?.startsWith('language-')
-            if (className === 'language-mermaid') {
-              const text = typeof children === 'string' ? children : String(children ?? '')
-              return <MermaidBlock content={text} />
+          code: ({ children }) => (
+            // Only inline code reaches here — block code is handled by pre()
+            <code
+              className="px-1.5 py-0.5 rounded text-sm"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-primary)',
+              }}
+            >
+              {children}
+            </code>
+          ),
+          pre: ({ children, node }) => {
+            // Fenced code blocks: extract language from the hast <code> node
+            const codeNode = (node as any)?.children?.[0]
+            let language: string | undefined
+            if (codeNode?.tagName === 'code') {
+              const classNames = codeNode.properties?.className
+              if (Array.isArray(classNames)) {
+                const langClass = classNames.find((c: string) => c.startsWith('language-'))
+                if (langClass) language = langClass.replace('language-', '')
+              }
             }
-            if (isBlock) {
-              return (
-                <pre
-                  className="rounded-md p-3 my-3 overflow-x-auto text-sm"
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  }}
-                >
-                  <code>{children}</code>
-                </pre>
-              )
+            if (language === 'mermaid') {
+              return <MermaidBlock content={extractText(children).replace(/\n$/, '')} />
             }
             return (
-              <code
-                className="px-1.5 py-0.5 rounded text-sm"
+              <pre
+                className="rounded-md p-3 my-3 overflow-x-auto text-sm"
                 style={{
                   backgroundColor: 'var(--color-surface)',
-                  color: 'var(--color-primary)',
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 }}
               >
-                {children}
-              </code>
+                <code>{extractText(children).replace(/\n$/, '')}</code>
+              </pre>
             )
           },
-          pre: ({ children }) => <>{children}</>,
           blockquote: ({ children }) => (
             <blockquote
               className="pl-4 my-3 italic"
