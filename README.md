@@ -28,6 +28,7 @@ Have ideas, feature requests, or just want to chat about the project? Join us on
 - Built-in file explorer with context menu (open, rename, duplicate, move to trash)
 - Code viewer (Monaco), HTML sandbox, Markdown preview, Mermaid diagrams, SVG renderer
 - **3D model preview** — OpenSCAD files rendered with Three.js, with STL export
+- **Jupyter notebook** — `.ipynb` preview with live kernel execution and inline cell editing (Colab-style)
 - Image preview (base64 data URL), fullscreen preview modal
 - `@mention` autocomplete with VS Code-style fuzzy matching and configurable exclude patterns
 
@@ -43,9 +44,17 @@ Have ideas, feature requests, or just want to chat about the project? Join us on
 - Audio ducking — system volume auto-lowers during voice recording
 - Headless mode — notifications-only without overlay window
 
+### Text-to-Speech
+- AI responses read aloud via configurable TTS providers
+- **Providers**: Piper (HTTP), edge-tts (CLI), spd-say (system speech-dispatcher)
+- **Response modes**: full, summary (Haiku-generated), auto (full if short, summary if long), off
+- Per-stream audio ducking — other audio lowers while TTS plays
+- Per-conversation TTS settings via AI overrides cascade
+
 ### Scheduled Tasks
 - Recurring task execution on conversations
 - Schedule agent actions to run automatically on a configurable interval
+- Built-in MCP bridge — AI can create, list, and cancel scheduled tasks directly
 
 ### Tools & Extensions
 - **MCP servers** — connect stdio, HTTP, or SSE Model Context Protocol tools
@@ -153,6 +162,7 @@ npm run test:renderer # renderer tests only
 | Diagrams | Mermaid |
 | 3D | Three.js, @react-three/fiber, @react-three/drei |
 | Code Editor | Monaco Editor |
+| Jupyter | jupyter_client + ipykernel (local kernel) |
 | Voice | whisper.cpp (local) |
 | Build | electron-vite, electron-builder |
 
