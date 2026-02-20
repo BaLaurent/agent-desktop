@@ -54,10 +54,26 @@
 - **Streaming**: `webContents.send('jupyter:output', chunk)` — renderer subscribes via `onOutput()` listener
 - **Cleanup**: `shutdownAllKernels()` called in `before-quit` handler; per-kernel 3s graceful + SIGKILL
 - **Bundling**: `bridge.py` in `extraResources` (electron-builder.yml); resolved via `app.isPackaged ? process.resourcesPath : app.getAppPath()/resources`
-- **Frontend**: `filePath` prop is optional — no toolbar when absent (backward compat for inline preview)
-  - Live outputs replace static .ipynb outputs per-cell; file never modified (read-only viewer)
+- **Frontend**: `filePath` prop is optional — no toolbar/editing when absent (backward compat for inline preview)
+  - Live outputs replace static .ipynb outputs per-cell
   - **Gotcha**: useEffect cleanup with `[filePath, kernelStatus]` deps causes shutdown on every status change — must use `useRef` for kernelStatus and depend only on `[filePath]`
 - **Detection**: `detectJupyter()` checks `import jupyter_client; import ipykernel; print("ok")` — returns `{ found, pythonPath, error? }` with specific missing-package message
+
+## Notebook Editing (Colab/Jupyter style)
+- `NotebookPreview` supports inline cell editing when `filePath` is provided; read-only without it
+- **Mutable state**: `EditableCell` with stable `_id` (incremental counter) replaces immutable `useMemo(JSON.parse)`
+  - All kernel maps (`cellOutputs`, `cellExecCounts`, `reqToCellRef`) keyed by `_id` — outputs follow cells through add/delete/move
+  - `notebookMetaRef` preserves notebook-level metadata (kernelspec, nbformat) for serialization
+- **Code cells**: click `<pre>` → single floating Monaco editor; Ctrl+Enter run, Ctrl+S save, Escape commit
+- **Markdown/raw cells**: double-click → `<textarea>`; Escape or blur commits
+- **Cell operations**: `AddCellBar` between cells (+ Code / + Markdown), `CellToolbar` on hover (delete, move up/down)
+  - New cells auto-open in edit mode
+- **Serialization**: `serializeNotebook()` — source split to `["line1\n", "line2"]` (nbformat 4 convention); `JSON.stringify(..., null, 1)`
+  - Live kernel outputs replace static outputs on save (Jupyter behavior)
+- **Dirty tracking**: debounced (300ms) `useEffect` pushes serialized JSON to `fileExplorerStore.setEditorContent()`
+  - `skipInitialSyncRef` prevents false dirty on initial render
+  - **Gotcha (infinite loop)**: `lastSerializedRef` + `lastContentRef` double guard — when `content` prop changes after save, compare against `lastSerializedRef` to skip re-init from own write
+- **Exported**: `serializeNotebook` and `EditableCell` type exported for direct testing
 
 ## CWD & Working Directory
 - Each conversation has `cwd` column (nullable, defaults to `~/.agent-desktop/sessions-folder/{id}/`)
