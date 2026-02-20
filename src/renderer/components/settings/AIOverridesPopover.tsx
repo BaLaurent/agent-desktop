@@ -1,8 +1,8 @@
-import { useState, useRef, useMemo, useCallback } from 'react'
+import { useRef } from 'react'
 import type { AIOverrides } from '../../../shared/types'
 import type { McpServerName } from '../../../shared/constants'
 import { useClickOutside } from '../../hooks/useClickOutside'
-import { parseMcpDisabledList } from '../../utils/mcpUtils'
+import { useOverrideDraft } from '../../hooks/useOverrideDraft'
 import { OverrideFormFields } from './OverrideFormFields'
 
 interface AIOverridesPopoverProps {
@@ -24,74 +24,18 @@ export function AIOverridesPopover({
   title,
   mcpServers,
 }: AIOverridesPopoverProps) {
-  const [draft, setDraft] = useState<AIOverrides>({ ...overrides })
   const popoverRef = useRef<HTMLDivElement>(null)
-
   useClickOutside(popoverRef, onClose)
 
-  const mcpDisabledDraft = useMemo(() => parseMcpDisabledList(draft.ai_mcpDisabled), [draft.ai_mcpDisabled])
-  const mcpDisabledInherited = useMemo(() => parseMcpDisabledList(inheritedValues['ai_mcpDisabled']), [inheritedValues])
-
-  const mcpOverridden = draft.ai_mcpDisabled !== undefined
-
-  const toggleMcpOverride = useCallback(() => {
-    setDraft((prev) => {
-      const next = { ...prev }
-      if (next.ai_mcpDisabled !== undefined) {
-        delete next.ai_mcpDisabled
-      } else {
-        next.ai_mcpDisabled = inheritedValues['ai_mcpDisabled'] || '[]'
-      }
-      return next
-    })
-  }, [inheritedValues])
-
-  const toggleMcpServer = useCallback((serverName: string) => {
-    setDraft((prev) => {
-      const disabled = new Set(parseMcpDisabledList(prev.ai_mcpDisabled))
-      if (disabled.has(serverName)) {
-        disabled.delete(serverName)
-      } else {
-        disabled.add(serverName)
-      }
-      return { ...prev, ai_mcpDisabled: disabled.size > 0 ? JSON.stringify([...disabled]) : '[]' }
-    })
-  }, [])
-
-  const toggleOverride = useCallback((key: string) => {
-    setDraft((prev) => {
-      const next = { ...prev }
-      if (next[key as keyof AIOverrides] !== undefined) {
-        delete next[key as keyof AIOverrides]
-      } else {
-        next[key as keyof AIOverrides] = inheritedValues[key] || ''
-      }
-      return next
-    })
-  }, [inheritedValues])
-
-  const setValue = useCallback((key: string, value: string) => {
-    setDraft((prev) => ({ ...prev, [key]: value }))
-  }, [])
-
-  const handleSave = () => {
-    const cleaned: AIOverrides = {}
-    for (const [k, v] of Object.entries(draft)) {
-      if (v !== undefined && v !== '') {
-        if (k === 'ai_mcpDisabled') {
-          cleaned[k] = v
-        } else {
-          cleaned[k as keyof AIOverrides] = v
-        }
-      }
-    }
-    onSave(Object.keys(cleaned).length > 0 ? cleaned : {})
-  }
+  const {
+    draft, mcpDisabledDraft, mcpDisabledInherited, mcpOverridden,
+    toggleMcpOverride, toggleMcpServer, toggleOverride, setValue, cleanDraft,
+  } = useOverrideDraft(overrides, inheritedValues)
 
   return (
     <div
       ref={popoverRef}
-      className="fixed z-50 rounded-lg shadow-xl text-sm w-[340px]"
+      className="fixed z-50 rounded-lg shadow-xl text-sm w-[340px] max-h-[80vh] flex flex-col"
       style={{
         top: '50%',
         left: '50%',
@@ -103,7 +47,7 @@ export function AIOverridesPopover({
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3 border-b"
+        className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
         style={{ borderColor: 'var(--color-bg)' }}
       >
         <span className="font-medium">{title}</span>
@@ -116,8 +60,8 @@ export function AIOverridesPopover({
         </button>
       </div>
 
-      {/* Settings */}
-      <div className="px-4 py-2 flex flex-col gap-2">
+      {/* Scrollable body */}
+      <div className="px-4 py-2 flex flex-col gap-2 overflow-y-auto flex-1">
         <OverrideFormFields
           draft={draft}
           inheritedValues={inheritedValues}
@@ -135,7 +79,7 @@ export function AIOverridesPopover({
 
       {/* Footer */}
       <div
-        className="flex items-center justify-end gap-2 px-4 py-3 border-t"
+        className="flex items-center justify-end gap-2 px-4 py-3 border-t flex-shrink-0"
         style={{ borderColor: 'var(--color-bg)' }}
       >
         <button
@@ -146,7 +90,7 @@ export function AIOverridesPopover({
           Cancel
         </button>
         <button
-          onClick={handleSave}
+          onClick={() => onSave(cleanDraft())}
           className="px-3 py-1 rounded text-xs bg-primary text-contrast"
         >
           Save

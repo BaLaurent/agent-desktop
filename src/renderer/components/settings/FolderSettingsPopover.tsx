@@ -1,9 +1,9 @@
-import { useState, useRef, useMemo, useCallback } from 'react'
-import type { Folder, AIOverrides } from '../../../shared/types'
+import { useState, useRef } from 'react'
+import type { Folder } from '../../../shared/types'
 import type { McpServerName } from '../../../shared/constants'
 import { parseOverrides } from '../../utils/resolveAISettings'
 import { useClickOutside } from '../../hooks/useClickOutside'
-import { parseMcpDisabledList } from '../../utils/mcpUtils'
+import { useOverrideDraft } from '../../hooks/useOverrideDraft'
 import { OverrideFormFields } from './OverrideFormFields'
 
 export type { McpServerName } from '../../../shared/constants'
@@ -23,56 +23,14 @@ export function FolderSettingsPopover({
   onSave,
   onClose,
 }: FolderSettingsPopoverProps) {
-  const [draft, setDraft] = useState<AIOverrides>(() => parseOverrides(folder.ai_overrides))
   const [cwdValue, setCwdValue] = useState(folder.default_cwd || '')
   const popoverRef = useRef<HTMLDivElement>(null)
-
   useClickOutside(popoverRef, onClose)
 
-  const mcpDisabledDraft = useMemo(() => parseMcpDisabledList(draft.ai_mcpDisabled), [draft.ai_mcpDisabled])
-  const mcpDisabledInherited = useMemo(() => parseMcpDisabledList(globalSettings['ai_mcpDisabled']), [globalSettings])
-
-  const mcpOverridden = draft.ai_mcpDisabled !== undefined
-
-  const toggleMcpOverride = useCallback(() => {
-    setDraft((prev) => {
-      const next = { ...prev }
-      if (next.ai_mcpDisabled !== undefined) {
-        delete next.ai_mcpDisabled
-      } else {
-        next.ai_mcpDisabled = globalSettings['ai_mcpDisabled'] || '[]'
-      }
-      return next
-    })
-  }, [globalSettings])
-
-  const toggleMcpServer = useCallback((serverName: string) => {
-    setDraft((prev) => {
-      const disabled = new Set(parseMcpDisabledList(prev.ai_mcpDisabled))
-      if (disabled.has(serverName)) {
-        disabled.delete(serverName)
-      } else {
-        disabled.add(serverName)
-      }
-      return { ...prev, ai_mcpDisabled: disabled.size > 0 ? JSON.stringify([...disabled]) : '[]' }
-    })
-  }, [])
-
-  const toggleOverride = useCallback((key: string) => {
-    setDraft((prev) => {
-      const next = { ...prev }
-      if (next[key as keyof AIOverrides] !== undefined) {
-        delete next[key as keyof AIOverrides]
-      } else {
-        next[key as keyof AIOverrides] = globalSettings[key] || ''
-      }
-      return next
-    })
-  }, [globalSettings])
-
-  const setValue = useCallback((key: string, value: string) => {
-    setDraft((prev) => ({ ...prev, [key]: value }))
-  }, [])
+  const {
+    draft, mcpDisabledDraft, mcpDisabledInherited, mcpOverridden,
+    toggleMcpOverride, toggleMcpServer, toggleOverride, setValue, cleanDraft,
+  } = useOverrideDraft(parseOverrides(folder.ai_overrides), globalSettings)
 
   const handleBrowseCwd = async () => {
     const selected = await window.agent.system.selectFolder()
@@ -80,16 +38,7 @@ export function FolderSettingsPopover({
   }
 
   const handleSave = () => {
-    const cleaned: AIOverrides = {}
-    for (const [k, v] of Object.entries(draft)) {
-      if (v !== undefined && v !== '') {
-        if (k === 'ai_mcpDisabled') {
-          cleaned[k] = v
-        } else {
-          cleaned[k as keyof AIOverrides] = v
-        }
-      }
-    }
+    const cleaned = cleanDraft()
     const aiJson = Object.keys(cleaned).length > 0 ? JSON.stringify(cleaned) : null
     const cwd = cwdValue.trim() || null
     onSave({ ai_overrides: aiJson, default_cwd: cwd })
