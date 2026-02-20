@@ -110,8 +110,80 @@ export async function restoreVolume(): Promise<void> {
   }
 }
 
+// ─── Per-stream ducking (for TTS) ───────────────────────────
+// Lowers all existing audio streams individually via pactl,
+// so the TTS stream (created after ducking) plays at full volume.
+
+interface SavedStream {
+  index: number
+  volume: number // percentage
+}
+
+let savedStreams: SavedStream[] | null = null
+
+async function listSinkInputs(pactlPath: string): Promise<SavedStream[]> {
+  const out = await exec(pactlPath, ['list', 'sink-inputs'])
+  const inputs: SavedStream[] = []
+  // Output is blocks separated by "Sink Input #<index>"
+  const blocks = out.split(/^Sink Input #(\d+)/m).slice(1)
+  for (let i = 0; i < blocks.length; i += 2) {
+    const index = parseInt(blocks[i], 10)
+    const body = blocks[i + 1] || ''
+    const volMatch = body.match(/Volume:.*?(\d+)%/)
+    if (volMatch) {
+      inputs.push({ index, volume: parseInt(volMatch[1], 10) })
+    }
+  }
+  return inputs
+}
+
+export async function duckOtherStreams(reductionPercent: number): Promise<void> {
+  if (reductionPercent <= 0 || savedStreams !== null) return
+
+  const pactlPath = findBinaryInPath('pactl')
+  if (!pactlPath) {
+    console.warn('[volume] pactl not found — per-stream ducking unavailable')
+    return
+  }
+
+  try {
+    const inputs = await listSinkInputs(pactlPath)
+    if (inputs.length === 0) return
+
+    savedStreams = inputs
+    for (const input of inputs) {
+      const target = Math.max(0, input.volume - reductionPercent)
+      await exec(pactlPath, ['set-sink-input-volume', String(input.index), `${target}%`])
+    }
+    console.log(`[volume] Ducked ${inputs.length} stream(s) by ${reductionPercent}%`)
+  } catch (err) {
+    savedStreams = null
+    console.warn('[volume] Duck streams failed:', err)
+  }
+}
+
+export async function restoreOtherStreams(): Promise<void> {
+  if (!savedStreams) return
+
+  const pactlPath = findBinaryInPath('pactl')
+  if (!pactlPath) { savedStreams = null; return }
+
+  const streams = savedStreams
+  savedStreams = null
+
+  for (const input of streams) {
+    try {
+      await exec(pactlPath, ['set-sink-input-volume', String(input.index), `${input.volume}%`])
+    } catch {
+      // Stream may have ended — ignore
+    }
+  }
+  console.log(`[volume] Restored ${streams.length} stream(s)`)
+}
+
 /** Reset module state for testing */
 export function _resetForTesting(): void {
   cachedBackend = undefined
   savedVolume = null
+  savedStreams = null
 }

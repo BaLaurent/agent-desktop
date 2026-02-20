@@ -12,6 +12,7 @@ import { findBinaryInPath } from '../utils/env'
 import { getSetting } from '../utils/db'
 import { sanitizeError } from '../utils/errors'
 import { validateString } from '../utils/validate'
+import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { HAIKU_MODEL } from '../../shared/constants'
 
 // ─── Module state ────────────────────────────────────────────
@@ -292,6 +293,9 @@ export async function speak(text: string, db: Database.Database): Promise<void> 
 
   notifySpeakingState(true)
 
+  const duck = Number(getSetting(db, 'voice_volumeDuck')) || 0
+  if (duck > 0) await duckOtherStreams(duck)
+
   try {
     switch (provider) {
       case 'piper': {
@@ -318,6 +322,7 @@ export async function speak(text: string, db: Database.Database): Promise<void> 
         throw new Error(`Unknown TTS provider: ${provider}`)
     }
   } finally {
+    restoreOtherStreams().catch(() => {})
     notifySpeakingState(false)
   }
 }
