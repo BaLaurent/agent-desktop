@@ -121,6 +121,7 @@ export function SchedulerPage({ onClose }: Props) {
                   onToggle={toggleTask}
                   onRunNow={runNow}
                   onDelete={handleDelete}
+                  onClose={onClose}
                 />
               ))}
             </div>

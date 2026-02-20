@@ -7,6 +7,7 @@ interface Props {
   onToggle: (id: number, enabled: boolean) => void
   onRunNow: (id: number) => void
   onDelete: (id: number) => void
+  onClose: () => void
 }
 
 function formatSchedule(task: ScheduledTask): string {
@@ -59,7 +60,7 @@ function StatusBadge({ status }: { status: ScheduledTask['last_status'] }) {
   )
 }
 
-export function TaskCard({ task, onEdit, onToggle, onRunNow, onDelete }: Props) {
+export function TaskCard({ task, onEdit, onToggle, onRunNow, onDelete, onClose }: Props) {
   const { setActiveConversation } = useConversationsStore()
 
   return (
@@ -178,7 +179,7 @@ export function TaskCard({ task, onEdit, onToggle, onRunNow, onDelete }: Props) 
       {/* Conversation link */}
       {task.conversation_title && (
         <button
-          onClick={() => setActiveConversation(task.conversation_id)}
+          onClick={() => { setActiveConversation(task.conversation_id); onClose() }}
           className="text-xs mt-2 hover:underline cursor-pointer"
           style={{ color: 'var(--color-primary)' }}
         >
