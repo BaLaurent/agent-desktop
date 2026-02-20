@@ -10,7 +10,7 @@ vi.mock('./env', () => ({
 
 import { execFile } from 'child_process'
 import { findBinaryInPath } from './env'
-import { duckVolume, restoreVolume, _resetForTesting } from './volume'
+import { duckVolume, restoreVolume, duckOtherStreams, restoreOtherStreams, _resetForTesting } from './volume'
 
 function mockBackend(name: string, path: string) {
   vi.mocked(findBinaryInPath).mockImplementation((n) => (n === name ? path : null))
@@ -132,5 +132,89 @@ describe('volume', () => {
       // 150 - 30 = 120 → 1.2
       expect(vi.mocked(execFile).mock.calls[1][1]).toEqual(['set-volume', '@DEFAULT_AUDIO_SINK@', '1.2'])
     })
+  })
+})
+
+describe('stream ducking', () => {
+  const PACTL_LIST_TWO_INPUTS = [
+    'Sink Input #42',
+    '    Driver: protocol-native.c',
+    '    Volume: front-left: 52428 /  80% / -5.81 dB',
+    'Sink Input #99',
+    '    Driver: protocol-native.c',
+    '    Volume: front-left: 32768 /  50% / -18.06 dB',
+  ].join('\n')
+
+  beforeEach(() => {
+    _resetForTesting()
+    vi.clearAllMocks()
+  })
+
+  it('ducks two sink inputs by reduction amount', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+    // Call 0: list sink-inputs → two inputs
+    // Call 1: set-sink-input-volume #42 → ''
+    // Call 2: set-sink-input-volume #99 → ''
+    mockExecSequence([PACTL_LIST_TWO_INPUTS, '', ''])
+
+    await duckOtherStreams(30)
+
+    expect(execFile).toHaveBeenCalledTimes(3)
+    // list call
+    expect(vi.mocked(execFile).mock.calls[0][1]).toEqual(['list', 'sink-inputs'])
+    // #42: 80 - 30 = 50
+    expect(vi.mocked(execFile).mock.calls[1][1]).toEqual(['set-sink-input-volume', '42', '50%'])
+    // #99: 50 - 30 = 20
+    expect(vi.mocked(execFile).mock.calls[2][1]).toEqual(['set-sink-input-volume', '99', '20%'])
+  })
+
+  it('no-op when pactl not found', async () => {
+    vi.mocked(findBinaryInPath).mockReturnValue(null)
+
+    await duckOtherStreams(30)
+
+    expect(execFile).not.toHaveBeenCalled()
+  })
+
+  it('no-op when reductionPercent is 0', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+
+    await duckOtherStreams(0)
+
+    expect(execFile).not.toHaveBeenCalled()
+  })
+
+  it('second duck is ignored (double-duck protection)', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+    mockExecSequence([PACTL_LIST_TWO_INPUTS, '', '', PACTL_LIST_TWO_INPUTS, '', ''])
+
+    await duckOtherStreams(30)
+    await duckOtherStreams(20) // should be ignored
+
+    // Only 3 calls: list + 2 set from the first duck
+    expect(execFile).toHaveBeenCalledTimes(3)
+  })
+
+  it('restoreOtherStreams restores saved streams', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+    mockExecSequence([PACTL_LIST_TWO_INPUTS, '', '', '', ''])
+
+    await duckOtherStreams(30)
+    await restoreOtherStreams()
+
+    // 3 from duck + 2 restore calls
+    expect(execFile).toHaveBeenCalledTimes(5)
+    // restore #42 to original 80%
+    expect(vi.mocked(execFile).mock.calls[3][1]).toEqual(['set-sink-input-volume', '42', '80%'])
+    // restore #99 to original 50%
+    expect(vi.mocked(execFile).mock.calls[4][1]).toEqual(['set-sink-input-volume', '99', '50%'])
+  })
+
+  it('restoreOtherStreams is no-op when not ducked', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+
+    await restoreOtherStreams()
+
+    expect(execFile).not.toHaveBeenCalled()
   })
 })

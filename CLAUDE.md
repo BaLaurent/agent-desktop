@@ -65,7 +65,7 @@
   - **Per-skill disable** (`ai_disabledSkills`): JSON `string[]` of skill names; denied in `canUseTool` BEFORE bypass mode check
   - `'user'` discovers `~/.claude/skills/`, `'project'`/`'local'` also discovers `.claude/skills/` in CWD
 - **maxTurns**: 0 = unlimited (SDK receives `undefined`); no upper cap in UI
-- Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `ai_skillsEnabled`, `ai_disabledSkills`, `files_excludePatterns`
+- Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `ai_skillsEnabled`, `ai_disabledSkills`, `files_excludePatterns`, `tts_responseMode`, `tts_summaryPrompt`
 - **System prompt editor**: `SystemPromptEditorModal` — full-screen Monaco editor modal, shared by global AI settings and folder/conversation override forms ("Expand" button on textarea fields)
 - See `src/shared/constants.ts` for `SETTING_DEFS`, `MODEL_OPTIONS`, `PERMISSION_OPTIONS`
 
@@ -79,6 +79,12 @@
 - Status: derived from `enabled` field only — no runtime connection tracking (SDK manages connections)
 - Per-conversation MCP: `ai_mcpDisabled` key in `ai_overrides` — JSON array of disabled server names (negative list)
 - Default (absent key) = all enabled servers active; new servers auto-active unless explicitly disabled
+- **Scheduler Bridge MCP** (`schedulerBridge.ts`): internal MCP server injected per-conversation as `agent_scheduler`
+  - Unix domain socket at `$XDG_RUNTIME_DIR/agent-desktop-sched-{pid}.sock` with UUID auth token
+  - Newline-delimited JSON protocol; `resources/mcp/scheduler-server.mjs` bridges stdio MCP ↔ socket
+  - Methods: `scheduler.create` (with `one_shot` support), `scheduler.list`, `scheduler.cancel`
+  - **Gotcha**: scheduler MCP removed from `aiSettings.mcpServers` during unattended task execution to prevent recursive task creation
+  - System prompt directive injected when bridge is active — tells AI to use built-in scheduler tools instead of cron/systemd
 
 ## Streaming & Tool Use
 - **Stub-then-enrich pattern**: `streaming.ts` uses `Map<string, ToolCall>` — `content_block_start` creates stub, `input_json_delta` accumulates, `content_block_stop` finalizes, `result` enriches with output
@@ -148,12 +154,26 @@
 - **Gotcha**: `ready-to-show` never fires for transparent BrowserWindows on Linux/Wayland — must use `webContents.did-finish-load` instead
 - **Gotcha**: overlay must use `h-screen` not `h-full` — `html`/`body`/`#root` lack `height: 100%`, so `h-full` resolves to `auto` and breaks `overflow-y-auto` scrolling
 
+## Text-to-Speech (TTS)
+- `src/main/services/tts.ts` — speaks AI responses aloud via configurable providers
+- **Providers**: `piper` (HTTP, needs `tts_piperUrl`), `edgetts` (CLI binary, needs `tts_edgettsBinary`), `spd-say` (system speech-dispatcher)
+- **Audio players**: mpv > ffplay > paplay > aplay (auto-detected, or explicit via `tts_playerPath` setting); spd-say plays directly
+- **Markdown stripping**: removes code blocks, links, headings, bold/italic, emojis before TTS
+- **Response TTS modes** (`tts_responseMode`): `off` | `full` | `summary` (Haiku summarizes) | `auto` (full if ≤ word limit, else summary)
+  - `tts_autoWordLimit` (default 200) — threshold for auto mode
+  - `tts_summaryPrompt` — template with `{response}` placeholder, sent to Haiku
+- **Per-stream ducking**: `duckOtherStreams()` lowers existing PulseAudio sink inputs so TTS plays over them; `restoreOtherStreams()` restores
+- `speakResponse()` called fire-and-forget after AI response in `streamAndSave()`; `stop()` called before new streams
+- IPC: `tts:speak`, `tts:stop`, `tts:validate`, `tts:detectPlayers`
+- TTS settings cascadeable via `ai_overrides`: `tts_responseMode`, `tts_summaryPrompt`
+
 ## Audio Ducking
-- `src/main/utils/volume.ts` — auto-lowers system volume during Quick Voice recording
-- Backend detection: `wpctl` > `pactl` > `amixer` (cached after first lookup via `findBinaryInPath()`)
+- `src/main/utils/volume.ts` — two ducking strategies:
+  - **System volume ducking** (`duckVolume`/`restoreVolume`): used by Quick Voice recording; backend detection `wpctl` > `pactl` > `amixer`
+  - **Per-stream ducking** (`duckOtherStreams`/`restoreOtherStreams`): used by TTS; requires `pactl`; lowers individual sink inputs
 - **Subtractive model**: setting `voice_volumeDuck` = 30 means "reduce by 30 points" (80% → 50%), clamped at 0
+- **Double-duck guard**: `savedVolume !== null` (system) / `savedStreams !== null` (per-stream)
 - Duck on `showOverlay('voice')` (fire-and-forget), restore on overlay `closed` event
-- **Double-duck guard**: `savedVolume !== null` prevents overwriting the original volume on rapid re-trigger
 - Silent on error (log + skip, never throw) — same pattern as `hyprctl()` in `waylandShortcuts.ts`
 - **Gotcha**: FIFO double-fire (Hyprland `echo > pipe` can deliver two lines per keypress) — debounced per shortcut-id (150ms) in `createShortcutPipe()`
 - **Gotcha**: `restoreVolume()` called both at `overlay:stopRecording` (toggle) AND `closed` event — idempotent via `savedVolume === null` guard
