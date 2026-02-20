@@ -24,6 +24,8 @@ extraResources:
     to: trayLight.png
   - from: build/trayLight@2x.png
     to: trayLight@2x.png
+  - from: resources/mcp/scheduler-server.mjs
+    to: mcp/scheduler-server.mjs
 extraMetadata:
   main: ./out/main/index.js
 mac:

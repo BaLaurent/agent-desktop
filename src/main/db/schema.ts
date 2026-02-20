@@ -108,6 +108,7 @@ const TABLES = [
     last_status TEXT,
     last_error TEXT,
     run_count INTEGER DEFAULT 0,
+    one_shot INTEGER DEFAULT 0,
     notify_desktop INTEGER DEFAULT 1,
     notify_voice INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT (datetime('now')),
@@ -184,5 +185,11 @@ function runMigrations(db: Database.Database): void {
   // Add cleared_at column to conversations (context boundary for /clear command)
   if (!convCols.some((c) => c.name === 'cleared_at')) {
     try { db.exec('ALTER TABLE conversations ADD COLUMN cleared_at TEXT') } catch (e) { console.warn('[migration] conversations.cleared_at:', e) }
+  }
+
+  // Add one_shot column to scheduled_tasks (auto-disable after single execution)
+  const schedCols = db.pragma('table_info(scheduled_tasks)') as { name: string }[]
+  if (!schedCols.some((c) => c.name === 'one_shot')) {
+    try { db.exec('ALTER TABLE scheduled_tasks ADD COLUMN one_shot INTEGER DEFAULT 0') } catch (e) { console.warn('[migration] scheduled_tasks.one_shot:', e) }
   }
 }

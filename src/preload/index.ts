@@ -119,6 +119,17 @@ const api: AgentAPI = {
     transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('whisper:transcribe', wavBuffer), 45000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('whisper:validateConfig')),
   },
+  tts: {
+    speak: (text: string) => withTimeout(ipcRenderer.invoke('tts:speak', text), 60000),
+    stop: () => withTimeout(ipcRenderer.invoke('tts:stop')),
+    validate: () => withTimeout(ipcRenderer.invoke('tts:validate')),
+    detectPlayers: () => withTimeout(ipcRenderer.invoke('tts:detectPlayers')),
+    onStateChange: (callback: (state: { speaking: boolean }) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, state: { speaking: boolean }) => callback(state)
+      ipcRenderer.on('tts:stateChange', handler)
+      return () => { ipcRenderer.removeListener('tts:stateChange', handler) }
+    },
+  },
   openscad: {
     compile: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:compile', scadFilePath), 75000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('openscad:validateConfig')),

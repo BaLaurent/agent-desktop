@@ -10,6 +10,8 @@ import { getMainWindow } from '../index'
 import type { AISettings } from './streaming'
 import type { Message, Attachment, ToolCall, ToolApprovalResponse, AskUserResponse, KnowledgeSelection } from '../../shared/types'
 import { validateString, validatePositiveInt, validatePathSafe } from '../utils/validate'
+import { getSchedulerMcpConfig } from './schedulerBridge'
+import { speakResponse, stop as stopTts } from './tts'
 import { safeJsonParse } from '../utils/json'
 import { getKnowledgesDir, getSupportedExtensions } from './knowledge'
 import { DEFAULT_MODEL, HAIKU_MODEL } from '../../shared/constants'
@@ -197,6 +199,15 @@ export async function getSystemPrompt(db: Database.Database, conversationId: num
     }
   }
 
+  // Scheduler directive: tell the AI about the built-in scheduler MCP tools
+  const schedulerMcpAvailable = getSchedulerMcpConfig(conversationId) !== null
+  if (schedulerMcpAvailable) {
+    prompt += '\n\nYou have access to a built-in task scheduler via MCP tools (schedule_task, list_scheduled_tasks, cancel_scheduled_task). ' +
+      'Use these tools for reminders, scheduled tasks, and recurring actions. ' +
+      'Do NOT use cron, at, systemd timers, or other system schedulers — always use the built-in schedule_task tool. ' +
+      'For one-time reminders, use the delay_minutes parameter. For recurring tasks, use interval_value + interval_unit.'
+  }
+
   return prompt
 }
 
@@ -248,7 +259,7 @@ function filterMcpServers(
 }
 
 export function getAISettings(db: Database.Database, conversationId: number): AISettings {
-  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel']
+  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt']
   const rows = db
     .prepare(`SELECT key, value FROM settings WHERE key IN (${keys.map(() => '?').join(',')})`)
     .all(...keys) as { key: string; value: string }[]
@@ -343,6 +354,12 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
   const rawModel = modelWasOverridden ? cascadedModel : (globalCustomModel || globalModel || undefined)
   const finalModel = rawModel === 'custom' ? undefined : rawModel
 
+  // Inject scheduler MCP server (internal, per-conversation)
+  const schedulerMcp = getSchedulerMcpConfig(conversationId)
+  if (schedulerMcp) {
+    mcpServers['agent_scheduler'] = schedulerMcp
+  }
+
   return {
     model: finalModel,
     maxTurns: map['ai_maxTurns'] ? Number(map['ai_maxTurns']) : undefined,
@@ -359,6 +376,9 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     disabledSkills: safeJsonParse<string[]>(map['ai_disabledSkills'] || '[]', []),
     apiKey: globalApiKey,
     baseUrl: globalBaseUrl,
+    ttsResponseMode: (map['tts_responseMode'] as 'off' | 'full' | 'summary' | 'auto') || undefined,
+    ttsAutoWordLimit: map['tts_autoWordLimit'] ? Number(map['tts_autoWordLimit']) : undefined,
+    ttsSummaryPrompt: map['tts_summaryPrompt'] || undefined,
   }
 }
 
@@ -402,6 +422,7 @@ async function streamAndSave(
   db: Database.Database,
   conversationId: number
 ): Promise<Message | null> {
+  stopTts() // Stop any active TTS before new stream
   const history = buildMessageHistory(db, conversationId)
   const aiSettings = getAISettings(db, conversationId)
   const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
@@ -414,6 +435,9 @@ async function streamAndSave(
       if (!exists) return null
       const assistantMsg = saveMessage(db, conversationId, 'assistant', responseContent, [], toolCalls)
       updateConversationTimestamp(db, conversationId)
+      // Fire-and-forget: TTS for AI response
+      speakResponse(responseContent, db, conversationId, aiSettings)
+        .catch(err => console.error('[tts] Response TTS error:', err))
       return assistantMsg
     }
   } catch (err) {

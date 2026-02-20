@@ -122,6 +122,13 @@ export interface AgentAPI {
     transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
     validateConfig(): Promise<{ binaryFound: boolean; modelFound: boolean; binaryPath: string; modelPath: string }>
   }
+  tts: {
+    speak(text: string): Promise<void>
+    stop(): Promise<void>
+    validate(): Promise<{ provider: string | null; providerFound: boolean; playerFound: boolean; playerPath: string; error?: string }>
+    detectPlayers(): Promise<Array<{ name: string; path: string; available: boolean }>>
+    onStateChange(callback: (state: { speaking: boolean }) => void): () => void
+  }
   openscad: {
     compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
     validateConfig(): Promise<{ binaryFound: boolean; binaryPath: string; version: string }>

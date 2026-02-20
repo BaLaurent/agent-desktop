@@ -9,6 +9,7 @@ import { ToolList } from '../components/tools/ToolList'
 import { McpServerList } from '../components/mcp/McpServerList'
 import { KnowledgeManager } from '../components/knowledge/KnowledgeManager'
 import { VoiceInputSettings } from '../components/settings/VoiceInputSettings'
+import { TTSSettings } from '../components/settings/TTSSettings'
 import { QuickChatSettings } from '../components/settings/QuickChatSettings'
 import { OpenSCADSettings } from '../components/settings/OpenSCADSettings'
 
@@ -22,6 +23,7 @@ const categories = [
   'Appearance',
   'Shortcuts',
   'Voice Input',
+  'Text-to-Speech',
   'Quick Chat',
   'OpenSCAD',
   'MCP Servers',
@@ -39,6 +41,7 @@ const categoryComponents: Record<Category, React.FC | null> = {
   Appearance: AppearanceSettings,
   Shortcuts: ShortcutSettings,
   'Voice Input': VoiceInputSettings,
+  'Text-to-Speech': TTSSettings,
   'Quick Chat': QuickChatSettings,
   'OpenSCAD': OpenSCADSettings,
   'MCP Servers': McpServerList,

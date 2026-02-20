@@ -6,6 +6,7 @@ import { buildMessageHistory, getAISettings, getSystemPrompt, saveMessage } from
 import { streamMessage, injectApiKeyEnv, registerStreamWindow } from './streaming'
 import { validateString, validatePositiveInt } from '../utils/validate'
 import { sanitizeError } from '../utils/errors'
+import { speak as ttsSpeak } from './tts'
 import { DEFAULT_MODEL } from '../../shared/constants'
 import type { ScheduledTask, CreateScheduledTask, IntervalUnit } from '../../shared/types'
 
@@ -59,6 +60,7 @@ function rowToTask(row: Record<string, unknown>): ScheduledTask {
     interval_unit: row.interval_unit as IntervalUnit,
     schedule_time: (row.schedule_time as string) || null,
     catch_up: Boolean(row.catch_up),
+    one_shot: Boolean(row.one_shot),
     last_run_at: (row.last_run_at as string) || null,
     next_run_at: (row.next_run_at as string) || null,
     last_status: (row.last_status as ScheduledTask['last_status']) || null,
@@ -128,6 +130,9 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
     // Force bypass for unattended execution
     aiSettings.permissionMode = 'bypassPermissions'
 
+    // Prevent recursive task creation: remove scheduler MCP from unattended execution
+    delete aiSettings.mcpServers?.['agent_scheduler']
+
     const systemPrompt = await getSystemPrompt(db, task.conversation_id, aiSettings.cwd!)
 
     // Inject API key env if configured
@@ -153,13 +158,23 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
       }
 
       // Update task: success
-      const nextRun = computeNextRun(task.interval_value, task.interval_unit, task.schedule_time)
-      db.prepare(`
-        UPDATE scheduled_tasks
-        SET last_run_at = ?, next_run_at = ?, last_status = 'success', last_error = NULL,
-            run_count = run_count + 1, updated_at = ?
-        WHERE id = ?
-      `).run(now, nextRun, now, task.id)
+      if (task.one_shot) {
+        // One-shot: disable after single execution
+        db.prepare(`
+          UPDATE scheduled_tasks
+          SET last_run_at = ?, next_run_at = NULL, last_status = 'success', last_error = NULL,
+              run_count = run_count + 1, enabled = 0, updated_at = ?
+          WHERE id = ?
+        `).run(now, now, task.id)
+      } else {
+        const nextRun = computeNextRun(task.interval_value, task.interval_unit, task.schedule_time)
+        db.prepare(`
+          UPDATE scheduled_tasks
+          SET last_run_at = ?, next_run_at = ?, last_status = 'success', last_error = NULL,
+              run_count = run_count + 1, updated_at = ?
+          WHERE id = ?
+        `).run(now, nextRun, now, task.id)
+      }
 
       const updated = getTask(db, task.id)
       if (updated) notifyRenderer('scheduler:taskUpdate', updated)
@@ -172,6 +187,12 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
             body: (content || 'Task completed').slice(0, 200),
           }).show()
         } catch { /* notification may fail in some environments */ }
+      }
+
+      // Voice notification (TTS)
+      if (task.notify_voice) {
+        ttsSpeak((content || 'Task completed').slice(0, 500), db)
+          .catch(err => console.error('[scheduler] Voice notification error:', err))
       }
 
       // Refresh conversation list in renderer
@@ -321,8 +342,8 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     const result = db.prepare(`
       INSERT INTO scheduled_tasks (name, prompt, conversation_id, interval_value, interval_unit,
-        schedule_time, catch_up, notify_desktop, notify_voice, next_run_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        schedule_time, catch_up, one_shot, notify_desktop, notify_voice, next_run_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.name,
       data.prompt,
@@ -331,6 +352,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       data.interval_unit,
       data.schedule_time || null,
       data.catch_up !== false ? 1 : 0,
+      data.one_shot ? 1 : 0,
       data.notify_desktop !== false ? 1 : 0,
       data.notify_voice ? 1 : 0,
       nextRun,
@@ -388,6 +410,10 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     if (data.catch_up !== undefined) {
       updates.push('catch_up = ?')
       values.push(data.catch_up ? 1 : 0)
+    }
+    if (data.one_shot !== undefined) {
+      updates.push('one_shot = ?')
+      values.push(data.one_shot ? 1 : 0)
     }
     if (data.notify_desktop !== undefined) {
       updates.push('notify_desktop = ?')

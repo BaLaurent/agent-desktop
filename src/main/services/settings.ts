@@ -51,6 +51,16 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'ai_apiKey',
   'ai_baseUrl',
   'ai_customModel',
+  // TTS settings (global, not cascadable)
+  'tts_provider',
+  'tts_piperUrl',
+  'tts_edgettsVoice',
+  'tts_edgettsBinary',
+  'tts_playerPath',
+  'tts_maxLength',
+  'tts_autoWordLimit',
+  'tts_summaryPrompt',
+  'tts_responseMode',
 ])
 
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {

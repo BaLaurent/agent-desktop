@@ -46,6 +46,15 @@ export const SKILLS_TOGGLE_OPTIONS = [
   { value: 'false', label: 'Disabled' },
 ] as const
 
+// ─── TTS Response Options ───────────────────────────────────
+
+export const TTS_RESPONSE_OPTIONS = [
+  { value: 'off', label: 'Off' },
+  { value: 'full', label: 'Full Response' },
+  { value: 'summary', label: 'Summary (Haiku)' },
+  { value: 'auto', label: 'Auto (Full or Summary)' },
+] as const
+
 // ─── AI Override Setting Definitions ─────────────────────────
 
 export interface SettingDef {
@@ -68,6 +77,8 @@ export const SETTING_DEFS: SettingDef[] = [
   { key: 'ai_skillsEnabled', label: 'Skills', type: 'select', options: SKILLS_TOGGLE_OPTIONS },
   { key: 'ai_defaultSystemPrompt', label: 'System Prompt', type: 'textarea' },
   { key: 'files_excludePatterns', label: 'File Exclude Patterns', type: 'textarea' },
+  { key: 'tts_responseMode', label: 'Response TTS', type: 'select', options: TTS_RESPONSE_OPTIONS },
+  { key: 'tts_summaryPrompt', label: 'TTS Summary Prompt', type: 'textarea' },
 ]
 
 // ─── AI Override Keys ────────────────────────────────────────
@@ -86,6 +97,8 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_skillsEnabled',
   'ai_disabledSkills',
   'files_excludePatterns',
+  'tts_responseMode',
+  'tts_summaryPrompt',
 ]
 
 // ─── File Exclude Patterns ──────────────────────────────────

@@ -15,6 +15,8 @@ export interface AIOverrides {
   ai_disabledSkills?: string   // JSON string[] of disabled skill names
   hooks_cwdRestriction?: string
   files_excludePatterns?: string
+  tts_responseMode?: string    // 'off' | 'full' | 'summary' | 'auto'
+  tts_summaryPrompt?: string   // prompt template with {response} placeholder
 }
 
 export interface Conversation {
@@ -167,6 +169,7 @@ export interface ScheduledTask {
   interval_unit: IntervalUnit
   schedule_time: string | null
   catch_up: boolean
+  one_shot: boolean
   last_run_at: string | null
   next_run_at: string | null
   last_status: TaskStatus | null
@@ -186,6 +189,7 @@ export interface CreateScheduledTask {
   interval_unit: IntervalUnit
   schedule_time?: string
   catch_up?: boolean
+  one_shot?: boolean
   notify_desktop?: boolean
   notify_voice?: boolean
 }

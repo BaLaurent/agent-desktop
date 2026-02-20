@@ -101,6 +101,9 @@ export interface AISettings {
   disabledSkills?: string[]
   apiKey?: string
   baseUrl?: string
+  ttsResponseMode?: 'off' | 'full' | 'summary' | 'auto'
+  ttsAutoWordLimit?: number
+  ttsSummaryPrompt?: string
 }
 
 /**

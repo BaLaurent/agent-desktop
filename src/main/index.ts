@@ -11,6 +11,7 @@ import { cleanupPastedFiles } from './services/files'
 import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } from './services/globalShortcuts'
 import { showOverlay } from './services/quickChat'
 import { startScheduler, stopScheduler } from './services/scheduler'
+import { startBridge, stopBridge } from './services/schedulerBridge'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
@@ -124,6 +125,7 @@ if (!gotLock) {
       onShowApp: () => toggleAppWindow(),
     })
 
+    startBridge(db)
     startScheduler(db)
     createTray(getMainWindow, createWindow)
 
@@ -141,6 +143,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     stopScheduler()
+    stopBridge()
     unregisterGlobalShortcuts()
     stopAutoUpdater()
     closeDatabase()
