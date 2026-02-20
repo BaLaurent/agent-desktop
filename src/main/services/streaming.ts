@@ -480,7 +480,7 @@ export async function streamMessage(
           })
           for (const s of sysMsg.mcp_servers) {
             if (s.status !== 'connected') {
-              console.error(`[streaming] MCP "${s.name}" ${s.status}: ${s.error || 'unknown error'}`)
+              console.error(`[streaming] MCP "${s.name}" status=${s.status} error=${JSON.stringify(s.error || null)} details=${JSON.stringify(s)}`)
             }
           }
         }

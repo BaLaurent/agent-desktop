@@ -2,31 +2,83 @@
 // MCP Server for Agent Desktop Scheduler
 // Standalone ESM script, zero dependencies.
 // Communicates with the main process via Unix socket bridge.
+//
+// Protocol: newline-delimited JSON on stdin/stdout (NOT Content-Length framing).
+// The Claude Agent SDK reads/writes JSON lines, not LSP-style Content-Length.
 
 import * as net from 'node:net'
+import * as fs from 'node:fs'
+import { createInterface } from 'node:readline'
 
 const SOCKET_PATH = process.env.SCHEDULER_SOCKET
 const AUTH_TOKEN = process.env.SCHEDULER_TOKEN
 const CONVERSATION_ID = Number(process.env.SCHEDULER_CONVERSATION_ID)
+const LOG_FILE = process.env.SCHEDULER_LOG_FILE || null
+
+// ─── Logging ────────────────────────────────────────────────
+
+let logFd = null
+if (LOG_FILE) {
+  try {
+    logFd = fs.openSync(LOG_FILE, 'a')
+  } catch (err) {
+    process.stderr.write(`[scheduler-server] Cannot open log file ${LOG_FILE}: ${err.message}\n`)
+  }
+}
+
+function log(level, msg) {
+  const line = `${new Date().toISOString()} [scheduler-server] [${level}] ${msg}\n`
+  process.stderr.write(line)
+  if (logFd !== null) {
+    try { fs.writeSync(logFd, line) } catch { /* best effort */ }
+  }
+}
+
+// ─── Env validation ─────────────────────────────────────────
 
 if (!SOCKET_PATH || !AUTH_TOKEN || !CONVERSATION_ID) {
-  process.stderr.write('Missing SCHEDULER_SOCKET, SCHEDULER_TOKEN, or SCHEDULER_CONVERSATION_ID\n')
+  const missing = [
+    !SOCKET_PATH && 'SCHEDULER_SOCKET',
+    !AUTH_TOKEN && 'SCHEDULER_TOKEN',
+    !CONVERSATION_ID && 'SCHEDULER_CONVERSATION_ID',
+  ].filter(Boolean).join(', ')
+  log('ERROR', `Missing env vars: ${missing}`)
   process.exit(1)
 }
 
-// ─── Bridge client ───────────────────────────────────────────
+log('INFO', `Starting: socket=${SOCKET_PATH} conv=${CONVERSATION_ID} log=${LOG_FILE || 'stderr-only'}`)
+
+// ─── Bridge client (lazy connection) ────────────────────────
 
 let bridgeConn = null
+let bridgeConnecting = null
 let requestId = 0
 const pending = new Map()
 
-function connectBridge() {
-  return new Promise((resolve, reject) => {
+function ensureBridge() {
+  if (bridgeConn) return Promise.resolve(bridgeConn)
+  if (bridgeConnecting) return bridgeConnecting
+
+  log('INFO', `Connecting to bridge at ${SOCKET_PATH}`)
+
+  bridgeConnecting = new Promise((resolve, reject) => {
     const conn = net.createConnection(SOCKET_PATH, () => {
       bridgeConn = conn
+      bridgeConnecting = null
+      log('INFO', 'Bridge connected')
       resolve(conn)
     })
-    conn.on('error', reject)
+
+    conn.on('error', (err) => {
+      bridgeConn = null
+      bridgeConnecting = null
+      log('ERROR', `Bridge connection error: ${err.message} (code=${err.code || 'none'})`)
+      reject(err)
+    })
+
+    conn.setTimeout(5000, () => {
+      conn.destroy(new Error('Bridge connection timeout (5s)'))
+    })
 
     let buffer = ''
     conn.on('data', (chunk) => {
@@ -41,20 +93,35 @@ function connectBridge() {
           const p = pending.get(resp.id)
           if (p) {
             pending.delete(resp.id)
-            if (resp.error) p.reject(new Error(resp.error))
-            else p.resolve(resp.result)
+            if (resp.error) {
+              log('WARN', `Bridge call ${resp.id} error: ${resp.error}`)
+              p.reject(new Error(resp.error))
+            } else {
+              p.resolve(resp.result)
+            }
           }
-        } catch { /* ignore parse errors */ }
+        } catch (e) {
+          log('WARN', `Bridge response parse error: ${e.message}, raw: ${line.slice(0, 200)}`)
+        }
       }
     })
+
+    conn.on('close', () => {
+      log('WARN', 'Bridge connection closed')
+      bridgeConn = null
+    })
   })
+
+  return bridgeConnecting
 }
 
-function bridgeCall(method, params) {
+async function bridgeCall(method, params) {
+  await ensureBridge()
   return new Promise((resolve, reject) => {
     const id = ++requestId
     pending.set(id, { resolve, reject })
     const msg = JSON.stringify({ id, method, token: AUTH_TOKEN, params: { ...params, conversation_id: CONVERSATION_ID } })
+    log('DEBUG', `Bridge call #${id}: ${method}`)
     bridgeConn.write(msg + '\n')
   })
 }
@@ -103,6 +170,8 @@ const TOOLS = [
 // ─── Tool call handlers ──────────────────────────────────────
 
 async function handleToolCall(name, args) {
+  log('INFO', `Tool call: ${name} args=${JSON.stringify(args).slice(0, 500)}`)
+
   switch (name) {
     case 'schedule_task': {
       let { name: taskName, prompt, delay_minutes, interval_value, interval_unit, one_shot, schedule_time } = args
@@ -134,11 +203,13 @@ async function handleToolCall(name, args) {
         schedule_time: schedule_time || null,
       })
 
+      log('INFO', `Task created: ${JSON.stringify(result)}`)
       return JSON.stringify(result)
     }
 
     case 'list_scheduled_tasks': {
       const result = await bridgeCall('scheduler.list', {})
+      log('INFO', `Listed ${Array.isArray(result) ? result.length : '?'} tasks`)
       return JSON.stringify(result)
     }
 
@@ -146,6 +217,7 @@ async function handleToolCall(name, args) {
       const { task_id } = args
       if (!task_id) throw new Error('task_id is required')
       const result = await bridgeCall('scheduler.cancel', { task_id })
+      log('INFO', `Cancelled task ${task_id}`)
       return JSON.stringify(result)
     }
 
@@ -154,18 +226,17 @@ async function handleToolCall(name, args) {
   }
 }
 
-// ─── MCP stdio protocol (Content-Length framing) ─────────────
-
-let inputBuffer = Buffer.alloc(0)
+// ─── JSON-RPC message handling ──────────────────────────────
 
 function sendResponse(response) {
-  const body = JSON.stringify(response)
-  const header = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n`
-  process.stdout.write(header + body)
+  const line = JSON.stringify(response) + '\n'
+  process.stdout.write(line)
+  log('DEBUG', `Sent response: id=${response.id} hasResult=${!!response.result} hasError=${!!response.error}`)
 }
 
 function handleMessage(msg) {
   const { id, method, params } = msg
+  log('INFO', `MCP recv: method=${method} id=${id}`)
 
   switch (method) {
     case 'initialize':
@@ -173,7 +244,7 @@ function handleMessage(msg) {
         jsonrpc: '2.0',
         id,
         result: {
-          protocolVersion: '2024-11-05',
+          protocolVersion: '2025-11-25',
           capabilities: { tools: {} },
           serverInfo: { name: 'agent-scheduler', version: '1.0.0' },
         },
@@ -181,7 +252,7 @@ function handleMessage(msg) {
       break
 
     case 'notifications/initialized':
-      // No response needed for notifications
+      log('INFO', 'MCP initialized notification received')
       break
 
     case 'tools/list':
@@ -204,6 +275,7 @@ function handleMessage(msg) {
           })
         })
         .catch((err) => {
+          log('ERROR', `Tool call ${params.name} failed: ${err.message}`)
           sendResponse({
             jsonrpc: '2.0',
             id,
@@ -216,6 +288,7 @@ function handleMessage(msg) {
       break
 
     default:
+      log('WARN', `Unknown MCP method: ${method}`)
       sendResponse({
         jsonrpc: '2.0',
         id,
@@ -224,54 +297,38 @@ function handleMessage(msg) {
   }
 }
 
-function processInput() {
-  while (true) {
-    // Look for Content-Length header
-    const headerEnd = inputBuffer.indexOf('\r\n\r\n')
-    if (headerEnd === -1) return
+// ─── Crash handlers ─────────────────────────────────────────
 
-    const header = inputBuffer.slice(0, headerEnd).toString()
-    const match = header.match(/Content-Length:\s*(\d+)/i)
-    if (!match) {
-      // Skip malformed data
-      inputBuffer = inputBuffer.slice(headerEnd + 4)
-      continue
-    }
-
-    const contentLength = parseInt(match[1], 10)
-    const bodyStart = headerEnd + 4
-
-    if (inputBuffer.length < bodyStart + contentLength) return // incomplete
-
-    const body = inputBuffer.slice(bodyStart, bodyStart + contentLength).toString()
-    inputBuffer = inputBuffer.slice(bodyStart + contentLength)
-
-    try {
-      handleMessage(JSON.parse(body))
-    } catch (err) {
-      process.stderr.write(`[scheduler-server] Parse error: ${err.message}\n`)
-    }
-  }
-}
-
-// ─── Main ────────────────────────────────────────────────────
-
-async function main() {
-  await connectBridge()
-  process.stderr.write('[scheduler-server] Connected to bridge, ready for MCP\n')
-
-  process.stdin.on('data', (chunk) => {
-    inputBuffer = Buffer.concat([inputBuffer, chunk])
-    processInput()
-  })
-
-  process.stdin.on('end', () => {
-    if (bridgeConn) bridgeConn.end()
-    process.exit(0)
-  })
-}
-
-main().catch((err) => {
-  process.stderr.write(`[scheduler-server] Fatal: ${err.message}\n`)
+process.on('uncaughtException', (err) => {
+  log('FATAL', `Uncaught exception: ${err.message}\n${err.stack || ''}`)
   process.exit(1)
 })
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? `${reason.message}\n${reason.stack || ''}` : String(reason)
+  log('FATAL', `Unhandled rejection: ${msg}`)
+  process.exit(1)
+})
+
+// ─── Main: readline on stdin (newline-delimited JSON) ───────
+
+const rl = createInterface({ input: process.stdin, terminal: false })
+
+rl.on('line', (line) => {
+  const trimmed = line.trim()
+  if (!trimmed) return
+  try {
+    handleMessage(JSON.parse(trimmed))
+  } catch (err) {
+    log('ERROR', `Parse error: ${err.message}, line: ${trimmed.slice(0, 200)}`)
+  }
+})
+
+rl.on('close', () => {
+  log('INFO', 'stdin closed, shutting down')
+  if (logFd !== null) { try { fs.closeSync(logFd) } catch { /* ok */ } }
+  if (bridgeConn) bridgeConn.end()
+  process.exit(0)
+})
+
+log('INFO', 'Ready for MCP (newline-delimited JSON on stdin/stdout)')

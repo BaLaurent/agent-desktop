@@ -16,6 +16,20 @@ let socketPath: string | null = null
 let authToken: string | null = null
 let bridgeDb: Database.Database | null = null
 
+// ─── File logging ─────────────────────────────────────────────
+
+function getLogPath(): string {
+  return path.join(app.getPath('userData'), 'agent_scheduler.log')
+}
+
+function bridgeLog(level: string, msg: string): void {
+  const line = `${new Date().toISOString()} [schedulerBridge] [${level}] ${msg}`
+  console.log(line)
+  try {
+    fs.appendFileSync(getLogPath(), line + '\n')
+  } catch { /* best effort */ }
+}
+
 // ─── Socket path ─────────────────────────────────────────────
 
 function getSocketPath(): string {
@@ -140,6 +154,7 @@ function dispatch(req: BridgeRequest): unknown {
 // ─── Socket server ───────────────────────────────────────────
 
 function handleConnection(conn: net.Socket): void {
+  bridgeLog('INFO', 'New bridge client connected')
   let buffer = ''
 
   conn.on('data', (chunk) => {
@@ -153,17 +168,23 @@ function handleConnection(conn: net.Socket): void {
 
       try {
         const req = JSON.parse(line) as BridgeRequest & { id?: string | number }
+        bridgeLog('DEBUG', `Dispatch: method=${req.method} id=${req.id}`)
         const result = dispatch(req)
         conn.write(JSON.stringify({ id: req.id, result }) + '\n')
       } catch (err) {
         const errMsg = sanitizeError(err)
+        bridgeLog('ERROR', `Dispatch error: ${errMsg}`)
         conn.write(JSON.stringify({ id: null, error: errMsg }) + '\n')
       }
     }
   })
 
   conn.on('error', (err) => {
-    console.error('[schedulerBridge] Connection error:', err.message)
+    bridgeLog('ERROR', `Connection error: ${err.message}`)
+  })
+
+  conn.on('close', () => {
+    bridgeLog('INFO', 'Bridge client disconnected')
   })
 }
 
@@ -174,6 +195,11 @@ export function startBridge(db: Database.Database): void {
   authToken = randomUUID()
   socketPath = getSocketPath()
 
+  // Truncate log file on startup
+  try { fs.writeFileSync(getLogPath(), '') } catch { /* ok */ }
+
+  bridgeLog('INFO', `Starting bridge: socket=${socketPath}`)
+
   // Clean up stale socket
   try { fs.unlinkSync(socketPath) } catch { /* ok */ }
 
@@ -181,15 +207,16 @@ export function startBridge(db: Database.Database): void {
   server.listen(socketPath, () => {
     // Set socket permissions to owner-only
     try { fs.chmodSync(socketPath!, 0o600) } catch { /* ok */ }
-    console.log('[schedulerBridge] Listening on', socketPath)
+    bridgeLog('INFO', `Listening on ${socketPath}`)
   })
 
   server.on('error', (err) => {
-    console.error('[schedulerBridge] Server error:', err)
+    bridgeLog('ERROR', `Server error: ${(err as Error).message}`)
   })
 }
 
 export function stopBridge(): void {
+  bridgeLog('INFO', 'Stopping bridge')
   if (server) {
     server.close()
     server = null
@@ -200,7 +227,7 @@ export function stopBridge(): void {
   }
   authToken = null
   bridgeDb = null
-  console.log('[schedulerBridge] Stopped')
+  bridgeLog('INFO', 'Bridge stopped')
 }
 
 function getServerScriptPath(): string {
@@ -212,13 +239,13 @@ function getServerScriptPath(): string {
 
 export function getSchedulerMcpConfig(conversationId: number): { command: string; args: string[]; env: Record<string, string> } | null {
   if (!socketPath || !authToken) {
-    console.warn('[schedulerBridge] Bridge not started — scheduler MCP unavailable')
+    bridgeLog('WARN', 'Bridge not started — scheduler MCP unavailable')
     return null
   }
 
   const nodeBin = findBinaryInPath('node')
   if (!nodeBin) {
-    console.warn('[schedulerBridge] Node.js binary not found in PATH — scheduler MCP unavailable')
+    bridgeLog('WARN', 'Node.js binary not found in PATH — scheduler MCP unavailable')
     return null
   }
 
@@ -226,11 +253,12 @@ export function getSchedulerMcpConfig(conversationId: number): { command: string
   try {
     fs.accessSync(scriptPath, fs.constants.R_OK)
   } catch {
-    console.warn('[schedulerBridge] MCP script not found at', scriptPath, '— scheduler MCP unavailable')
+    bridgeLog('WARN', `MCP script not found at ${scriptPath} — scheduler MCP unavailable`)
     return null
   }
 
-  console.log('[schedulerBridge] MCP config: node=%s script=%s socket=%s conv=%d', nodeBin, scriptPath, socketPath, conversationId)
+  const logPath = getLogPath()
+  bridgeLog('INFO', `MCP config: node=${nodeBin} script=${scriptPath} socket=${socketPath} conv=${conversationId} log=${logPath}`)
 
   return {
     command: nodeBin,
@@ -239,6 +267,7 @@ export function getSchedulerMcpConfig(conversationId: number): { command: string
       SCHEDULER_SOCKET: socketPath,
       SCHEDULER_TOKEN: authToken,
       SCHEDULER_CONVERSATION_ID: String(conversationId),
+      SCHEDULER_LOG_FILE: logPath,
     },
   }
 }
