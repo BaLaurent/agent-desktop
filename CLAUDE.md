@@ -44,6 +44,21 @@
   - **Gotcha**: browser URL-encodes accented chars in href (`é` → `%C3%A9`) — must `decodeURIComponent` before slugifying
   - **Gotcha**: `slugify` uses Unicode `\p{L}\p{N}` (not `\w`) to preserve accented characters
 
+## Jupyter Kernel Execution
+- `NotebookPreview` supports live cell execution via local Jupyter kernel
+- **Architecture**: Python bridge (`resources/jupyter/bridge.py`) spawned as child process; JSON Lines protocol over stdin/stdout — same pattern as `schedulerBridge.ts`
+- **Dependencies**: requires `jupyter_client` AND `ipykernel` — ipykernel registers the actual `python3` kernel spec
+  - **Gotcha**: `jupyter_client` alone is NOT enough — `NoSuchKernel python3` without ipykernel
+- **Backend**: `src/main/services/jupyter.ts` — `Map<string, KernelProcess>` keyed by notebook `filePath`; one kernel per notebook
+- **IPC**: registered without `db` param (like themes/commands/updater); dedicated `jupyter:output` channel for streaming (separate from AI streaming)
+- **Streaming**: `webContents.send('jupyter:output', chunk)` — renderer subscribes via `onOutput()` listener
+- **Cleanup**: `shutdownAllKernels()` called in `before-quit` handler; per-kernel 3s graceful + SIGKILL
+- **Bundling**: `bridge.py` in `extraResources` (electron-builder.yml); resolved via `app.isPackaged ? process.resourcesPath : app.getAppPath()/resources`
+- **Frontend**: `filePath` prop is optional — no toolbar when absent (backward compat for inline preview)
+  - Live outputs replace static .ipynb outputs per-cell; file never modified (read-only viewer)
+  - **Gotcha**: useEffect cleanup with `[filePath, kernelStatus]` deps causes shutdown on every status change — must use `useRef` for kernelStatus and depend only on `[filePath]`
+- **Detection**: `detectJupyter()` checks `import jupyter_client; import ipykernel; print("ok")` — returns `{ found, pythonPath, error? }` with specific missing-package message
+
 ## CWD & Working Directory
 - Each conversation has `cwd` column (nullable, defaults to `~/.agent-desktop/sessions-folder/{id}/`)
 - **Gotcha**: `getAISettings()` must be called BEFORE `getSystemPrompt()` — CWD is needed for prompt injection
