@@ -23,6 +23,7 @@ import { registerHandlers as quickChatHandlers } from './services/quickChat'
 import { registerHandlers as schedulerHandlers } from './services/scheduler'
 import { registerHandlers as ttsHandlers } from './services/tts'
 import { registerHandlers as updaterHandlers } from './services/updater'
+import { registerHandlers as jupyterHandlers } from './services/jupyter'
 
 const serviceModules = [
   authHandlers,
@@ -72,6 +73,7 @@ export function registerAllHandlers(ipcMain: IpcMain, db: Database.Database): vo
   themesHandlers(safeIpc)
   commandsHandlers(safeIpc)
   updaterHandlers(safeIpc)
+  jupyterHandlers(safeIpc)
   ensureThemeDir().catch((err) => console.error('[themes] Failed to ensure theme dir:', err))
   ensureKnowledgesDir().catch((err) => console.error('[knowledge] Failed to ensure knowledges dir:', err))
 }

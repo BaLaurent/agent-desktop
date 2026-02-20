@@ -12,6 +12,7 @@ import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } f
 import { showOverlay } from './services/quickChat'
 import { startScheduler, stopScheduler } from './services/scheduler'
 import { startBridge, stopBridge } from './services/schedulerBridge'
+import { shutdownAllKernels } from './services/jupyter'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
@@ -142,6 +143,7 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    shutdownAllKernels()
     stopScheduler()
     stopBridge()
     unregisterGlobalShortcuts()

@@ -161,6 +161,20 @@ const api: AgentAPI = {
       return () => { ipcRenderer.removeListener('updates:status', handler) }
     },
   },
+  jupyter: {
+    startKernel: (filePath: string, kernelName?: string) => withTimeout(ipcRenderer.invoke('jupyter:startKernel', filePath, kernelName)),
+    executeCell: (filePath: string, code: string) => withTimeout(ipcRenderer.invoke('jupyter:executeCell', filePath, code)),
+    interruptKernel: (filePath: string) => withTimeout(ipcRenderer.invoke('jupyter:interruptKernel', filePath)),
+    restartKernel: (filePath: string) => withTimeout(ipcRenderer.invoke('jupyter:restartKernel', filePath)),
+    shutdownKernel: (filePath: string) => withTimeout(ipcRenderer.invoke('jupyter:shutdownKernel', filePath)),
+    getStatus: (filePath: string) => withTimeout(ipcRenderer.invoke('jupyter:getStatus', filePath)),
+    detectJupyter: () => withTimeout(ipcRenderer.invoke('jupyter:detectJupyter')),
+    onOutput: (callback: (chunk: unknown) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, chunk: unknown) => callback(chunk)
+      ipcRenderer.on('jupyter:output', handler)
+      return () => { ipcRenderer.removeListener('jupyter:output', handler) }
+    },
+  },
   system: {
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
     getInfo: () => withTimeout(ipcRenderer.invoke('system:getInfo')),

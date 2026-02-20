@@ -194,6 +194,23 @@ export interface CreateScheduledTask {
   notify_voice?: boolean
 }
 
+// ─── Jupyter Kernel Types ────────────────────────────────────
+
+export interface JupyterOutputChunk {
+  filePath: string
+  id: string | null
+  type: 'stream' | 'execute_result' | 'display_data' | 'error' | 'status' | 'ready'
+  name?: string
+  text?: string
+  data?: Record<string, string>
+  execution_count?: number
+  ename?: string
+  evalue?: string
+  traceback?: string[]
+  state?: string
+  language?: string
+}
+
 // ─── Tool Approval / AskUserQuestion Types ───────────────────
 
 export interface AskUserOption {

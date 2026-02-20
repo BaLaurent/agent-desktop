@@ -23,6 +23,7 @@ import type {
   UpdateStatus,
   ScheduledTask,
   CreateScheduledTask,
+  JupyterOutputChunk,
 } from '../shared/types'
 
 export interface AgentAPI {
@@ -151,6 +152,16 @@ export interface AgentAPI {
     install(): Promise<void>
     getStatus(): Promise<UpdateStatus>
     onStatus(callback: (status: UpdateStatus) => void): () => void
+  }
+  jupyter: {
+    startKernel(filePath: string, kernelName?: string): Promise<{ status: string }>
+    executeCell(filePath: string, code: string): Promise<string>
+    interruptKernel(filePath: string): Promise<void>
+    restartKernel(filePath: string): Promise<void>
+    shutdownKernel(filePath: string): Promise<void>
+    getStatus(filePath: string): Promise<string | null>
+    detectJupyter(): Promise<{ found: boolean; pythonPath: string | null; error?: string }>
+    onOutput(callback: (chunk: JupyterOutputChunk) => void): () => void
   }
   system: {
     getPathForFile(file: File): string

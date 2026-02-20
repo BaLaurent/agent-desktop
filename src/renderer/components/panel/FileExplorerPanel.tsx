@@ -7,6 +7,7 @@ import { MermaidBlock } from '../artifacts/MermaidBlock'
 import { ModelPreview } from '../artifacts/ModelPreview'
 import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
+import { NotebookPreview } from '../artifacts/NotebookPreview'
 import { CodeEditorModal } from './CodeEditorModal'
 import { PreviewModal } from './PreviewModal'
 import type { FileNode } from '../../../shared/types'
@@ -23,7 +24,7 @@ function getBasename(filePath: string): string {
   return idx === -1 ? filePath : filePath.slice(idx + 1)
 }
 
-const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad', 'obj'])
+const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad', 'obj', 'ipynb'])
 
 const MODEL_EXTENSIONS = new Set(['stl', 'obj', '3mf', 'ply'])
 
@@ -637,6 +638,7 @@ function FileViewer({ filePath, content, language, allowScripts, lastSavedAt }: 
     }
     if (ext === 'scad') return <ScadPreview filePath={filePath} lastSavedAt={lastSavedAt ?? 0} />
     if (ext === 'obj') return <ModelPreview filePath={filePath} content={content} />
+    if (ext === 'ipynb') return <NotebookPreview content={content} filePath={filePath} />
   }
 
   // Everything else (code files, or source mode) → Monaco

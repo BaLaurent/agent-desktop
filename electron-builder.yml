@@ -26,6 +26,8 @@ extraResources:
     to: trayLight@2x.png
   - from: resources/mcp/scheduler-server.mjs
     to: mcp/scheduler-server.mjs
+  - from: resources/jupyter/bridge.py
+    to: jupyter/bridge.py
 extraMetadata:
   main: ./out/main/index.js
 mac:
