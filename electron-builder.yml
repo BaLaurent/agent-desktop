@@ -4,6 +4,7 @@ publish:
   - provider: github
     owner: BaLaurent
     repo: agent-desktop
+    releaseType: release
 directories:
   buildResources: build
   output: release
@@ -33,6 +34,9 @@ extraMetadata:
 mac:
   target:
     - target: dmg
+      arch:
+        - arm64
+    - target: zip
       arch:
         - arm64
   category: public.app-category.productivity

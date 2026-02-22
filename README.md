@@ -77,8 +77,11 @@ Have ideas, feature requests, or just want to chat about the project? Join us on
 
 ### Auto-Update
 - Built-in update system via electron-updater with GitHub Releases
-- AppImage: in-app download and install
-- deb: redirects to GitHub releases page
+- Checks on startup (10s delay) then every 4 hours; opt-in download, installs on restart
+- **AppImage** (Linux): in-app silent download and install
+- **deb** (Linux): redirects to GitHub releases page (no delta updates)
+- **macOS**: downloads a zip in the background, replaces the `.app` bundle and restarts
+- **Windows** (NSIS installer): in-app silent download and install via NSIS
 
 ## Installation
 
