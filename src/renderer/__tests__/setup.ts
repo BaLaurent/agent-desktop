@@ -97,6 +97,10 @@ export const mockAgent = {
     transcribe: vi.fn().mockResolvedValue({ text: '' }),
     validateConfig: vi.fn().mockResolvedValue({ binaryFound: true, modelFound: true, binaryPath: 'whisper-cli', modelPath: '/model.bin' }),
   },
+  voice: {
+    duck: vi.fn().mockResolvedValue(undefined),
+    restore: vi.fn().mockResolvedValue(undefined),
+  },
   system: {
     getPathForFile: vi.fn().mockReturnValue('/tmp/file'),
     getInfo: vi.fn().mockResolvedValue({ version: '0.1.0', electron: '33', node: '20', platform: 'linux', dbPath: '', configPath: '' }),
