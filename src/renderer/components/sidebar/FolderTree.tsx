@@ -36,6 +36,7 @@ export function SidebarTree() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const globalSettings = useSettingsStore((s) => s.settings)
+  const setSetting = useSettingsStore((s) => s.setSetting)
   const mcpServers = useMcpStore((s) => s.servers)
   const loadMcpServers = useMcpStore((s) => s.loadServers)
 
@@ -304,25 +305,52 @@ export function SidebarTree() {
     <div className="flex-1 overflow-y-auto pb-2" role="tree" aria-label="Conversations tree">
       {rootFolders.map((folder) => renderFolder(folder, 0))}
 
-      {unfiled.length > 0 && hasFolders && (
-        <div
-          className={`px-3 py-1 text-xs font-semibold uppercase tracking-wider${dragOverUnfiled ? ' sidebar-drop-active' : ''}`}
-          style={{ color: 'var(--color-text-muted)' }}
-          onDrop={(e) => handleDrop(e, null)}
-          onDragOver={handleDragOver}
-          onDragEnter={handleUnfiledDragEnter}
-          onDragLeave={handleUnfiledDragLeave}
-        >
-          Unfiled
-        </div>
-      )}
-      {unfiled.map((conv) => (
-        <ConversationItem
-          key={conv.id}
-          conversation={conv}
-          isActive={conv.id === activeConversationId}
-        />
-      ))}
+      {unfiled.length > 0 && (() => {
+        const unfiledExpanded = isSearching || (globalSettings.sidebar_unfiledExpanded ?? 'true') === 'true'
+        return (
+          <>
+            <div
+              className={`group flex items-center gap-1 px-2 py-1 cursor-pointer rounded mx-1 text-sm${dragOverUnfiled ? ' sidebar-drop-active' : ''}`}
+              style={{ color: 'var(--color-text)' }}
+              onClick={() => setSetting('sidebar_unfiledExpanded', unfiledExpanded ? 'false' : 'true')}
+              onDrop={(e) => handleDrop(e, null)}
+              onDragOver={handleDragOver}
+              onDragEnter={handleUnfiledDragEnter}
+              onDragLeave={handleUnfiledDragLeave}
+              onMouseEnter={(e) => {
+                if (!dragOverUnfiled) e.currentTarget.style.backgroundColor = 'var(--color-bg)'
+              }}
+              onMouseLeave={(e) => {
+                if (!dragOverUnfiled) e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+              role="treeitem"
+              aria-expanded={unfiledExpanded}
+              aria-label="Unfiled conversations"
+            >
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {unfiledExpanded ? '\u25BE' : '\u25B8'}
+              </span>
+              <span className="flex-1 truncate">Unfiled</span>
+              <span
+                className="text-xs px-1.5 rounded-full"
+                style={{
+                  backgroundColor: 'var(--color-bg)',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                {unfiled.length}
+              </span>
+            </div>
+            {unfiledExpanded && unfiled.map((conv) => (
+              <ConversationItem
+                key={conv.id}
+                conversation={conv}
+                isActive={conv.id === activeConversationId}
+              />
+            ))}
+          </>
+        )
+      })()}
 
       {overrideFolderId !== null && (() => {
         const targetFolder = folders.find((f) => f.id === overrideFolderId)
