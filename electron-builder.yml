@@ -29,6 +29,8 @@ extraResources:
     to: mcp/scheduler-server.mjs
   - from: resources/jupyter/bridge.py
     to: jupyter/bridge.py
+  - from: node_modules/sql.js/dist/sql-wasm.wasm
+    to: sql-wasm.wasm
 extraMetadata:
   main: ./out/main/index.js
 mac:

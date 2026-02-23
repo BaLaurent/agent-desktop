@@ -1,9 +1,10 @@
-import Database from 'better-sqlite3'
+import { initMemoryAdapter, SqlJsAdapter } from '../db/sqljs-adapter'
 import { createTables } from '../db/schema'
 import { seedDefaults } from '../db/seed'
 
 vi.mock('electron', () => ({
   app: {
+    isPackaged: false,
     getPath: vi.fn(() => '/tmp/test-agent'),
     commandLine: { appendSwitch: vi.fn() },
   },
@@ -35,12 +36,12 @@ import { loadAgentSDK } from './anthropic'
 
 const mockLoadAgentSDK = loadAgentSDK as ReturnType<typeof vi.fn>
 
-function createTestDb(): Database.Database {
-  const db = new Database(':memory:')
+async function createTestDb() {
+  const db = await initMemoryAdapter()
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
-  createTables(db)
-  seedDefaults(db)
+  createTables(db as any)
+  seedDefaults(db as any)
   return db
 }
 
@@ -61,14 +62,14 @@ function createMockIpcMain() {
 }
 
 describe('messages integration', () => {
-  let db: Database.Database
+  let db: SqlJsAdapter
   let ipc: ReturnType<typeof createMockIpcMain>
   let convId: number
 
-  beforeEach(() => {
-    db = createTestDb()
+  beforeEach(async () => {
+    db = await createTestDb()
     ipc = createMockIpcMain()
-    registerHandlers(ipc as never, db)
+    registerHandlers(ipc as never, db as any)
     mockStreamMessage.mockReset()
     mockStreamMessage.mockResolvedValue({ content: 'AI response' })
 

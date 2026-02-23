@@ -30,8 +30,8 @@ describe('System Service', () => {
   let db: Database.Database
   let ipc: ReturnType<typeof createMockIpcMain>
 
-  beforeEach(() => {
-    db = createTestDb()
+  beforeEach(async () => {
+    db = await createTestDb()
     ipc = createMockIpcMain()
     registerHandlers(ipc as any, db)
   })

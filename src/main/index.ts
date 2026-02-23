@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { getDatabase, closeDatabase } from './db/database'
+import { initDatabase, getDatabase, closeDatabase } from './db/database'
 import { registerAllHandlers } from './ipc'
 import { createTray, setTrayUpdateCallbacks, rebuildTrayMenu, toggleAppWindow } from './services/tray'
 import { initAutoUpdater, stopAutoUpdater, checkForUpdates, installUpdate } from './services/updater'
@@ -112,8 +112,9 @@ if (!gotLock) {
     }
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     registerPreviewProtocol()
+    await initDatabase()
     const db = getDatabase()
     registerAllHandlers(ipcMain, db)
     cleanupPastedFiles().catch(() => {}) // fire-and-forget: remove stale paste temp files
@@ -148,7 +149,7 @@ if (!gotLock) {
     stopBridge()
     unregisterGlobalShortcuts()
     stopAutoUpdater()
-    closeDatabase()
+    closeDatabase() // flush() + close() — ensures all pending writes are persisted
   })
 
   app.on('window-all-closed', () => {

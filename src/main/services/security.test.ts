@@ -37,7 +37,7 @@ describe('Security: Cross-Cutting Tests', () => {
   let ipc: ReturnType<typeof createMockIpcMain>
 
   beforeEach(async () => {
-    db = createTestDb()
+    db = await createTestDb()
     ipc = createMockIpcMain()
 
     // Register all services

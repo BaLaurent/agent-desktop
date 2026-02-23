@@ -1,24 +1,28 @@
-import Database from 'better-sqlite3'
+import { initMemoryAdapter, SqlJsAdapter } from './sqljs-adapter'
 import { createTables } from './schema'
 
-function createTestDb(): Database.Database {
-  const db = new Database(':memory:')
+vi.mock('electron', () => ({
+  app: { isPackaged: false, getPath: vi.fn(() => '/tmp') },
+}))
+
+async function createTestDb() {
+  const db = await initMemoryAdapter()
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   return db
 }
 
 describe('schema', () => {
-  it('createTables is idempotent (call twice, no error)', () => {
-    const db = createTestDb()
-    createTables(db)
-    expect(() => createTables(db)).not.toThrow()
+  it('createTables is idempotent (call twice, no error)', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
+    expect(() => createTables(db as any)).not.toThrow()
     db.close()
   })
 
-  it('all expected tables exist', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('all expected tables exist', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
@@ -45,9 +49,9 @@ describe('schema', () => {
     db.close()
   })
 
-  it('cwd column exists on conversations table', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('cwd column exists on conversations table', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     const cols = db.pragma('table_info(conversations)') as { name: string }[]
     const colNames = cols.map((c) => c.name)
@@ -56,9 +60,9 @@ describe('schema', () => {
     db.close()
   })
 
-  it('tool_calls column exists on messages table', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('tool_calls column exists on messages table', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     const cols = db.pragma('table_info(messages)') as { name: string }[]
     const colNames = cols.map((c) => c.name)
@@ -67,9 +71,9 @@ describe('schema', () => {
     db.close()
   })
 
-  it('mcp_servers has type, url, headers columns after migration', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('mcp_servers has type, url, headers columns after migration', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     const cols = db.pragma('table_info(mcp_servers)') as { name: string }[]
     const colNames = cols.map((c) => c.name)
@@ -80,9 +84,9 @@ describe('schema', () => {
     db.close()
   })
 
-  it('folders has default_cwd column after migration', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('folders has default_cwd column after migration', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     const cols = db.pragma('table_info(folders)') as { name: string }[]
     const colNames = cols.map((c) => c.name)
@@ -91,9 +95,9 @@ describe('schema', () => {
     db.close()
   })
 
-  it('conversations has cleared_at column after migration', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('conversations has cleared_at column after migration', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     const cols = db.pragma('table_info(conversations)') as { name: string }[]
     const colNames = cols.map((c) => c.name)
@@ -102,9 +106,9 @@ describe('schema', () => {
     db.close()
   })
 
-  it('mcp_servers type column defaults to stdio', () => {
-    const db = createTestDb()
-    createTables(db)
+  it('mcp_servers type column defaults to stdio', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
 
     db.prepare("INSERT INTO mcp_servers (name, command) VALUES ('test', 'node')").run()
     const row = db.prepare('SELECT type FROM mcp_servers WHERE name = ?').get('test') as { type: string }

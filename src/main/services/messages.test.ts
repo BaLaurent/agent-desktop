@@ -42,8 +42,8 @@ describe('Messages Service', () => {
   let db: Database.Database
   let convId: number
 
-  beforeEach(() => {
-    db = createTestDb()
+  beforeEach(async () => {
+    db = await createTestDb()
     const conv = db.prepare("INSERT INTO conversations (title) VALUES ('Test Conv')").run()
     convId = conv.lastInsertRowid as number
   })

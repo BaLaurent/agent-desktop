@@ -53,8 +53,8 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 describe('openscad service', () => {
   let db: Database.Database
 
-  beforeEach(() => {
-    db = createTestDb()
+  beforeEach(async () => {
+    db = await createTestDb()
     vi.clearAllMocks()
     spawnCallbacks = []
   })

@@ -108,8 +108,8 @@ describe('files IPC handlers', () => {
   let ipc: ReturnType<typeof createMockIpcMain>
   let testDir: string
 
-  beforeEach(() => {
-    db = createTestDb()
+  beforeEach(async () => {
+    db = await createTestDb()
     ipc = createMockIpcMain()
     registerHandlers(ipc as any, db)
     mockShell.showItemInFolder.mockClear()

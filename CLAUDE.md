@@ -6,7 +6,7 @@
 - `npm run dist:linux` — package AppImage + deb (output: `release/`)
 
 ## Architecture
-- Electron + React + Zustand + Tailwind + SQLite (better-sqlite3)
+- Electron + React + Zustand + Tailwind + SQLite (sql.js / WASM)
 - Build tool: electron-vite (outputs to `out/`, not `dist-electron/`)
 - IPC: each service in `src/main/services/` exports `registerHandlers(ipcMain, db)`
 - Preload: `contextBridge.exposeInMainWorld('agent', api)` — typed via `src/preload/api.d.ts`
@@ -15,7 +15,7 @@
 ## Key Conventions
 - CSS: `@import` before `@tailwind` directives; themes via CSS custom properties
 - Auth: OAuth credentials from `claude login` CLI, NOT api_key
-- DB: SQLite WAL mode, at `~/.config/agent-desktop/agent.db`
+- DB: sql.js (WASM SQLite) in RAM with debounced flush to `~/.config/agent-desktop/agent.db`
 - Vite 5.x required (electron-vite peer dep)
 - **asar: false** in electron-builder.yml — required because Agent SDK resolves `cli.js` via `import.meta.url` which lands inside `app.asar`; system `node` cannot read asar archives
 - **Fonts**: `@fontsource/jetbrains-mono` bundled (imported in `main.tsx`) — ensures monospace code rendering works regardless of system fonts; critical for box-drawing chars in ASCII diagrams
@@ -305,14 +305,13 @@
 - `src/main/utils/` — `paths.ts` (expandTilde), `mime.ts` (consolidated MIME), `validate.ts`, `json.ts` (safeJsonParse), `errors.ts` (sanitizeError)
 - ARIA labels/roles across 40+ components
 
-## Testing & ABI Swap
+## Testing
 - `npm test` — Vitest: `vitest.config.main.ts` (node) + `vitest.config.renderer.ts` (jsdom)
 - `@testing-library/react` pinned to v15 (v16 requires React 19)
 - Tests colocated: `*.test.ts` next to source
-- **better-sqlite3 ABI swap**: `scripts/rebuild-native.js` at postinstall builds Electron + Node binaries to `.native-cache/`
-- `pretest`/`posttest` swap binaries; custom scripts must call them explicitly (npm hooks only fire for `test`)
-- `npm rebuild better-sqlite3` cleans `build/` — backups MUST live outside it (hence `.native-cache/`)
-- **If Ctrl+C interrupts tests**: run `npm run posttest` to restore Electron binary before `npm run dev`
+- **Database**: sql.js (WASM SQLite) — no native modules, no ABI swap needed
+- **Gotcha**: `initDatabase()` is async at startup (`await` in `app.whenReady()`) — flush debounce 500ms, flush synchrone on `before-quit`
+- **Gotcha**: `createTestDb()` in `db-helper.ts` is async — all `beforeEach` blocks must be `async` and `await createTestDb()`
 
 ## IPC Timeout
 - All `ipcRenderer.invoke()` wrapped with `withTimeout()` (default 30s); `ms <= 0` disables timeout
