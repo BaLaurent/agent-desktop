@@ -33,6 +33,7 @@
   - `files:listTree` — recursive DFS (MAX_DEPTH=10, MAX_FILES=500, configurable exclude list). Used only by `@mention` autocomplete
 - `files_excludePatterns` setting (comma-separated dir names) cascades via AI overrides; defaults in `constants.ts`
 - Viewers: Monaco (code), sandboxed iframe (HTML), react-markdown (MD), MermaidBlock (.mmd), DOMPurify-sanitized SVG, image preview (base64 data URL)
+- **Mermaid sanitization gotcha**: Mermaid v11 uses `foreignObject` for text labels and `use`/`xlink:href` for arrow markers — DOMPurify must allow these (`ADD_TAGS: ['foreignobject', 'use']`, `html: true` profile) or diagram text disappears. `securityLevel: 'strict'` set explicitly. Auto-fit zoom scales large diagrams to container.
 - Images read as binary → base64 with `language: 'image'`; SVGs rendered inline (not raw code)
 - No file size limits on `readFile`; `MAX_PASTE_SIZE = 5MB` only for clipboard paste
 - Auto-refresh on stream finish; `artifacts` table left inert (no migration needed)
