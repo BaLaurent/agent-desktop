@@ -242,6 +242,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }))
 
+// Conversation-updated listener — reload messages when another window finishes streaming
+if (typeof window !== 'undefined' && window.agent?.events?.onConversationUpdated) {
+  window.agent.events.onConversationUpdated((conversationId: number) => {
+    const store = useChatStore.getState()
+    if (store.activeConversationId === conversationId && !(conversationId in store.streamBuffers)) {
+      store.loadMessages(conversationId)
+    }
+  })
+}
+
 // Stream listener — guarded against preload not being ready
 if (typeof window !== 'undefined' && window.agent?.messages?.onStream) {
 window.agent.messages.onStream((chunk: StreamChunk) => {

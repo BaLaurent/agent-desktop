@@ -123,6 +123,10 @@ export interface AgentAPI {
     transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
     validateConfig(): Promise<{ binaryFound: boolean; modelFound: boolean; binaryPath: string; modelPath: string }>
   }
+  voice: {
+    duck(): Promise<void>
+    restore(): Promise<void>
+  }
   tts: {
     speak(text: string): Promise<void>
     stop(): Promise<void>
@@ -181,6 +185,7 @@ export interface AgentAPI {
     onConversationTitleUpdated(callback: (data: { id: number; title: string }) => void): () => void
     onOverlayStopRecording(callback: () => void): () => void
     onConversationsRefresh(callback: () => void): () => void
+    onConversationUpdated(callback: (conversationId: number) => void): () => void
   }
   window: {
     minimize(): void

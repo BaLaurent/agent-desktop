@@ -23,6 +23,7 @@ vi.mock('./streaming', () => ({
   streamMessage: (...args: unknown[]) => mockStreamMessage(...args),
   abortStream: vi.fn(),
   injectApiKeyEnv: vi.fn(() => null),
+  notifyConversationUpdated: vi.fn(),
 }))
 
 vi.mock('fs', async () => {

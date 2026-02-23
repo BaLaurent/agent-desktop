@@ -4,7 +4,7 @@ import { mkdirSync } from 'fs'
 import { promises as fsp } from 'fs'
 import { join, basename, extname, resolve, relative } from 'path'
 import { app } from 'electron'
-import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv } from './streaming'
+import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv, notifyConversationUpdated } from './streaming'
 import { loadAgentSDK } from './anthropic'
 import { getMainWindow } from '../index'
 import type { AISettings } from './streaming'
@@ -435,6 +435,7 @@ async function streamAndSave(
       if (!exists) return null
       const assistantMsg = saveMessage(db, conversationId, 'assistant', responseContent, [], toolCalls)
       updateConversationTimestamp(db, conversationId)
+      notifyConversationUpdated(conversationId)
       // Fire-and-forget: TTS for AI response
       speakResponse(responseContent, db, conversationId, aiSettings)
         .catch(err => console.error('[tts] Response TTS error:', err))

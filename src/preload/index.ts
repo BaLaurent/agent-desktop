@@ -119,6 +119,10 @@ const api: AgentAPI = {
     transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('whisper:transcribe', wavBuffer), 45000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('whisper:validateConfig')),
   },
+  voice: {
+    duck: () => withTimeout(ipcRenderer.invoke('voice:duck')),
+    restore: () => withTimeout(ipcRenderer.invoke('voice:restore')),
+  },
   tts: {
     speak: (text: string) => withTimeout(ipcRenderer.invoke('tts:speak', text), 60000),
     stop: () => withTimeout(ipcRenderer.invoke('tts:stop')),
@@ -212,6 +216,11 @@ const api: AgentAPI = {
       const handler = () => callback()
       ipcRenderer.on('conversations:refresh', handler)
       return () => { ipcRenderer.removeListener('conversations:refresh', handler) }
+    },
+    onConversationUpdated: (callback: (conversationId: number) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, id: number) => callback(id)
+      ipcRenderer.on('messages:conversationUpdated', handler)
+      return () => { ipcRenderer.removeListener('messages:conversationUpdated', handler) }
     },
   },
   window: {

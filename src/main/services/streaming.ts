@@ -517,6 +517,14 @@ export async function streamMessage(
   return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted }
 }
 
+export function notifyConversationUpdated(conversationId: number): void {
+  for (const win of streamWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('messages:conversationUpdated', conversationId)
+    }
+  }
+}
+
 export function abortStream(conversationId?: number): void {
   denyPendingForConversation(conversationId)
   if (conversationId != null) {
