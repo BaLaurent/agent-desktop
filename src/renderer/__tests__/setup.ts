@@ -3,6 +3,8 @@ import '@testing-library/jest-dom'
 
 // Captured stream listener callback — set when chatStore module registers its onStream handler
 export let capturedStreamListener: ((chunk: unknown) => void) | null = null
+// Captured conversation-updated listener — set when chatStore module registers its onConversationUpdated handler
+export let capturedConversationUpdatedListener: ((conversationId: number) => void) | null = null
 
 export const mockAgent = {
   auth: {
@@ -111,6 +113,10 @@ export const mockAgent = {
     onTrayNewConversation: vi.fn().mockReturnValue(() => {}),
     onDeeplinkNavigate: vi.fn().mockReturnValue(() => {}),
     onConversationTitleUpdated: vi.fn().mockReturnValue(() => {}),
+    onConversationUpdated: vi.fn().mockImplementation((cb: (id: number) => void) => {
+      capturedConversationUpdatedListener = cb
+      return () => {}
+    }),
   },
   window: {
     minimize: vi.fn(),

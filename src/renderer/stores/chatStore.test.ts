@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { mockAgent, capturedStreamListener } from '../__tests__/setup'
+import { mockAgent, capturedStreamListener, capturedConversationUpdatedListener } from '../__tests__/setup'
 import { useChatStore } from './chatStore'
 import type { StreamChunk } from '../../shared/types'
 import { useSettingsStore } from './settingsStore'
@@ -657,6 +657,45 @@ describe('chatStore', () => {
       const state = useChatStore.getState()
       const toolPart = state.streamParts[0] as any
       expect(toolPart.output).toBe('file contents')
+    })
+  })
+
+  describe('onConversationUpdated listener', () => {
+    function getListener(): (conversationId: number) => void {
+      if (!capturedConversationUpdatedListener) throw new Error('Conversation updated listener was not captured')
+      return capturedConversationUpdatedListener
+    }
+
+    it('reloads messages when viewing the updated conversation and not streaming it', async () => {
+      const reloadedMsgs = [
+        { id: 1, conversation_id: 5, role: 'user' as const, content: 'Hi', attachments: '[]', created_at: '', updated_at: '' },
+        { id: 2, conversation_id: 5, role: 'assistant' as const, content: 'Hello!', attachments: '[]', created_at: '', updated_at: '' },
+      ]
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 5, title: 'Test', messages: reloadedMsgs })
+
+      useChatStore.setState({ activeConversationId: 5, streamBuffers: {} })
+
+      getListener()(5)
+
+      // Wait for async loadMessages
+      await new Promise(r => setTimeout(r, 50))
+      expect(mockAgent.conversations.get).toHaveBeenCalledWith(5)
+    })
+
+    it('does not reload when viewing a different conversation', () => {
+      useChatStore.setState({ activeConversationId: 3, streamBuffers: {} })
+
+      getListener()(5)
+
+      expect(mockAgent.conversations.get).not.toHaveBeenCalled()
+    })
+
+    it('does not reload when the conversation is currently streaming (has buffer)', () => {
+      useChatStore.setState({ activeConversationId: 5, streamBuffers: { 5: [] } })
+
+      getListener()(5)
+
+      expect(mockAgent.conversations.get).not.toHaveBeenCalled()
     })
   })
 

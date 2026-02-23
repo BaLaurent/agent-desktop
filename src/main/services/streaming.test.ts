@@ -15,7 +15,7 @@ vi.mock('./anthropic', () => ({
   }),
 }))
 
-import { buildPromptWithHistory, streamMessage } from './streaming'
+import { buildPromptWithHistory, streamMessage, registerStreamWindow, notifyConversationUpdated } from './streaming'
 
 describe('buildPromptWithHistory', () => {
   it('returns bare content for a single message', () => {
@@ -574,5 +574,39 @@ describe('streamMessage — system init (MCP status)', () => {
       (call: unknown[]) => call[0] === 'messages:stream' && (call[1] as { type: string }).type === 'mcp_status'
     )
     expect(mcpChunks).toHaveLength(0)
+  })
+})
+
+describe('notifyConversationUpdated', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+  })
+
+  it('broadcasts messages:conversationUpdated to registered stream windows', () => {
+    const sendFn = vi.fn()
+    const fakeWin = {
+      isDestroyed: () => false,
+      webContents: { send: sendFn },
+      on: vi.fn(),
+    } as unknown as Parameters<typeof registerStreamWindow>[0]
+
+    registerStreamWindow(fakeWin)
+    notifyConversationUpdated(42)
+
+    expect(sendFn).toHaveBeenCalledWith('messages:conversationUpdated', 42)
+  })
+
+  it('skips destroyed windows', () => {
+    const sendFn = vi.fn()
+    const fakeWin = {
+      isDestroyed: () => true,
+      webContents: { send: sendFn },
+      on: vi.fn(),
+    } as unknown as Parameters<typeof registerStreamWindow>[0]
+
+    registerStreamWindow(fakeWin)
+    notifyConversationUpdated(1)
+
+    expect(sendFn).not.toHaveBeenCalled()
   })
 })

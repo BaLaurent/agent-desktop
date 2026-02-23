@@ -128,6 +128,7 @@
 - Chunks without `conversationId` fall back to `activeConversationId` (backward compat)
 - Conversation history: `buildPromptWithHistory()` wraps prior messages in `<conversation_history>` XML tags; current message placed outside
 - **Persistence**: `tool_calls TEXT` column on messages; `streamMessage()` returns `{ content, toolCalls, aborted }`
+- **Cross-window refresh**: `notifyConversationUpdated()` broadcasts `messages:conversationUpdated` to all stream windows after `streamAndSave()` saves assistant message; chatStore listener reloads messages if viewing that conversation and not streaming it (guard: `!(conversationId in streamBuffers)`)
 
 ## Tool Approval & AskUserQuestion
 - `canUseTool` callback is **always set**, regardless of permission mode
