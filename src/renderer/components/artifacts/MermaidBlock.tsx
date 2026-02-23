@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import mermaid from 'mermaid'
 import DOMPurify from 'dompurify'
 
-mermaid.initialize({ startOnLoad: false, theme: 'dark' })
+mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' })
 
 let nextId = 0
 
@@ -26,10 +26,19 @@ function MermaidViewer({ svgHtml, fullscreen, onToggleFullscreen }: {
   const dragStart = useRef({ x: 0, y: 0 })
   const panStart = useRef({ x: 0, y: 0 })
 
-  // Reset zoom/pan when toggling fullscreen or content changes
+  // Auto-fit zoom when content or fullscreen changes
   useEffect(() => {
-    setZoom(1)
     setPan({ x: 0, y: 0 })
+    if (!viewportRef.current) { setZoom(1); return }
+    const svg = viewportRef.current.querySelector('svg')
+    if (!svg) { setZoom(1); return }
+    const viewBox = svg.viewBox?.baseVal
+    if (!viewBox || !viewBox.width || !viewBox.height) { setZoom(1); return }
+    const container = viewportRef.current.getBoundingClientRect()
+    if (!container.width || !container.height) { setZoom(1); return }
+    const scaleX = container.width / viewBox.width
+    const scaleY = container.height / viewBox.height
+    setZoom(Math.min(scaleX, scaleY, 1)) // never above 100%
   }, [fullscreen, svgHtml])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -170,9 +179,11 @@ export function MermaidBlock({ content }: MermaidBlockProps) {
     mermaid.render(id, content.trim())
       .then(({ svg }) => {
         const sanitized = DOMPurify.sanitize(svg, {
-          USE_PROFILES: { svg: true, svgFilters: true },
-          FORBID_TAGS: ['script', 'foreignObject', 'use'],
-          FORBID_ATTR: ['xlink:href'],
+          USE_PROFILES: { svg: true, svgFilters: true, html: true },
+          ADD_TAGS: ['foreignobject', 'use'],
+          ADD_ATTR: ['dominant-baseline', 'xlink:href'],
+          FORBID_TAGS: ['script'],
+          FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onfocus', 'onblur'],
         })
         setSvgHtml(sanitized)
       })
