@@ -203,7 +203,12 @@
   - `tts_summaryPrompt` — template with `{response}` placeholder, sent to Haiku
 - **Per-stream ducking**: `duckOtherStreams()` lowers existing PulseAudio sink inputs so TTS plays over them; `restoreOtherStreams()` restores
 - `speakResponse()` called fire-and-forget after AI response in `streamAndSave()`; `stop()` called before new streams
-- IPC: `tts:speak`, `tts:stop`, `tts:validate`, `tts:detectPlayers`
+- **Per-message replay**: `speakMessage(text, db, conversationId, messageId)` reuses `speakResponse` with dynamic `import('./messages')` (circular dep avoidance); tracks `currentMessageId` for UI state
+  - `ttsStore.ts` (Zustand): `speakingMessageId` state + module-level `onStateChange` listener
+  - Play/Stop button on assistant messages in `MessageBubble.tsx` (visible on hover or while speaking)
+  - **Gotcha**: `speak()` must call `stopInternal()` (not `stop()`) to avoid clearing `currentMessageId` and sending spurious `speaking:false` before new playback starts
+- IPC: `tts:speak`, `tts:stop`, `tts:validate`, `tts:detectPlayers`, `tts:speakMessage`
+- Keyboard shortcut: `stop_tts` (`Ctrl+Shift+T`) — stops any active TTS playback
 - TTS settings cascadeable via `ai_overrides`: `tts_responseMode`, `tts_summaryPrompt`
 
 ## Audio Ducking
