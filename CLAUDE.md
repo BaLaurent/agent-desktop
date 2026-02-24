@@ -159,6 +159,7 @@
 - **Copy-to-session**: files copied to `{cwd}/attachments/` with dedup naming; markdown links appended to message content
 - **File path API**: `webUtils.getPathForFile(file)` via preload — replaces unsafe `(file as any).path`
 - Paste: 5MB limit, saved to `os.tmpdir()/agent-paste/` with unique filename
+- **Web mode file uploads**: `src/renderer/utils/fileToAttachment.ts` — utility converting browser File → Attachment. Desktop uses `getPathForFile()`, web mode reads file into memory and uploads via `savePastedFile` IPC. Used by `FileUploadButton` and `FileDropZone`
 
 ## Slash Commands
 - Type `/` in chat input to open autocomplete dropdown with fuzzy filtering
@@ -362,6 +363,8 @@
 - **Safe areas**: `mobile-safe-bottom`/`mobile-safe-top` CSS classes use `env(safe-area-inset-*)` for notched devices; applied to input area and top bar
 - **Modals/popovers**: `max-w-[calc(100vw-1rem)]` on mobile to prevent offscreen overflow (TaskFormModal, FolderSettingsPopover, AIOverridesPopover)
 - **Gotcha**: `useMobileMode` checks only `__AGENT_WEB_MODE__`, not screen size — desktop browser via web server gets mobile layout (intentional: touch-friendly for all remote access)
+- **Session persistence**: `conversationsStore.ts` — in web mode, `activeConversationId` persisted to sessionStorage; restored on page load to prevent context loss on browser kill/reload (Android)
+- **File picker recovery**: `FileUploadButton.tsx` — saves `agent_pendingUpload` flag to sessionStorage before opening picker; on page reload, auto-reopens picker after 500ms to complete interrupted upload
 
 ## Mobile Swipe Gestures
 - `src/renderer/hooks/useEdgeSwipe.ts` — two hooks for touch navigation on mobile (web server mode)
