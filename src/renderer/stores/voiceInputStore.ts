@@ -78,6 +78,9 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
 
       recorder.start()
       set({ isRecording: true })
+
+      // Duck system volume while recording (same as Quick Voice overlay)
+      window.agent.voice.duck().catch(() => {})
     } catch (err) {
       releaseMediaStream()
       const msg = err instanceof Error ? err.message : 'Failed to start recording'
@@ -96,10 +99,14 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
     if (!mediaRecorder || mediaRecorder.state === 'inactive') {
       releaseMediaStream()
       set({ isRecording: false })
+      window.agent.voice.restore().catch(() => {})
       return
     }
 
     set({ isRecording: false, isTranscribing: true, error: null })
+
+    // Restore volume as soon as recording stops (don't wait for transcription)
+    window.agent.voice.restore().catch(() => {})
 
     try {
       // Stop recording and collect all data
@@ -154,6 +161,7 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
     }
     releaseMediaStream()
     set({ isRecording: false, isTranscribing: false, error: null })
+    window.agent.voice.restore().catch(() => {})
   },
 
   clearError: () => set({ error: null }),

@@ -7,6 +7,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { safeJsonParse } from '../utils/json'
 import { getSetting } from '../utils/db'
+import { duckVolume, restoreVolume } from '../utils/volume'
 
 const MAX_BUFFER_SIZE = 50 * 1024 * 1024 // 50MB
 const TIMEOUT_MS = 30_000
@@ -209,6 +210,15 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
   ipcMain.handle('whisper:validateConfig', async () => {
     return validateConfig(db)
+  })
+
+  ipcMain.handle('voice:duck', async () => {
+    const duck = Number(getSetting(db, 'voice_volumeDuck')) || 0
+    if (duck > 0) await duckVolume(duck)
+  })
+
+  ipcMain.handle('voice:restore', async () => {
+    await restoreVolume()
   })
 }
 

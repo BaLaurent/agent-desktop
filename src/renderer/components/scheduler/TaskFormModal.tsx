@@ -4,16 +4,21 @@ import { useConversationsStore } from '../../stores/conversationsStore'
 
 interface Props {
   task?: ScheduledTask | null
+  initialPrompt?: string
+  initialConversationId?: number
   onSave: (data: CreateScheduledTask) => Promise<void>
   onClose: () => void
 }
 
-export function TaskFormModal({ task, onSave, onClose }: Props) {
+export function TaskFormModal({ task, initialPrompt, initialConversationId, onSave, onClose }: Props) {
   const { conversations, loadConversations } = useConversationsStore()
 
-  const [name, setName] = useState(task?.name || '')
-  const [prompt, setPrompt] = useState(task?.prompt || '')
-  const [conversationId, setConversationId] = useState<number | 'new'>(task?.conversation_id || 'new')
+  const effectivePrompt = initialPrompt ?? task?.prompt ?? ''
+  const [name, setName] = useState(
+    task?.name || (effectivePrompt ? effectivePrompt.slice(0, 50).trim() + (effectivePrompt.length > 50 ? '...' : '') : '')
+  )
+  const [prompt, setPrompt] = useState(effectivePrompt)
+  const [conversationId, setConversationId] = useState<number | 'new'>(initialConversationId ?? task?.conversation_id ?? 'new')
   const [intervalValue, setIntervalValue] = useState(task?.interval_value || 1)
   const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>(task?.interval_unit || 'hours')
   const [scheduleTime, setScheduleTime] = useState(task?.schedule_time || '')

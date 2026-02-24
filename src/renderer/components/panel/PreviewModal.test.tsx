@@ -22,6 +22,12 @@ vi.mock('../artifacts/SvgPreview', () => ({
   ),
 }))
 
+vi.mock('../artifacts/NotebookPreview', () => ({
+  NotebookPreview: ({ content }: { content: string }) => (
+    <div data-testid="mock-notebook">{content}</div>
+  ),
+}))
+
 import { render, screen, fireEvent } from '@testing-library/react'
 import { PreviewModal } from './PreviewModal'
 
@@ -115,5 +121,10 @@ describe('PreviewModal', () => {
   it('renders .markdown extension as markdown', () => {
     render(<PreviewModal {...defaultProps} filePath="/readme.markdown" content="## Title" />)
     expect(screen.getByTestId('mock-markdown')).toBeInTheDocument()
+  })
+
+  it('renders notebook viewer for .ipynb files', () => {
+    render(<PreviewModal {...defaultProps} filePath="/test/analysis.ipynb" language="ipynb" content='{"cells":[]}' />)
+    expect(screen.getByTestId('mock-notebook')).toBeInTheDocument()
   })
 })
