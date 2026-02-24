@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { useMobileMode } from '../../hooks/useMobileMode'
 import { fileToAttachment } from '../../utils/fileToAttachment'
 import type { Attachment } from '../../../shared/types'
@@ -10,16 +10,36 @@ interface FileUploadButtonProps {
 const ACCEPTED =
   '.txt,.md,.js,.ts,.py,.json,.csv,.yaml,.yml,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp'
 
+const PENDING_UPLOAD_KEY = 'agent_pendingUpload'
+
 export function FileUploadButton({ onFilesSelected }: FileUploadButtonProps) {
   const mobile = useMobileMode()
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Web mode: if page reloaded with a pending upload flag, re-open the file picker
+  useEffect(() => {
+    if (!mobile) return
+    const pending = sessionStorage.getItem(PENDING_UPLOAD_KEY)
+    if (pending) {
+      sessionStorage.removeItem(PENDING_UPLOAD_KEY)
+      // Small delay to let the page finish rendering
+      setTimeout(() => inputRef.current?.click(), 500)
+    }
+  }, [mobile])
+
   const handleClick = useCallback(() => {
+    // Web mode: save flag so we can re-open picker if page reloads
+    if ((window as any).__AGENT_WEB_MODE__) {
+      sessionStorage.setItem(PENDING_UPLOAD_KEY, '1')
+    }
     inputRef.current?.click()
   }, [])
 
   const handleChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Upload succeeded (or was cancelled) — clear the pending flag
+      sessionStorage.removeItem(PENDING_UPLOAD_KEY)
+
       const fileList = e.target.files
       if (!fileList || fileList.length === 0) return
 
