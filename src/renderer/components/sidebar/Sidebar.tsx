@@ -42,9 +42,11 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
         className="flex items-center justify-between px-3 py-3 flex-shrink-0"
         style={{ borderBottom: '1px solid var(--color-bg)' }}
       >
-        <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-          Conversations
-        </span>
+        {!isMobile && (
+          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            Conversations
+          </span>
+        )}
         <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-1'}`}>
           {onOpenSettings && (
             <button
