@@ -52,9 +52,11 @@ linux:
     - target: AppImage
       arch:
         - x64
+        - arm64
     - target: deb
       arch:
         - x64
+        - arm64
   category: Utility
   maintainer: Agent Desktop Contributors
   desktop:
@@ -65,9 +67,11 @@ win:
     - target: nsis
       arch:
         - x64
+        - arm64
     - target: portable
       arch:
         - x64
+        - arm64
   icon: build/icon.ico
 nsis:
   oneClick: false
