@@ -209,7 +209,7 @@
   - Play/Stop button on assistant messages in `MessageBubble.tsx` (visible on hover or while speaking)
   - **Gotcha**: `speak()` must call `stopInternal()` (not `stop()`) to avoid clearing `currentMessageId` and sending spurious `speaking:false` before new playback starts
 - IPC: `tts:speak`, `tts:stop`, `tts:validate`, `tts:detectPlayers`, `tts:speakMessage`
-- Keyboard shortcut: `stop_tts` (`Ctrl+Shift+T`) — stops any active TTS playback
+- Keyboard shortcut: `stop_tts` (`Ctrl+Shift+T`) — **global shortcut** (works outside app focus); registered at OS level like `quick_chat`/`quick_voice`/`show_app`
 - TTS settings cascadeable via `ai_overrides`: `tts_responseMode`, `tts_summaryPrompt`
 
 ## Audio Ducking
@@ -235,7 +235,7 @@
 - **Gotcha**: FIFO must be opened with `O_RDWR` only (no `O_NONBLOCK`) — `O_NONBLOCK` causes `EAGAIN` errors with `createReadStream`; `O_RDWR` alone prevents blocking on `open()` and prevents EOF when writers disconnect
 - **Gotcha**: always `unbind` before `bind` in hyprctl — `keyword bind` accumulates at runtime; app restarts without compositor restarts leave stale bindings
 - **Gotcha**: re-registration keeps FIFO alive and only updates hyprctl binds — `rebindWaylandShortcuts()` avoids teardown/rebuild
-- Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`); re-registered via `quickChat:reregisterShortcuts` IPC
+- Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`, `stop_tts`); re-registered via `quickChat:reregisterShortcuts` IPC
 - Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
 
 ## Keyboard Shortcuts & Deep Links
@@ -246,7 +246,7 @@
   - `keyEventToAccelerator()`: records `Ctrl` and `Super` as separate parts
   - `formatKeybinding()`: converts legacy `CommandOrControl` → `Ctrl` for display
   - **Backward compat**: existing DB entries with `CommandOrControl` still parse correctly (maps to `ctrl`)
-- Global shortcuts (`quick_chat`, `quick_voice`, `show_app`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
+- Global shortcuts (`quick_chat`, `quick_voice`, `show_app`, `stop_tts`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
 - Deep link: `agent://conversation/{id}`; tray "New Conversation" sends `tray:newConversation` IPC
 
 ## Auto-Title Generation
