@@ -1,5 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { useMobileMode } from '../../hooks/useMobileMode'
+import { fileToAttachment } from '../../utils/fileToAttachment'
 import type { Attachment } from '../../../shared/types'
 
 interface FileUploadButtonProps {
@@ -18,18 +19,15 @@ export function FileUploadButton({ onFilesSelected }: FileUploadButtonProps) {
   }, [])
 
   const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const fileList = e.target.files
       if (!fileList || fileList.length === 0) return
 
-      const attachments: Attachment[] = Array.from(fileList).map((file) => ({
-        name: file.name,
-        path: window.agent.system.getPathForFile(file),
-        type: file.type || 'application/octet-stream',
-        size: file.size,
-      }))
+      const attachments = await Promise.all(
+        Array.from(fileList).map((file) => fileToAttachment(file))
+      )
 
-      onFilesSelected(attachments)
+      onFilesSelected(attachments.filter((a): a is Attachment => a !== null))
 
       // Reset so selecting the same file again triggers onChange
       e.target.value = ''

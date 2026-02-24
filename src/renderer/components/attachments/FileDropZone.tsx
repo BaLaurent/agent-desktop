@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useMobileMode } from '../../hooks/useMobileMode'
+import { fileToAttachment } from '../../utils/fileToAttachment'
 import type { Attachment } from '../../../shared/types'
 
 interface FileDropZoneProps {
@@ -24,7 +25,7 @@ export function FileDropZone({ children, onFilesDropped }: FileDropZoneProps) {
   }, [])
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault()
       e.stopPropagation()
       setIsDragOver(false)
@@ -32,14 +33,11 @@ export function FileDropZone({ children, onFilesDropped }: FileDropZoneProps) {
       const droppedFiles = Array.from(e.dataTransfer.files)
       if (droppedFiles.length === 0) return
 
-      const attachments: Attachment[] = droppedFiles.map((file) => ({
-        name: file.name,
-        path: window.agent.system.getPathForFile(file),
-        type: file.type || extToType(file.name),
-        size: file.size,
-      }))
+      const attachments = await Promise.all(
+        droppedFiles.map((file) => fileToAttachment(file))
+      )
 
-      onFilesDropped(attachments)
+      onFilesDropped(attachments.filter((a): a is Attachment => a !== null))
     },
     [onFilesDropped]
   )
@@ -61,27 +59,4 @@ export function FileDropZone({ children, onFilesDropped }: FileDropZoneProps) {
       )}
     </div>
   )
-}
-
-function extToType(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-  const map: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    svg: 'image/svg+xml',
-    webp: 'image/webp',
-    pdf: 'application/pdf',
-    json: 'application/json',
-    txt: 'text/plain',
-    md: 'text/markdown',
-    js: 'text/javascript',
-    ts: 'text/typescript',
-    py: 'text/x-python',
-    csv: 'text/csv',
-    yaml: 'text/yaml',
-    yml: 'text/yaml',
-  }
-  return map[ext] ?? 'application/octet-stream'
 }
