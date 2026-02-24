@@ -341,7 +341,24 @@
 - **Dev mode**: proxies HTTP to `ELECTRON_RENDERER_URL` with shim injection
 - Settings: `server_enabled`, `server_port` (default 3484), `server_autoStart`; toggle in Settings > Web Server
 - IPC: `server:start`, `server:stop`, `server:getStatus`; preload `window.agent.server.*`
+- **Firewall detection**: `getServerStatus()` returns `firewallWarning` string — checks nftables, iptables, ufw for DROP policies missing the port; displayed in settings UI
+- **LAN IP**: skips virtual interfaces (docker, tailscale, veth, etc.); falls back to any non-internal IPv4
 - Dependencies: `ws` (WebSocket server), `qrcode` (QR code SVG in renderer)
+
+## Mobile Ergonomics (Web Server)
+- `useMobileMode()` hook (`src/renderer/hooks/useMobileMode.ts`): returns `true` when `window.__AGENT_WEB_MODE__` is set (injected by web server shim); used across 30+ renderer components
+- **Pattern**: `const mobile = useMobileMode()` → conditional Tailwind classes; no media queries — mode is binary (Electron vs web)
+- **Touch targets**: 44px minimum (`w-11 h-11` or `py-3` + text) on all interactive elements in mobile mode
+- **Input font**: `text-base` (16px) on `<textarea>`/`<input>` to prevent iOS auto-zoom on focus
+- **Viewport height**: `100dvh` instead of `100vh` — accounts for mobile browser URL bar (App root, modals, settings)
+- **Click-outside**: `useClickOutside` hook and all manual click-outside listeners register both `mousedown` AND `touchstart`
+- **ChatView input**: two-row layout on mobile — toolbar row (file upload, @mention, voice) + full-width input row with send button
+- **ChatStatusLine**: compact single-line on mobile (`text-[10px]`, `overflow-x-auto`); dropdown menus capped to `max-w-[calc(100vw-2rem)]`
+- **Header**: `pl-14` to clear hamburger overlay in mobile mode; title uses `truncate` (not `flex-shrink-0`) to prevent horizontal overflow
+- **Sidebar overlay**: width `min(280px, calc(100vw - 60px))` — leaves tap target to close; absolute positioned over content
+- **Safe areas**: `mobile-safe-bottom`/`mobile-safe-top` CSS classes use `env(safe-area-inset-*)` for notched devices; applied to input area and top bar
+- **Modals/popovers**: `max-w-[calc(100vw-1rem)]` on mobile to prevent offscreen overflow (TaskFormModal, FolderSettingsPopover, AIOverridesPopover)
+- **Gotcha**: `useMobileMode` checks only `__AGENT_WEB_MODE__`, not screen size — desktop browser via web server gets mobile layout (intentional: touch-friendly for all remote access)
 
 ## IPC Timeout
 - All `ipcRenderer.invoke()` wrapped with `withTimeout()` (default 30s); `ms <= 0` disables timeout
