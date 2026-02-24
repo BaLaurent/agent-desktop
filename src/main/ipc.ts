@@ -67,7 +67,8 @@ function withSanitizedErrors(ipcMain: IpcMain): IpcMain {
       }
     })
     // Mirror into ipcDispatch so WebSocket bridge can call the same handlers.
-    // No handler uses event.sender — all have `_event`, so passing null is safe.
+    // Most handlers use `_event` (unused), so passing null is safe.
+    // Exception: openscad:exportStl uses event.sender — blocked in handleWsMessage().
     ipcDispatch.set(channel, async (...args: unknown[]) => {
       try {
         return await listener(null as unknown as IpcMainInvokeEvent, ...args)

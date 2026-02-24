@@ -446,6 +446,14 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
   }
 
   if (msg.type === 'invoke' && msg.id && msg.channel) {
+    // Block channels that are unsafe via WebSocket:
+    // - server:* — web clients must not control the server itself
+    // - openscad:exportStl — uses event.sender (null via WS → crash)
+    if (msg.channel.startsWith('server:') || msg.channel === 'openscad:exportStl') {
+      ws.send(JSON.stringify({ type: 'result', id: msg.id, error: `Channel not available via WebSocket: ${msg.channel}` }))
+      return
+    }
+
     const handler = ipcDispatch.get(msg.channel)
     if (!handler) {
       ws.send(JSON.stringify({ type: 'result', id: msg.id, error: `Unknown channel: ${msg.channel}` }))
