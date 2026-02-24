@@ -4,6 +4,7 @@ import type { McpServerName } from '../../../shared/constants'
 import { useClickOutside } from '../../hooks/useClickOutside'
 import { useOverrideDraft } from '../../hooks/useOverrideDraft'
 import { OverrideFormFields } from './OverrideFormFields'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface AIOverridesPopoverProps {
   overrides: AIOverrides
@@ -25,6 +26,7 @@ export function AIOverridesPopover({
   mcpServers,
 }: AIOverridesPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
+  const mobile = useMobileMode()
   useClickOutside(popoverRef, onClose)
 
   const {
@@ -35,7 +37,7 @@ export function AIOverridesPopover({
   return (
     <div
       ref={popoverRef}
-      className="fixed z-50 rounded-lg shadow-xl text-sm w-[340px] max-h-[80vh] flex flex-col"
+      className={`fixed z-50 rounded-lg shadow-xl text-sm flex flex-col max-w-[calc(100vw-1.5rem)] ${mobile ? 'w-full' : 'w-[340px]'}`}
       style={{
         top: '50%',
         left: '50%',
@@ -43,6 +45,7 @@ export function AIOverridesPopover({
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-text-muted)',
         color: 'var(--color-text)',
+        maxHeight: mobile ? '80dvh' : '80vh',
       }}
     >
       {/* Header */}
@@ -53,7 +56,7 @@ export function AIOverridesPopover({
         <span className="font-medium">{title}</span>
         <button
           onClick={onClose}
-          className="text-xs px-1.5 py-0.5 rounded hover:opacity-80"
+          className={`rounded hover:opacity-80 ${mobile ? 'w-11 h-11 flex items-center justify-center text-sm' : 'text-xs px-1.5 py-0.5'}`}
           style={{ color: 'var(--color-text-muted)' }}
         >
           x
@@ -84,14 +87,14 @@ export function AIOverridesPopover({
       >
         <button
           onClick={onClose}
-          className="px-3 py-1 rounded text-xs"
+          className={`rounded text-xs ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1'}`}
           style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-muted)' }}
         >
           Cancel
         </button>
         <button
           onClick={() => onSave(cleanDraft())}
-          className="px-3 py-1 rounded text-xs bg-primary text-contrast"
+          className={`rounded text-xs bg-primary text-contrast ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1'}`}
         >
           Save
         </button>

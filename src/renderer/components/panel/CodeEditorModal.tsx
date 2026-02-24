@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import { useFileExplorerStore } from '../../stores/fileExplorerStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface CodeEditorModalProps {
   value: string
@@ -17,6 +18,7 @@ function toMonacoLanguage(lang: string | null): string {
 }
 
 export function CodeEditorModal({ value, onChange, onClose, language, filename }: CodeEditorModalProps) {
+  const mobile = useMobileMode()
   const handleClose = useCallback(() => {
     onClose()
   }, [onClose])
@@ -46,8 +48,8 @@ export function CodeEditorModal({ value, onChange, onClose, language, filename }
       }}
     >
       <div
-        className="flex flex-col w-[96vw] max-w-[1600px] rounded-lg shadow-2xl overflow-hidden"
-        style={{ backgroundColor: 'var(--color-surface)', height: '92vh' }}
+        className={`flex flex-col w-[96vw] max-w-[1600px] rounded-lg shadow-2xl overflow-hidden ${mobile ? 'max-h-[100dvh]' : ''}`}
+        style={{ backgroundColor: 'var(--color-surface)', height: mobile ? '100dvh' : '92vh' }}
       >
         {/* Header */}
         <div
@@ -59,7 +61,7 @@ export function CodeEditorModal({ value, onChange, onClose, language, filename }
           </span>
           <button
             onClick={handleClose}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-base transition-colors"
+            className={`${mobile ? 'w-11 h-11' : 'w-7 h-7'} flex items-center justify-center rounded hover:bg-base transition-colors`}
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Close editor"
           >
@@ -69,21 +71,42 @@ export function CodeEditorModal({ value, onChange, onClose, language, filename }
 
         {/* Editor */}
         <div className="flex-1 min-h-0">
-          <Editor
-            height="100%"
-            language={toMonacoLanguage(language)}
-            theme="vs-dark"
-            value={value}
-            onChange={(v) => onChange(v ?? '')}
-            onMount={handleMount}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 13,
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              lineNumbers: 'on',
-            }}
-          />
+          {mobile ? (
+            <div className="flex flex-col h-full">
+              <div
+                className="px-3 py-2 text-xs"
+                style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-muted)' }}
+              >
+                Monaco editor has limited mobile support. Use a simple text editor below.
+              </div>
+              <textarea
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="flex-1 w-full px-3 py-2 text-sm font-mono outline-none resize-none"
+                style={{
+                  backgroundColor: 'var(--color-deep)',
+                  color: 'var(--color-text)',
+                }}
+                spellCheck={false}
+              />
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              language={toMonacoLanguage(language)}
+              theme="vs-dark"
+              value={value}
+              onChange={(v) => onChange(v ?? '')}
+              onMount={handleMount}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 13,
+                wordWrap: 'on',
+                scrollBeyondLastLine: false,
+                lineNumbers: 'on',
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

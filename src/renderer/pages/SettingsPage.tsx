@@ -12,6 +12,8 @@ import { VoiceInputSettings } from '../components/settings/VoiceInputSettings'
 import { TTSSettings } from '../components/settings/TTSSettings'
 import { QuickChatSettings } from '../components/settings/QuickChatSettings'
 import { OpenSCADSettings } from '../components/settings/OpenSCADSettings'
+import { WebServerSettings } from '../components/settings/WebServerSettings'
+import { useMobileMode } from '../hooks/useMobileMode'
 
 interface SettingsPageProps {
   onClose: () => void
@@ -29,6 +31,7 @@ const categories = [
   'MCP Servers',
   'Allowed Tools',
   'Knowledge Base',
+  'Web Server',
   'Storage',
   'About',
 ] as const
@@ -47,12 +50,14 @@ const categoryComponents: Record<Category, React.FC | null> = {
   'MCP Servers': McpServerList,
   'Allowed Tools': ToolList,
   'Knowledge Base': KnowledgeManager,
+  'Web Server': WebServerSettings,
   Storage: StorageSettings,
   About: AboutSection,
 }
 
 export function SettingsPage({ onClose }: SettingsPageProps) {
   const [activeCategory, setActiveCategory] = useState<Category>('General')
+  const mobile = useMobileMode()
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -72,67 +77,114 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       }}
     >
       <div
-        className="w-full max-w-4xl max-h-[80vh] rounded-lg shadow-xl flex overflow-hidden"
+        className={`w-full max-w-4xl rounded-lg shadow-xl flex overflow-hidden ${
+          mobile ? 'flex-col max-h-[100dvh] h-full' : 'max-h-[80vh]'
+        }`}
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
-        {/* Sidebar */}
-        <div
-          className="w-[200px] flex-shrink-0 flex flex-col py-4 border-r border-[var(--color-text-muted)]/10"
-          style={{ backgroundColor: 'var(--color-deep)' }}
-        >
-          <h2
-            className="px-4 pb-3 text-lg font-semibold"
-            style={{ color: 'var(--color-text)' }}
+        {mobile ? (
+          /* Mobile: horizontal scrollable tab band at top */
+          <div
+            className="flex-shrink-0 border-b border-[var(--color-text-muted)]/10"
+            style={{ backgroundColor: 'var(--color-deep)' }}
           >
-            Settings
-          </h2>
-          <nav className="flex flex-col gap-0.5 px-2">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className="text-left px-3 py-2 rounded text-sm transition-colors"
-                style={{
-                  backgroundColor:
-                    activeCategory === cat ? 'var(--color-primary)' : 'transparent',
-                  color:
-                    activeCategory === cat ? '#fff' : 'var(--color-text-muted)',
-                }}
+            <div className="flex items-center justify-between px-4 py-3">
+              <h2
+                className="text-lg font-semibold"
+                style={{ color: 'var(--color-text)' }}
               >
-                {cat}
+                Settings
+              </h2>
+              <button
+                onClick={onClose}
+                className="w-11 h-11 flex items-center justify-center rounded hover:bg-[var(--color-bg)] transition-colors"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M1.05 1.05a.5.5 0 01.707 0L7 6.293l5.243-5.243a.5.5 0 11.707.707L7.707 7l5.243 5.243a.5.5 0 11-.707.707L7 7.707l-5.243 5.243a.5.5 0 01-.707-.707L6.293 7 1.05 1.757a.5.5 0 010-.707z" />
+                </svg>
               </button>
-            ))}
-          </nav>
-        </div>
+            </div>
+            <nav className="flex flex-row overflow-x-auto gap-1 px-2 pb-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className="whitespace-nowrap px-4 py-2.5 rounded text-sm transition-colors flex-shrink-0"
+                  style={{
+                    backgroundColor:
+                      activeCategory === cat ? 'var(--color-primary)' : 'transparent',
+                    color:
+                      activeCategory === cat ? '#fff' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {cat}
+                </button>
+              ))}
+            </nav>
+          </div>
+        ) : (
+          /* Desktop: sidebar */
+          <div
+            className="w-[200px] flex-shrink-0 flex flex-col py-4 border-r border-[var(--color-text-muted)]/10"
+            style={{ backgroundColor: 'var(--color-deep)' }}
+          >
+            <h2
+              className="px-4 pb-3 text-lg font-semibold"
+              style={{ color: 'var(--color-text)' }}
+            >
+              Settings
+            </h2>
+            <nav className="flex flex-col gap-0.5 px-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className="text-left px-3 py-2 rounded text-sm transition-colors"
+                  style={{
+                    backgroundColor:
+                      activeCategory === cat ? 'var(--color-primary)' : 'transparent',
+                    color:
+                      activeCategory === cat ? '#fff' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {cat}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Header with close button */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10">
-            <h2
-              className="text-lg font-semibold"
-              style={{ color: 'var(--color-text)' }}
-            >
-              {activeCategory}
-            </h2>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded hover:bg-[var(--color-bg)] transition-colors"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="currentColor"
+          {/* Header with close button (desktop only — mobile has it in the tab band) */}
+          {!mobile && (
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10">
+              <h2
+                className="text-lg font-semibold"
+                style={{ color: 'var(--color-text)' }}
               >
-                <path d="M1.05 1.05a.5.5 0 01.707 0L7 6.293l5.243-5.243a.5.5 0 11.707.707L7.707 7l5.243 5.243a.5.5 0 11-.707.707L7 7.707l-5.243 5.243a.5.5 0 01-.707-.707L6.293 7 1.05 1.757a.5.5 0 010-.707z" />
-              </svg>
-            </button>
-          </div>
+                {activeCategory}
+              </h2>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded hover:bg-[var(--color-bg)] transition-colors"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="currentColor"
+                >
+                  <path d="M1.05 1.05a.5.5 0 01.707 0L7 6.293l5.243-5.243a.5.5 0 11.707.707L7.707 7l5.243 5.243a.5.5 0 11-.707.707L7 7.707l-5.243 5.243a.5.5 0 01-.707-.707L6.293 7 1.05 1.757a.5.5 0 010-.707z" />
+                </svg>
+              </button>
+            </div>
+          )}
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4">
+          <div className={`flex-1 overflow-y-auto overflow-x-hidden ${mobile ? 'px-4' : 'px-6'} py-4`}>
             {ActiveComponent ? (
               <ActiveComponent />
             ) : (

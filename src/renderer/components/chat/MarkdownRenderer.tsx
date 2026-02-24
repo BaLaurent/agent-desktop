@@ -158,7 +158,7 @@ const components: Components = {
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
-    <div className="markdown-content">
+    <div className="markdown-content" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}

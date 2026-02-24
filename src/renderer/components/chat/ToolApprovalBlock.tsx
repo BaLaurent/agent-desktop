@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import type { StreamPart } from '../../../shared/types'
 
 type ToolApprovalPart = Extract<StreamPart, { type: 'tool_approval' }>
@@ -13,6 +14,7 @@ function truncate(value: unknown, maxLen = 200): string {
 }
 
 export function ToolApprovalBlock({ approval }: ToolApprovalBlockProps) {
+  const mobile = useMobileMode()
   const [responded, setResponded] = useState<'allow' | 'deny' | null>(null)
 
   const handleResponse = (behavior: 'allow' | 'deny') => {
@@ -56,14 +58,14 @@ export function ToolApprovalBlock({ approval }: ToolApprovalBlockProps) {
         <div className="mt-2 flex gap-2">
           <button
             onClick={() => handleResponse('allow')}
-            className="px-3 py-1 rounded text-xs font-medium transition-colors hover:opacity-90 bg-success text-contrast"
+            className={`rounded font-medium transition-colors hover:opacity-90 bg-success text-contrast ${mobile ? 'px-5 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
             aria-label={`Allow ${approval.toolName} tool`}
           >
             Allow
           </button>
           <button
             onClick={() => handleResponse('deny')}
-            className="px-3 py-1 rounded text-xs font-medium transition-colors hover:opacity-90 bg-error text-contrast"
+            className={`rounded font-medium transition-colors hover:opacity-90 bg-error text-contrast ${mobile ? 'px-5 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
             aria-label={`Deny ${approval.toolName} tool`}
           >
             Deny

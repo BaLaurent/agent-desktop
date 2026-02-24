@@ -109,3 +109,9 @@
   outline-offset: -2px;
   border-radius: 4px;
 }
+
+/* Safe area for mobile browsers (notch, bottom bar) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .mobile-safe-top { padding-top: env(safe-area-inset-top); }
+}

@@ -1,5 +1,6 @@
 import type { App } from 'electron'
 import { getMainWindow } from '../index'
+import { broadcast } from '../utils/broadcast'
 import { log } from './system'
 
 export function setupDeepLinks(app: App): void {
@@ -34,6 +35,7 @@ function handleDeepLink(url: string): void {
       const win = getMainWindow()
       if (win) {
         win.webContents.send('deeplink:navigate', conversationId)
+        broadcast('deeplink:navigate', conversationId)
         win.show()
         win.focus()
       }

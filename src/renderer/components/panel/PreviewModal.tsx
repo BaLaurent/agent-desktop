@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import { HtmlPreview } from '../artifacts/HtmlPreview'
 import { MarkdownArtifact } from '../artifacts/MarkdownArtifact'
 import { MermaidBlock } from '../artifacts/MermaidBlock'
@@ -29,6 +30,7 @@ function getBasename(filePath: string): string {
 const MODEL_EXTENSIONS = new Set(['stl', 'obj', '3mf', 'ply'])
 
 export function PreviewModal({ filePath, content, language, allowScripts, onClose }: PreviewModalProps) {
+  const mobile = useMobileMode()
   const handleClose = useCallback(() => {
     onClose()
   }, [onClose])
@@ -93,8 +95,8 @@ export function PreviewModal({ filePath, content, language, allowScripts, onClos
       }}
     >
       <div
-        className="flex flex-col w-[96vw] max-w-[1600px] rounded-lg shadow-2xl overflow-hidden"
-        style={{ backgroundColor: 'var(--color-surface)', height: '92vh' }}
+        className={`flex flex-col w-[96vw] max-w-[1600px] rounded-lg shadow-2xl overflow-hidden ${mobile ? 'max-h-[100dvh]' : ''}`}
+        style={{ backgroundColor: 'var(--color-surface)', height: mobile ? '100dvh' : '92vh' }}
       >
         {/* Header */}
         <div
@@ -106,7 +108,7 @@ export function PreviewModal({ filePath, content, language, allowScripts, onClos
           </span>
           <button
             onClick={handleClose}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-base transition-colors"
+            className={`${mobile ? 'w-11 h-11' : 'w-7 h-7'} flex items-center justify-center rounded hover:bg-base transition-colors`}
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Close preview"
           >

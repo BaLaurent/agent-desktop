@@ -6,17 +6,21 @@ import { Sidebar } from '../components/sidebar/Sidebar'
 import { ChatView } from '../pages/ChatView'
 import { FileExplorerPanel } from '../components/panel/FileExplorerPanel'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { useMobileMode } from '../hooks/useMobileMode'
+import { useEdgeSwipe, useSwipeDismiss } from '../hooks/useEdgeSwipe'
 
 const DEFAULT_RADIUS_PCT = 10
 
-function PanelEdgeButton({ side, isOpen, onClick, radiusPct, alwaysVisible }: {
-  side: 'left' | 'right'; isOpen: boolean; onClick: () => void; radiusPct: number; alwaysVisible: boolean
+function PanelEdgeButton({ side, isOpen, onClick, radiusPct, alwaysVisible, mobile }: {
+  side: 'left' | 'right'; isOpen: boolean; onClick: () => void; radiusPct: number; alwaysVisible: boolean; mobile?: boolean
 }) {
   const btnRef = useRef<HTMLButtonElement>(null)
   const radiusRef = useRef(radiusPct)
   radiusRef.current = radiusPct
 
+  // Desktop-only: proximity-based opacity (skipped in mobile — no mousemove on touch)
   useEffect(() => {
+    if (mobile) return
     const btn = btnRef.current
     if (!btn) return
 
@@ -36,7 +40,32 @@ function PanelEdgeButton({ side, isOpen, onClick, radiusPct, alwaysVisible }: {
     }
     document.addEventListener('mousemove', onMove)
     return () => document.removeEventListener('mousemove', onMove)
-  }, [alwaysVisible])
+  }, [alwaysVisible, mobile])
+
+  // Mobile: hide the panel (right) button entirely
+  if (mobile && side === 'right') return null
+
+  // Mobile: render a hamburger button at top-left of chat
+  if (mobile && side === 'left') {
+    return (
+      <button
+        onClick={onClick}
+        className="absolute top-2 left-2 z-10 flex items-center justify-center cursor-pointer rounded-md"
+        style={{
+          width: 44,
+          height: 44,
+          backgroundColor: 'var(--color-surface)',
+          color: 'var(--color-text)',
+        }}
+        aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" />
+        </svg>
+      </button>
+    )
+  }
 
   // Left open → chevron left (collapse). Left closed → chevron right (expand).
   // Right open → chevron right (collapse). Right closed → chevron left (expand).
@@ -82,8 +111,45 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
   const { activeConversationId, conversations } = useConversationsStore()
   const sidebarRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const mobile = useMobileMode()
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null
+
+  // Mobile: auto-close sidebar when user selects a conversation
+  useEffect(() => {
+    if (mobile && activeConversationId && sidebarVisible) {
+      useUiStore.setState({ sidebarVisible: false })
+    }
+  }, [mobile, activeConversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const closeSidebar = useCallback(() => {
+    useUiStore.setState({ sidebarVisible: false })
+  }, [])
+
+  const closePanel = useCallback(() => {
+    useUiStore.setState({ panelVisible: false })
+  }, [])
+
+  // Mobile: swipe from left edge → open sidebar; swipe from right edge → open file explorer
+  const openSidebar = useCallback(() => {
+    useUiStore.setState({ sidebarVisible: true })
+  }, [])
+  const openPanel = useCallback(() => {
+    useUiStore.setState({ panelVisible: true })
+  }, [])
+  useEdgeSwipe(
+    mobile && !sidebarVisible && !panelVisible ? openSidebar : null,
+    mobile && !panelVisible && !sidebarVisible ? openPanel : null,
+  )
+  // Swipe to dismiss: swipe left closes sidebar, swipe right closes file explorer
+  useSwipeDismiss(
+    mobile && sidebarVisible ? 'left' : null,
+    closeSidebar,
+  )
+  useSwipeDismiss(
+    mobile && panelVisible ? 'right' : null,
+    closePanel,
+  )
 
   const onSidebarResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -126,9 +192,34 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
   }, [])
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* Sidebar */}
-      {sidebarVisible && (
+    <div className="flex flex-1 overflow-hidden relative">
+      {/* Mobile sidebar overlay: backdrop + fixed sidebar */}
+      {mobile && sidebarVisible && (
+        <>
+          {/* Semi-transparent backdrop */}
+          <div
+            className="fixed inset-0 z-30"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+            onClick={closeSidebar}
+          />
+          {/* Sidebar panel */}
+          <div
+            className="fixed top-0 left-0 z-40 h-full overflow-y-auto"
+            style={{
+              width: 'min(280px, calc(100vw - 60px))',
+              backgroundColor: 'var(--color-surface)',
+              borderRight: '1px solid var(--color-bg)',
+            }}
+          >
+            <ErrorBoundary>
+              <Sidebar onOpenSettings={onOpenSettings} onOpenScheduler={onOpenScheduler} />
+            </ErrorBoundary>
+          </div>
+        </>
+      )}
+
+      {/* Desktop sidebar: inline in flex layout */}
+      {!mobile && sidebarVisible && (
         <>
           <div
             ref={sidebarRef}
@@ -155,11 +246,11 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
 
       {/* Main content — ChatView */}
       <div
-        className="flex-1 flex flex-col overflow-hidden relative"
+        className="flex-1 flex flex-col overflow-hidden relative mobile-safe-bottom"
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
-        <PanelEdgeButton side="left" isOpen={sidebarVisible} onClick={toggleSidebar} radiusPct={panelButtonRadiusPct} alwaysVisible={panelButtonAlwaysVisible} />
-        <PanelEdgeButton side="right" isOpen={panelVisible} onClick={togglePanel} radiusPct={panelButtonRadiusPct} alwaysVisible={panelButtonAlwaysVisible} />
+        <PanelEdgeButton side="left" isOpen={sidebarVisible} onClick={toggleSidebar} radiusPct={panelButtonRadiusPct} alwaysVisible={panelButtonAlwaysVisible} mobile={mobile} />
+        <PanelEdgeButton side="right" isOpen={panelVisible} onClick={togglePanel} radiusPct={panelButtonRadiusPct} alwaysVisible={panelButtonAlwaysVisible} mobile={mobile} />
         <ErrorBoundary>
           <ChatView
             conversationId={activeConversationId}
@@ -170,8 +261,31 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
         </ErrorBoundary>
       </div>
 
-      {/* Right panel — Artifacts */}
-      {panelVisible && (
+      {/* Right panel — overlay in mobile, inline in desktop */}
+      {mobile && panelVisible && (
+        <>
+          {/* Semi-transparent backdrop */}
+          <div
+            className="fixed inset-0 z-30"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+            onClick={closePanel}
+          />
+          {/* Panel overlay */}
+          <div
+            className="fixed top-0 right-0 z-40 h-full overflow-y-auto"
+            style={{
+              width: 'min(100vw, 360px)',
+              backgroundColor: 'var(--color-surface)',
+              borderLeft: '1px solid var(--color-bg)',
+            }}
+          >
+            <ErrorBoundary>
+              <FileExplorerPanel />
+            </ErrorBoundary>
+          </div>
+        </>
+      )}
+      {!mobile && panelVisible && (
         <>
           {/* Resize handle */}
           <div

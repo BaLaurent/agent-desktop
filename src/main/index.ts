@@ -14,6 +14,7 @@ import { startScheduler, stopScheduler } from './services/scheduler'
 import { startBridge, stopBridge } from './services/schedulerBridge'
 import { shutdownAllKernels } from './services/jupyter'
 import { stop as stopTts } from './services/tts'
+import { startServer, stopServer } from './services/webServer'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
@@ -133,6 +134,14 @@ if (!gotLock) {
     startScheduler(db)
     createTray(getMainWindow, createWindow)
 
+    // Auto-start web server if configured
+    const autoStartRow = db.prepare("SELECT value FROM settings WHERE key = 'server_autoStart'").get() as { value: string } | undefined
+    if (autoStartRow?.value === 'true') {
+      const portRow = db.prepare("SELECT value FROM settings WHERE key = 'server_port'").get() as { value: string } | undefined
+      const port = parseInt(portRow?.value || '3484', 10) || 3484
+      startServer(port).catch(err => console.error('[webServer] Auto-start failed:', err.message))
+    }
+
     if (app.isPackaged) {
       setTrayUpdateCallbacks(checkForUpdates, installUpdate)
       initAutoUpdater(getMainWindow, () => rebuildTrayMenu(true))
@@ -149,6 +158,7 @@ if (!gotLock) {
     shutdownAllKernels()
     stopScheduler()
     stopBridge()
+    stopServer().catch(() => {})
     unregisterGlobalShortcuts()
     stopAutoUpdater()
     closeDatabase() // flush() + close() — ensures all pending writes are persisted

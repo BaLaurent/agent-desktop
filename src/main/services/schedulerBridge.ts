@@ -7,6 +7,7 @@ import type Database from 'better-sqlite3'
 import type { CreateScheduledTask, IntervalUnit } from '../../shared/types'
 import { computeNextRun } from './scheduler'
 import { validateString, validatePositiveInt } from '../utils/validate'
+import { broadcast } from '../utils/broadcast'
 import { sanitizeError } from '../utils/errors'
 import { findBinaryInPath } from '../utils/env'
 import { getMainWindow } from '../index'
@@ -44,6 +45,7 @@ function notifyRenderer(event: string, data: unknown): void {
   if (win && !win.isDestroyed()) {
     win.webContents.send(event, data)
   }
+  broadcast(event, data)
 }
 
 interface BridgeRequest {

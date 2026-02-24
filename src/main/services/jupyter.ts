@@ -3,6 +3,7 @@ import * as path from 'path'
 import * as readline from 'readline'
 import { app, type IpcMain } from 'electron'
 import { findBinaryInPath } from '../utils/env'
+import { broadcast } from '../utils/broadcast'
 import { validateString } from '../utils/validate'
 import { sanitizeError } from '../utils/errors'
 import { getMainWindow } from '../index'
@@ -36,6 +37,7 @@ function sendToRenderer(event: string, data: unknown): void {
   if (win && !win.isDestroyed()) {
     win.webContents.send(event, data)
   }
+  broadcast(event, data)
 }
 
 function nextRequestId(kernel: KernelProcess): string {

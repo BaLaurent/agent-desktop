@@ -1,6 +1,7 @@
 import { autoUpdater } from 'electron-updater'
 import { app, BrowserWindow, shell, Notification } from 'electron'
 import type { IpcMain } from 'electron'
+import { broadcast } from '../utils/broadcast'
 import type { UpdateInfo, UpdateStatus } from '../../shared/types'
 
 let checkInterval: ReturnType<typeof setInterval> | null = null
@@ -15,6 +16,7 @@ function sendStatus(status: UpdateStatus): void {
   if (win && !win.isDestroyed()) {
     win.webContents.send('updates:status', status)
   }
+  broadcast('updates:status', status)
 }
 
 function isDebInstall(): boolean {

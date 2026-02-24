@@ -26,10 +26,19 @@ interface ConversationsState {
   importConversation: (data: string) => Promise<void>
 }
 
+const WEB_MODE = typeof window !== 'undefined' && !!(window as any).__AGENT_WEB_MODE__
+const SESSION_KEY = 'agent_activeConversationId'
+
+function readSavedConversationId(): number | null {
+  if (!WEB_MODE) return null
+  const saved = sessionStorage.getItem(SESSION_KEY)
+  return saved ? Number(saved) : null
+}
+
 export const useConversationsStore = create<ConversationsState>((set, get) => ({
   conversations: [],
   folders: [],
-  activeConversationId: null,
+  activeConversationId: readSavedConversationId(),
   searchQuery: '',
   isLoading: false,
 
@@ -48,6 +57,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
     const conversation = await window.agent.conversations.create(title)
     set((s) => ({ conversations: [conversation, ...s.conversations] }))
     set({ activeConversationId: conversation.id })
+    if (WEB_MODE) sessionStorage.setItem(SESSION_KEY, String(conversation.id))
     return conversation
   },
 
@@ -72,6 +82,10 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
   setActiveConversation: (id) => {
     set({ activeConversationId: id })
+    if (WEB_MODE) {
+      if (id !== null) sessionStorage.setItem(SESSION_KEY, String(id))
+      else sessionStorage.removeItem(SESSION_KEY)
+    }
   },
 
   searchConversations: async (query) => {

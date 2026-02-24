@@ -13,6 +13,7 @@ import { parseAccelerator, matchesEvent } from './utils/shortcutMatcher'
 import { parseOverrides, resolveEffectiveSettings } from './utils/resolveAISettings'
 import { OverlayChat } from './components/overlay/OverlayChat'
 import { SchedulerPage } from './components/scheduler/SchedulerPage'
+import { useMobileMode } from './hooks/useMobileMode'
 
 const params = new URLSearchParams(window.location.search)
 const isOverlay = params.get('mode') === 'overlay'
@@ -125,17 +126,18 @@ export default function App() {
   }, [])
 
   const showTitlebar = useSettingsStore((s) => s.settings.showTitlebar) !== 'false'
+  const mobile = useMobileMode()
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen" style={{ height: '100dvh' }}>
       {showTitlebar ? (
         <Titlebar onOpenSettings={openSettings} />
-      ) : (
+      ) : !mobile ? (
         <div
           className="flex-shrink-0"
           style={{ height: 6, WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
-      )}
+      ) : null}
       <AuthGuard>
         <MainLayout
           onOpenSettings={!showTitlebar ? openSettings : undefined}
