@@ -47,6 +47,7 @@ mac:
     NSMicrophoneUsageDescription: "Agent Desktop uses the microphone for voice input transcription (via whisper.cpp). Audio is processed locally and never sent to any server."
 
 linux:
+  artifactName: "${name}-${version}-${arch}.${ext}"
   target:
     - target: AppImage
       arch:

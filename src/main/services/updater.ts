@@ -77,11 +77,15 @@ export function initAutoUpdater(
   })
 
   autoUpdater.on('error', (err) => {
-    // 404 for latest-*.yml is expected when no release metadata exists yet
-    if (err.message?.includes('latest-linux.yml') || err.message?.includes('latest-mac.yml') || err.message?.includes('latest.yml')) {
+    const isMetadataNotFound = err.message?.includes('latest-linux.yml')
+      || err.message?.includes('latest-mac.yml')
+      || err.message?.includes('latest.yml')
+    if (isMetadataNotFound) {
+      console.log('[updater] Update metadata not found:', err.message)
       sendStatus({ state: 'not-available' })
       return
     }
+    console.error('[updater] Update error:', err.message)
     sendStatus({ state: 'error', message: err.message })
   })
 

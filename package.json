@@ -12,6 +12,8 @@
     "dist:linux": "electron-builder --linux",
     "dist:win": "electron-builder --win",
     "publish:mac": "electron-vite build && electron-builder --mac --publish always",
+    "publish:linux": "electron-vite build && electron-builder --linux --publish always",
+    "publish:win": "electron-vite build && electron-builder --win --publish always",
     "test": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts",
     "test:main": "vitest run --config vitest.config.main.ts",
     "test:renderer": "vitest run --config vitest.config.renderer.ts",
