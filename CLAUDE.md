@@ -38,7 +38,13 @@
 - No file size limits on `readFile`; `MAX_PASTE_SIZE = 5MB` only for clipboard paste
 - Auto-refresh on stream finish; `artifacts` table left inert (no migration needed)
 - Theme apply: when CWD is `~/.agent-desktop/themes/`, `.css` files show Apply/Active buttons
-- Context menu: Open Default App, Reveal, Copy Path, Rename (inline), Duplicate, Move to Trash
+- Context menu: Open Default App, Reveal, Copy Path, Rename (inline), Duplicate, Move to Trash, New Conversation from Files
+- **Multi-file selection**: Ctrl+click (toggle) and Shift+click (range) — OS file manager pattern; `multiSelectedPaths: Set<string>` in store, independent of `selectedFilePath` (viewer)
+  - Right-click auto-adds node to multi-selection; context menu shows "New conversation with N items"
+  - `files:prepareSession` IPC: copies or symlinks selected files into new conversation's session folder (dedup with `_1`, `_2` suffixes)
+  - `NewConversationFromFilesModal`: confirmation dialog with copy/symlink method selector
+  - `getVisibleNodePaths()` pure DFS helper computes range for Shift+click (only expanded nodes)
+  - Normal click clears multi-selection; `loadTree`/`clear`/`refresh` reset it
 - `@mention` uses VS Code-style fuzzy matching (`src/renderer/utils/fuzzyMatch.ts`)
 - **Expand button**: "Expand" button routes to `CodeEditorModal` (source/code mode) or `PreviewModal` (preview/images); visible for all file types
 - **Markdown anchor links**: headings get slugified `id` attributes; `#` links scroll within container instead of calling `openExternal`

@@ -759,4 +759,123 @@ describe('files IPC handlers', () => {
       await expect(ipc.invoke('files:createFolder', '/proc', 'test')).rejects.toThrow('protected directory')
     })
   })
+
+  describe('files:prepareSession', () => {
+    // prepareSession writes to ~/.agent-desktop/sessions-folder/{id}/
+    // app.getPath('home') is mocked to /tmp/test-agent
+    const sessionsBase = join('/tmp/test-agent', '.agent-desktop', 'sessions-folder')
+
+    afterEach(() => {
+      try { rmSync(sessionsBase, { recursive: true, force: true }) } catch { /* ignore */ }
+    })
+
+    it('copies files to session folder', async () => {
+      const srcFile = join(testDir, 'hello.txt')
+      writeFileSync(srcFile, 'hello world')
+
+      const result = await ipc.invoke('files:prepareSession', 1, [srcFile], 'copy')
+      const destDir = join(sessionsBase, '1')
+
+      expect(result.cwd).toBe(destDir)
+      expect(result.count).toBe(1)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'hello.txt'), 'utf-8')).toBe('hello world')
+    })
+
+    it('creates symlinks with method symlink', async () => {
+      const srcFile = join(testDir, 'link-target.txt')
+      writeFileSync(srcFile, 'linked content')
+
+      const result = await ipc.invoke('files:prepareSession', 2, [srcFile], 'symlink')
+      const destDir = join(sessionsBase, '2')
+
+      expect(result.cwd).toBe(destDir)
+      expect(result.count).toBe(1)
+
+      const { lstatSync, readFileSync } = await import('fs')
+      const linkPath = join(destDir, 'link-target.txt')
+      expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+      expect(readFileSync(linkPath, 'utf-8')).toBe('linked content')
+    })
+
+    it('handles name collisions by appending _N suffix', async () => {
+      const srcFile = join(testDir, 'dup.txt')
+      writeFileSync(srcFile, 'first')
+
+      // First copy to create the collision
+      await ipc.invoke('files:prepareSession', 3, [srcFile], 'copy')
+
+      // Write different content and copy again
+      writeFileSync(srcFile, 'second')
+      const result = await ipc.invoke('files:prepareSession', 3, [srcFile], 'copy')
+      const destDir = join(sessionsBase, '3')
+
+      expect(result.count).toBe(1)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'dup.txt'), 'utf-8')).toBe('first')
+      expect(readFileSync(join(destDir, 'dup_1.txt'), 'utf-8')).toBe('second')
+    })
+
+    it('copies directories recursively', async () => {
+      const srcDir = join(testDir, 'myproject')
+      mkdirSync(srcDir)
+      writeFileSync(join(srcDir, 'index.ts'), 'const x = 1')
+      mkdirSync(join(srcDir, 'sub'))
+      writeFileSync(join(srcDir, 'sub', 'nested.txt'), 'deep')
+
+      const result = await ipc.invoke('files:prepareSession', 4, [srcDir], 'copy')
+      const destDir = join(sessionsBase, '4')
+
+      expect(result.cwd).toBe(destDir)
+      expect(result.count).toBe(1)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'myproject', 'index.ts'), 'utf-8')).toBe('const x = 1')
+      expect(readFileSync(join(destDir, 'myproject', 'sub', 'nested.txt'), 'utf-8')).toBe('deep')
+    })
+
+    it('validates conversationId as positive integer', async () => {
+      const srcFile = join(testDir, 'valid.txt')
+      writeFileSync(srcFile, 'ok')
+
+      await expect(ipc.invoke('files:prepareSession', 0, [srcFile], 'copy')).rejects.toThrow('positive integer')
+      await expect(ipc.invoke('files:prepareSession', -1, [srcFile], 'copy')).rejects.toThrow('positive integer')
+      await expect(ipc.invoke('files:prepareSession', 1.5, [srcFile], 'copy')).rejects.toThrow('positive integer')
+      await expect(ipc.invoke('files:prepareSession', 'abc' as any, [srcFile], 'copy')).rejects.toThrow('positive integer')
+    })
+
+    it('rejects empty sourcePaths array', async () => {
+      await expect(ipc.invoke('files:prepareSession', 1, [], 'copy')).rejects.toThrow('sourcePaths required')
+    })
+
+    it('rejects invalid method string', async () => {
+      const srcFile = join(testDir, 'valid.txt')
+      writeFileSync(srcFile, 'ok')
+
+      await expect(ipc.invoke('files:prepareSession', 1, [srcFile], 'move' as any)).rejects.toThrow('method must be copy or symlink')
+      await expect(ipc.invoke('files:prepareSession', 1, [srcFile], '' as any)).rejects.toThrow('method must be copy or symlink')
+    })
+
+    it('returns correct cwd and count for multiple files', async () => {
+      const file1 = join(testDir, 'a.txt')
+      const file2 = join(testDir, 'b.txt')
+      const file3 = join(testDir, 'c.txt')
+      writeFileSync(file1, 'aaa')
+      writeFileSync(file2, 'bbb')
+      writeFileSync(file3, 'ccc')
+
+      const result = await ipc.invoke('files:prepareSession', 5, [file1, file2, file3], 'copy')
+      const destDir = join(sessionsBase, '5')
+
+      expect(result.cwd).toBe(destDir)
+      expect(result.count).toBe(3)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'a.txt'), 'utf-8')).toBe('aaa')
+      expect(readFileSync(join(destDir, 'b.txt'), 'utf-8')).toBe('bbb')
+      expect(readFileSync(join(destDir, 'c.txt'), 'utf-8')).toBe('ccc')
+    })
+  })
 })
