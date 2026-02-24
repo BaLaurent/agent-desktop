@@ -181,4 +181,65 @@ describe('webServer', () => {
     const result2 = await startServer(port)
     expect(result1.token).toBe(result2.token)
   })
+
+  describe('WebSocket channel blocklist', () => {
+    async function invokeChannel(
+      ws: WebSocket,
+      token: string,
+      channel: string,
+      id: string,
+    ): Promise<any> {
+      const messages: any[] = []
+      return new Promise<any>((resolve, reject) => {
+        ws.on('open', () => {
+          ws.send(JSON.stringify({ type: 'auth', token }))
+        })
+        ws.on('message', (data) => {
+          const msg = JSON.parse(data.toString())
+          messages.push(msg)
+          if (msg.type === 'auth_result' && msg.success) {
+            ws.send(JSON.stringify({ type: 'invoke', id, channel, args: [] }))
+          }
+          if (msg.type === 'result') resolve(msg)
+        })
+        ws.on('error', reject)
+      })
+    }
+
+    it('blocks server:start via WebSocket', async () => {
+      const { token } = await startServer(port)
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const result = await invokeChannel(ws, token, 'server:start', '10')
+      expect(result.error).toContain('Channel not available via WebSocket: server:start')
+      ws.close()
+    })
+
+    it('blocks server:stop via WebSocket', async () => {
+      const { token } = await startServer(port)
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const result = await invokeChannel(ws, token, 'server:stop', '11')
+      expect(result.error).toContain('Channel not available via WebSocket: server:stop')
+      ws.close()
+    })
+
+    it('blocks openscad:exportStl via WebSocket', async () => {
+      const { token } = await startServer(port)
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const result = await invokeChannel(ws, token, 'openscad:exportStl', '12')
+      expect(result.error).toContain('Channel not available via WebSocket: openscad:exportStl')
+      ws.close()
+    })
+
+    it('does not block a normal registered channel', async () => {
+      const { token } = await startServer(port)
+
+      ipcDispatch.set('test:ping', async () => 'pong')
+
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const result = await invokeChannel(ws, token, 'test:ping', '13')
+      expect(result.error).toBeUndefined()
+      expect(result.result).toBe('pong')
+      ws.close()
+    })
+  })
 })

@@ -270,7 +270,7 @@
 - **URL whitelist**: `system:openExternal` only allows `http:`/`https:` protocols
 - **Path traversal**: `validatePathSafe()` blocks `/proc`, `/sys`, `/dev`, `/boot`, `/sbin`, `/etc`
 - **MCP command injection**: `DANGEROUS_CHARS` regex validates command field against shell metacharacters
-- **IPC validation**: `validateString`, `validatePositiveInt`, `validatePathSafe` on all handler entry points
+- **IPC validation**: `validateString`, `validatePositiveInt`, `validatePathSafe` on all handler entry points; note: `event.sender` is not used in any handler (WebSocket invokes pass `null` event) so safe for web server dispatch
 - **CWD restriction hooks** (`cwdHooks.ts`): PreToolUse hook denies writes outside CWD
   - **Gotcha**: must use `'deny'` not `'ask'` — bypass mode auto-approves `'ask'` decisions
   - Tilde expansion: `~/path` → `$HOME/path` before path resolution
@@ -345,7 +345,7 @@
 - **Firewall detection**: `getServerStatus()` returns `firewallWarning` string — async `detectFirewallBlock()` checks nftables, iptables, ufw for DROP policies missing the port; 60s cache (`firewallCache`) avoids repeated subprocess calls; displayed in settings UI
 - **Shutdown order**: `stopServer()` is async — closes all WS clients, then awaits `wss.close()`, then awaits `httpServer.close()` (chained, not parallel)
 - **maxPayload**: `WebSocketServer` configured with `maxPayload: 10MB` to prevent oversized messages
-- **Shim namespaces**: `server` namespace stubbed as no-ops in shim (web clients cannot start/stop the server)
+- **Shim namespaces & security**: `server` namespace stubbed as no-ops in shim (web clients cannot start/stop the server); server-side blocklist in `handleWsMessage()` blocks `server:*` channels and `openscad:exportStl` from WebSocket invocation (defense-in-depth)
 - **LAN IP**: skips virtual interfaces (docker, tailscale, veth, etc.); falls back to any non-internal IPv4
 - Dependencies: `ws` (WebSocket server), `qrcode` (QR code SVG in renderer)
 
