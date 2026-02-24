@@ -341,7 +341,10 @@
 - **Dev mode**: proxies HTTP to `ELECTRON_RENDERER_URL` with shim injection
 - Settings: `server_enabled`, `server_port` (default 3484), `server_autoStart`; toggle in Settings > Web Server
 - IPC: `server:start`, `server:stop`, `server:getStatus`; preload `window.agent.server.*`
-- **Firewall detection**: `getServerStatus()` returns `firewallWarning` string — checks nftables, iptables, ufw for DROP policies missing the port; displayed in settings UI
+- **Firewall detection**: `getServerStatus()` returns `firewallWarning` string — async `detectFirewallBlock()` checks nftables, iptables, ufw for DROP policies missing the port; 60s cache (`firewallCache`) avoids repeated subprocess calls; displayed in settings UI
+- **Shutdown order**: `stopServer()` is async — closes all WS clients, then awaits `wss.close()`, then awaits `httpServer.close()` (chained, not parallel)
+- **maxPayload**: `WebSocketServer` configured with `maxPayload: 10MB` to prevent oversized messages
+- **Shim namespaces**: `server` namespace stubbed as no-ops in shim (web clients cannot start/stop the server)
 - **LAN IP**: skips virtual interfaces (docker, tailscale, veth, etc.); falls back to any non-internal IPv4
 - Dependencies: `ws` (WebSocket server), `qrcode` (QR code SVG in renderer)
 
@@ -359,6 +362,13 @@
 - **Safe areas**: `mobile-safe-bottom`/`mobile-safe-top` CSS classes use `env(safe-area-inset-*)` for notched devices; applied to input area and top bar
 - **Modals/popovers**: `max-w-[calc(100vw-1rem)]` on mobile to prevent offscreen overflow (TaskFormModal, FolderSettingsPopover, AIOverridesPopover)
 - **Gotcha**: `useMobileMode` checks only `__AGENT_WEB_MODE__`, not screen size — desktop browser via web server gets mobile layout (intentional: touch-friendly for all remote access)
+
+## Mobile Swipe Gestures
+- `src/renderer/hooks/useEdgeSwipe.ts` — two hooks for touch navigation on mobile (web server mode)
+- **`useEdgeSwipe(onLeft, onRight, opts?)`**: detects swipes starting from screen edges (24px zone); used in `MainLayout` to open sidebar (swipe from left) and file explorer (swipe from right)
+- **`useSwipeDismiss(direction, onSwipe, opts?)`**: detects swipe anywhere on screen to dismiss overlays; swipe left closes sidebar, swipe right closes file explorer panel
+- Both hooks use `touchstart`/`touchend` (passive), threshold + maxVerticalDrift guards; callbacks stored in refs (no re-registration on prop changes)
+- **File explorer on mobile**: overlay panel (`fixed top-0 right-0 z-40`, `min(100vw, 360px)` width) replaces the resizable side panel used on desktop; `ChatView` header shows a folder icon button to toggle it via `useUiStore.togglePanel`
 
 ## IPC Timeout
 - All `ipcRenderer.invoke()` wrapped with `withTimeout()` (default 30s); `ms <= 0` disables timeout
