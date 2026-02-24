@@ -3,9 +3,9 @@ import type Database from 'better-sqlite3'
 import { promises as fsp } from 'fs'
 import { join, extname, dirname, basename } from 'path'
 import os from 'os'
-import { shell } from 'electron'
+import { shell, app } from 'electron'
 import type { FileNode } from '../../shared/types'
-import { validateString, validatePathSafe } from '../utils/validate'
+import { validateString, validatePathSafe, validatePositiveInt } from '../utils/validate'
 import { expandTilde } from '../utils/paths'
 import { IMAGE_EXTS, getImageMime, mimeToExt } from '../utils/mime'
 
@@ -369,5 +369,55 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     const tmpPath = join(tmpDir, filename)
     await fsp.writeFile(tmpPath, Buffer.from(data))
     return tmpPath
+  })
+
+  ipcMain.handle('files:prepareSession', async (
+    _event,
+    conversationId: number,
+    sourcePaths: string[],
+    method: 'copy' | 'symlink'
+  ) => {
+    validatePositiveInt(conversationId, 'conversationId')
+    if (!Array.isArray(sourcePaths) || sourcePaths.length === 0) throw new Error('sourcePaths required')
+    if (sourcePaths.length > 200) throw new Error('Too many files (max 200)')
+    if (method !== 'copy' && method !== 'symlink') throw new Error('method must be copy or symlink')
+
+    const sessionsBase = join(app.getPath('home'), '.agent-desktop', 'sessions-folder')
+    const destDir = join(sessionsBase, String(conversationId))
+    await fsp.mkdir(destDir, { recursive: true })
+
+    let count = 0
+    for (const src of sourcePaths) {
+      validateString(src, 'sourcePath', 2000)
+      const resolvedSrc = expandTilde(src)
+      validatePathSafe(resolvedSrc)
+
+      const name = basename(resolvedSrc)
+      let dest = join(destDir, name)
+
+      // Inline dedup: try name, then name_1, name_2...
+      if (await fsp.access(dest).then(() => true, () => false)) {
+        const ext = extname(name)
+        const base = basename(name, ext)
+        for (let i = 1; i < 1000; i++) {
+          dest = join(destDir, `${base}_${i}${ext}`)
+          if (!await fsp.access(dest).then(() => true, () => false)) break
+        }
+      }
+
+      if (method === 'copy') {
+        const stat = await fsp.stat(resolvedSrc)
+        if (stat.isDirectory()) {
+          await fsp.cp(resolvedSrc, dest, { recursive: true })
+        } else {
+          await fsp.copyFile(resolvedSrc, dest)
+        }
+      } else {
+        await fsp.symlink(resolvedSrc, dest)
+      }
+      count++
+    }
+
+    return { cwd: destDir, count }
   })
 }

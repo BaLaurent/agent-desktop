@@ -40,7 +40,12 @@ interface FileExplorerState {
   viewMode: ViewMode
   jsTrustedFolders: string[]
   jsTrustAll: boolean
+  multiSelectedPaths: Set<string>
+  lastClickedPath: string | null
 
+  toggleMultiSelect: (filePath: string) => void
+  rangeSelect: (filePath: string, visiblePaths: string[]) => void
+  clearMultiSelection: () => void
   loadTree: (cwd: string) => Promise<void>
   expandDir: (dirPath: string) => Promise<void>
   collapseDir: (dirPath: string) => void
@@ -74,6 +79,49 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
   viewMode: 'preview' as ViewMode,
   jsTrustedFolders: [],
   jsTrustAll: false,
+  multiSelectedPaths: new Set<string>(),
+  lastClickedPath: null,
+
+  toggleMultiSelect: (filePath) => {
+    const next = new Set(get().multiSelectedPaths)
+    if (next.has(filePath)) {
+      next.delete(filePath)
+    } else {
+      next.add(filePath)
+    }
+    set({ multiSelectedPaths: next, lastClickedPath: filePath })
+  },
+
+  rangeSelect: (filePath, visiblePaths) => {
+    const { lastClickedPath, multiSelectedPaths } = get()
+    if (!lastClickedPath) {
+      // No prior click — treat as single toggle
+      const next = new Set(multiSelectedPaths)
+      next.add(filePath)
+      set({ multiSelectedPaths: next, lastClickedPath: filePath })
+      return
+    }
+    const startIdx = visiblePaths.indexOf(lastClickedPath)
+    const endIdx = visiblePaths.indexOf(filePath)
+    if (startIdx === -1 || endIdx === -1) {
+      // Fallback: single toggle
+      const next = new Set(multiSelectedPaths)
+      next.add(filePath)
+      set({ multiSelectedPaths: next, lastClickedPath: filePath })
+      return
+    }
+    const lo = Math.min(startIdx, endIdx)
+    const hi = Math.max(startIdx, endIdx)
+    const next = new Set(multiSelectedPaths)
+    for (let i = lo; i <= hi; i++) {
+      next.add(visiblePaths[i])
+    }
+    set({ multiSelectedPaths: next, lastClickedPath: filePath })
+  },
+
+  clearMultiSelection: () => {
+    set({ multiSelectedPaths: new Set(), lastClickedPath: null })
+  },
 
   loadTree: async (cwd) => {
     set({ loading: true, error: null })
@@ -82,6 +130,7 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
       set({
         tree, cwd,
         expandedPaths: new Set(),
+        multiSelectedPaths: new Set(), lastClickedPath: null,
         selectedFilePath: null, fileContent: null, fileLanguage: null, fileWarning: null,
         editorContent: null, isDirty: false,
         loading: false,
@@ -134,7 +183,7 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
   },
 
   selectFile: async (filePath) => {
-    set({ loading: true, error: null, editorContent: null, isDirty: false, viewMode: 'preview', fileWarning: null })
+    set({ loading: true, error: null, editorContent: null, isDirty: false, viewMode: 'preview', fileWarning: null, multiSelectedPaths: new Set(), lastClickedPath: filePath })
     try {
       const { content, language, warning } = await window.agent.files.readFile(filePath)
       set({ selectedFilePath: filePath, fileContent: content, fileLanguage: language, fileWarning: warning || null, loading: false })
@@ -175,6 +224,7 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
       set({
         tree,
         expandedPaths: stillExpanded,
+        multiSelectedPaths: new Set(), lastClickedPath: null,
         loading: false,
         ...(selStillExists
           ? {}
@@ -188,6 +238,8 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
   clear: () => set({
     tree: [],
     expandedPaths: new Set(),
+    multiSelectedPaths: new Set(),
+    lastClickedPath: null,
     selectedFilePath: null,
     fileContent: null,
     fileLanguage: null,

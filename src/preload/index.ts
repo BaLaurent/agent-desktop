@@ -60,6 +60,8 @@ const api: AgentAPI = {
     move: (sourcePath: string, destDir: string) => withTimeout(ipcRenderer.invoke('files:move', sourcePath, destDir)),
     createFile: (dirPath: string, name: string) => withTimeout(ipcRenderer.invoke('files:createFile', dirPath, name)),
     createFolder: (dirPath: string, name: string) => withTimeout(ipcRenderer.invoke('files:createFolder', dirPath, name)),
+    prepareSession: (conversationId: number, sourcePaths: string[], method: 'copy' | 'symlink') =>
+      withTimeout(ipcRenderer.invoke('files:prepareSession', conversationId, sourcePaths, method), 60000),
   },
   folders: {
     list: () => withTimeout(ipcRenderer.invoke('folders:list')),

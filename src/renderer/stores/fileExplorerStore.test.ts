@@ -448,3 +448,281 @@ describe('fileExplorerStore', () => {
     expect(state.jsTrustAll).toBe(false)
   })
 })
+
+// ── Multi-selection ─────────────────────────────────────────
+
+describe('fileExplorerStore multi-selection', () => {
+  beforeEach(() => {
+    act(() => {
+      useFileExplorerStore.getState().clear()
+    })
+  })
+
+  const visiblePaths = ['/a/one.ts', '/a/two.ts', '/a/three.ts', '/a/four.ts', '/a/five.ts']
+
+  // ── toggleMultiSelect ───────────────────────────────────
+
+  it('toggleMultiSelect adds path to empty set', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.has('/a/one.ts')).toBe(true)
+    expect(state.multiSelectedPaths.size).toBe(1)
+  })
+
+  it('toggleMultiSelect removes path if already present', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    expect(useFileExplorerStore.getState().multiSelectedPaths.size).toBe(0)
+  })
+
+  it('toggleMultiSelect updates lastClickedPath', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+    expect(useFileExplorerStore.getState().lastClickedPath).toBe('/a/one.ts')
+
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+    expect(useFileExplorerStore.getState().lastClickedPath).toBe('/a/two.ts')
+  })
+
+  it('toggleMultiSelect does not touch selectedFilePath', () => {
+    useFileExplorerStore.setState({ selectedFilePath: '/existing/file.ts' })
+
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    expect(useFileExplorerStore.getState().selectedFilePath).toBe('/existing/file.ts')
+  })
+
+  it('toggleMultiSelect accumulates multiple paths', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+
+    const paths = useFileExplorerStore.getState().multiSelectedPaths
+    expect(paths.size).toBe(2)
+    expect(paths.has('/a/one.ts')).toBe(true)
+    expect(paths.has('/a/two.ts')).toBe(true)
+  })
+
+  // ── rangeSelect ─────────────────────────────────────────
+
+  it('rangeSelect selects range between lastClickedPath and target', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/a/four.ts', visiblePaths)
+    })
+
+    const paths = useFileExplorerStore.getState().multiSelectedPaths
+    expect(paths.has('/a/two.ts')).toBe(true)
+    expect(paths.has('/a/three.ts')).toBe(true)
+    expect(paths.has('/a/four.ts')).toBe(true)
+    expect(paths.has('/a/one.ts')).toBe(false)
+    expect(paths.has('/a/five.ts')).toBe(false)
+  })
+
+  it('rangeSelect works in reverse direction', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/four.ts')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/a/two.ts', visiblePaths)
+    })
+
+    const paths = useFileExplorerStore.getState().multiSelectedPaths
+    expect(paths.has('/a/two.ts')).toBe(true)
+    expect(paths.has('/a/three.ts')).toBe(true)
+    expect(paths.has('/a/four.ts')).toBe(true)
+  })
+
+  it('rangeSelect falls back to single add if no lastClickedPath', () => {
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/a/three.ts', visiblePaths)
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.size).toBe(1)
+    expect(state.multiSelectedPaths.has('/a/three.ts')).toBe(true)
+    expect(state.lastClickedPath).toBe('/a/three.ts')
+  })
+
+  it('rangeSelect falls back if lastClickedPath not in visiblePaths', () => {
+    useFileExplorerStore.setState({ lastClickedPath: '/not/visible.ts' })
+
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/a/three.ts', visiblePaths)
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.size).toBe(1)
+    expect(state.multiSelectedPaths.has('/a/three.ts')).toBe(true)
+  })
+
+  it('rangeSelect falls back if target not in visiblePaths', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/not/visible.ts', visiblePaths)
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.has('/not/visible.ts')).toBe(true)
+    expect(state.multiSelectedPaths.has('/a/one.ts')).toBe(true)
+  })
+
+  it('rangeSelect adds to existing selection', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    useFileExplorerStore.setState({
+      lastClickedPath: '/a/three.ts',
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/a/five.ts', visiblePaths)
+    })
+
+    const paths = useFileExplorerStore.getState().multiSelectedPaths
+    expect(paths.has('/a/one.ts')).toBe(true)
+    expect(paths.has('/a/three.ts')).toBe(true)
+    expect(paths.has('/a/four.ts')).toBe(true)
+    expect(paths.has('/a/five.ts')).toBe(true)
+  })
+
+  it('rangeSelect updates lastClickedPath', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().rangeSelect('/a/four.ts', visiblePaths)
+    })
+
+    expect(useFileExplorerStore.getState().lastClickedPath).toBe('/a/four.ts')
+  })
+
+  // ── clearMultiSelection ─────────────────────────────────
+
+  it('clearMultiSelection clears multiSelectedPaths and lastClickedPath', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().clearMultiSelection()
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.size).toBe(0)
+    expect(state.lastClickedPath).toBeNull()
+  })
+
+  // ── selectFile clears multi-selection ───────────────────
+
+  it('selectFile clears multiSelectedPaths', async () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+
+    mockAgent.files.readFile.mockResolvedValueOnce({ content: 'code', language: 'typescript' })
+    await act(async () => {
+      await useFileExplorerStore.getState().selectFile('/a/one.ts')
+    })
+
+    expect(useFileExplorerStore.getState().multiSelectedPaths.size).toBe(0)
+  })
+
+  it('selectFile sets lastClickedPath to the selected file', async () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+
+    mockAgent.files.readFile.mockResolvedValueOnce({ content: 'code', language: 'typescript' })
+    await act(async () => {
+      await useFileExplorerStore.getState().selectFile('/a/one.ts')
+    })
+
+    expect(useFileExplorerStore.getState().lastClickedPath).toBe('/a/one.ts')
+  })
+
+  // ── loadTree / clear / refresh reset multi-selection ────
+
+  it('loadTree resets multiSelectedPaths and lastClickedPath', async () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/two.ts')
+    })
+
+    mockAgent.files.listDir.mockResolvedValueOnce([])
+    await act(async () => {
+      await useFileExplorerStore.getState().loadTree('/test')
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.size).toBe(0)
+    expect(state.lastClickedPath).toBeNull()
+  })
+
+  it('clear resets multiSelectedPaths and lastClickedPath', () => {
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().clear()
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.size).toBe(0)
+    expect(state.lastClickedPath).toBeNull()
+  })
+
+  it('refresh resets multiSelectedPaths and lastClickedPath', async () => {
+    mockAgent.files.listDir.mockResolvedValueOnce([])
+    await act(async () => {
+      await useFileExplorerStore.getState().loadTree('/test')
+    })
+
+    act(() => {
+      useFileExplorerStore.getState().toggleMultiSelect('/a/one.ts')
+    })
+
+    mockAgent.files.listDir.mockResolvedValueOnce([])
+    await act(async () => {
+      await useFileExplorerStore.getState().refresh()
+    })
+
+    const state = useFileExplorerStore.getState()
+    expect(state.multiSelectedPaths.size).toBe(0)
+    expect(state.lastClickedPath).toBeNull()
+  })
+})

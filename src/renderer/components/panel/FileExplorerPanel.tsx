@@ -10,8 +10,10 @@ import { SvgPreview } from '../artifacts/SvgPreview'
 import { NotebookPreview } from '../artifacts/NotebookPreview'
 import { CodeEditorModal } from './CodeEditorModal'
 import { PreviewModal } from './PreviewModal'
+import { NewConversationFromFilesModal } from './NewConversationFromFilesModal'
 import type { FileNode } from '../../../shared/types'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useConversationsStore } from '../../stores/conversationsStore'
 
 function getFileExtension(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
@@ -111,6 +113,8 @@ interface ContextMenuProps {
   onRename: () => void
   onCreateFile?: (dirPath: string) => void
   onCreateFolder?: (dirPath: string) => void
+  multiSelectedCount: number
+  onNewConversationFromFiles?: () => void
 }
 
 function MenuItem({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
@@ -128,7 +132,7 @@ function MenuSeparator() {
   return <div className="my-1 mx-2 border-t border-base" />
 }
 
-function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreateFolder }: ContextMenuProps) {
+function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreateFolder, multiSelectedCount, onNewConversationFromFiles }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -210,6 +214,15 @@ function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreate
       <MenuItem label="Copy Path" onClick={handleCopyPath} />
       <MenuItem label="Rename" onClick={() => { onRename(); onClose() }} />
       <MenuItem label="Duplicate" onClick={handleDuplicate} />
+      {multiSelectedCount >= 1 && onNewConversationFromFiles && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            label={`New conversation with ${multiSelectedCount} item${multiSelectedCount !== 1 ? 's' : ''}`}
+            onClick={() => { onNewConversationFromFiles(); onClose() }}
+          />
+        </>
+      )}
       <MenuSeparator />
       <MenuItem label="Move to Trash" onClick={handleTrash} danger />
     </div>
@@ -280,12 +293,16 @@ interface FileTreeNodeProps {
   onDropOnFolder: (folderPath: string) => void
   onDragOverFolder: (folderPath: string) => void
   onDragLeaveFolder: () => void
+  multiSelectedPaths: Set<string>
+  onMultiToggle: (path: string) => void
+  onRangeSelect: (path: string) => void
 }
 
 function FileTreeNode({
   node, depth, selectedFilePath, expandedPaths, onToggleDir, onExpandDir, onSelect,
   onContextMenu, renamingPath, onRenameSubmit, onRenameCancel, isThemesCwd,
   onDragStart, onDragEnd, draggedPath, dropTargetPath, onDropOnFolder, onDragOverFolder, onDragLeaveFolder,
+  multiSelectedPaths, onMultiToggle, onRangeSelect,
 }: FileTreeNodeProps) {
   const expanded = node.isDirectory && expandedPaths.has(node.path)
   const autoExpandTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -355,10 +372,13 @@ function FileTreeNode({
       onDropOnFolder(node.path)
     }
 
+    const isDirMultiSelected = multiSelectedPaths.has(node.path)
+
     return (
       <div>
         <div
           className={`flex items-center${isDropTarget ? ' explorer-drop-active' : ''}`}
+          style={{ backgroundColor: isDirMultiSelected ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : undefined }}
           draggable={!isRenaming}
           onDragStart={handleDragStartNode}
           onDragEnd={handleDragEndNode}
@@ -368,7 +388,18 @@ function FileTreeNode({
           onDrop={handleFolderDrop}
         >
           <button
-            onClick={() => !isRenaming && onToggleDir(node.path)}
+            onClick={(e) => {
+              if (isRenaming) return
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault()
+                onMultiToggle(node.path)
+              } else if (e.shiftKey) {
+                e.preventDefault()
+                onRangeSelect(node.path)
+              } else {
+                onToggleDir(node.path)
+              }
+            }}
             onContextMenu={handleCtxMenu}
             className="w-full flex items-center gap-1 py-0.5 text-sm hover:opacity-80 transition-opacity text-left text-body"
             style={{ paddingLeft: depth * 16 + 8 }}
@@ -422,6 +453,9 @@ function FileTreeNode({
                 onDropOnFolder={onDropOnFolder}
                 onDragOverFolder={onDragOverFolder}
                 onDragLeaveFolder={onDragLeaveFolder}
+                multiSelectedPaths={multiSelectedPaths}
+                onMultiToggle={onMultiToggle}
+                onRangeSelect={onRangeSelect}
               />
             ))
           )
@@ -431,6 +465,7 @@ function FileTreeNode({
   }
 
   const isSelected = node.path === selectedFilePath
+  const isMultiSelected = multiSelectedPaths.has(node.path)
   const showApply = isThemesCwd && node.name.endsWith('.css') && !isRenaming
 
   return (
@@ -438,14 +473,29 @@ function FileTreeNode({
       className="flex items-center rounded"
       style={{
         paddingLeft: depth * 16 + 8,
-        backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 20%, transparent)' : 'transparent',
+        backgroundColor: isSelected
+          ? 'color-mix(in srgb, var(--color-primary) 20%, transparent)'
+          : isMultiSelected
+            ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)'
+            : 'transparent',
       }}
       draggable={!isRenaming}
       onDragStart={handleDragStartNode}
       onDragEnd={handleDragEndNode}
     >
       <button
-        onClick={() => !isRenaming && onSelect(node.path)}
+        onClick={(e) => {
+          if (isRenaming) return
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault()
+            onMultiToggle(node.path)
+          } else if (e.shiftKey) {
+            e.preventDefault()
+            onRangeSelect(node.path)
+          } else {
+            onSelect(node.path)
+          }
+        }}
         onContextMenu={handleCtxMenu}
         className="flex-1 min-w-0 flex items-center gap-1 py-0.5 text-sm hover:opacity-80 transition-opacity text-left text-body"
         aria-selected={isSelected}
@@ -707,6 +757,20 @@ function JsPermissionBanner({ filePath, onAllowOnce, onTrustFolder, onTrustAll, 
 
 // ── Panel ─────────────────────────────────────────────────────
 
+function getVisibleNodePaths(nodes: FileNode[], expandedPaths: Set<string>): string[] {
+  const result: string[] = []
+  function walk(items: FileNode[]) {
+    for (const node of items) {
+      result.push(node.path)
+      if (node.isDirectory && expandedPaths.has(node.path) && node.children) {
+        walk(node.children)
+      }
+    }
+  }
+  walk(nodes)
+  return result
+}
+
 // ── Create Input ──────────────────────────────────────────────
 
 function CreateInput({ kind, onSubmit, onCancel }: {
@@ -756,9 +820,10 @@ function CreateInput({ kind, onSubmit, onCancel }: {
 }
 
 export function FileExplorerPanel() {
-  const { tree, selectedFilePath, fileContent, editorContent, fileLanguage, fileWarning, loading, error, refresh, selectFile, cwd, expandedPaths, toggleDir, expandDir, viewMode } = useFileExplorerStore()
+  const { tree, selectedFilePath, fileContent, editorContent, fileLanguage, fileWarning, loading, error, refresh, selectFile, cwd, expandedPaths, toggleDir, expandDir, viewMode, multiSelectedPaths, toggleMultiSelect, clearMultiSelection } = useFileExplorerStore()
   const themesCwd = isThemesDirectory(cwd)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
+  const [showNewConvModal, setShowNewConvModal] = useState(false)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [jsEnabled, setJsEnabled] = useState(false)
   const [jsPromptDismissed, setJsPromptDismissed] = useState(false)
@@ -811,6 +876,10 @@ export function FileExplorerPanel() {
   const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
     e.preventDefault()
     e.stopPropagation()
+    const { multiSelectedPaths, toggleMultiSelect } = useFileExplorerStore.getState()
+    if (!multiSelectedPaths.has(node.path)) {
+      toggleMultiSelect(node.path)
+    }
     setContextMenu({ x: e.clientX, y: e.clientY, node })
   }, [])
 
@@ -923,6 +992,33 @@ export function FileExplorerPanel() {
     finally { setExporting(false) }
   }, [selectedFilePath])
 
+  // ── Multi-select handlers ─────────────────────────────────
+  const handleRangeSelect = useCallback((filePath: string) => {
+    const { tree, expandedPaths } = useFileExplorerStore.getState()
+    const visible = getVisibleNodePaths(tree, expandedPaths)
+    useFileExplorerStore.getState().rangeSelect(filePath, visible)
+  }, [])
+
+  const handleNewConversationFromFiles = useCallback(async (method: 'copy' | 'symlink') => {
+    const { multiSelectedPaths, clearMultiSelection } = useFileExplorerStore.getState()
+    const paths = [...multiSelectedPaths]
+
+    const { conversations, activeConversationId } = useConversationsStore.getState()
+    const activeConv = conversations.find(c => c.id === activeConversationId)
+    const folderId = activeConv?.folder_id ?? null
+
+    const { createConversation, moveToFolder, updateConversation } = useConversationsStore.getState()
+    const newConv = await createConversation()
+
+    if (folderId !== null) {
+      await moveToFolder(newConv.id, folderId)
+    }
+
+    const result = await window.agent.files.prepareSession(newConv.id, paths, method)
+    await updateConversation(newConv.id, { cwd: result.cwd })
+    clearMultiSelection()
+  }, [])
+
   // Close context menu on tree scroll
   const treeRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -1025,6 +1121,9 @@ export function FileExplorerPanel() {
               onDropOnFolder={handleDropOnFolder}
               onDragOverFolder={handleDragOverFolder}
               onDragLeaveFolder={handleDragLeaveFolder}
+              multiSelectedPaths={multiSelectedPaths}
+              onMultiToggle={toggleMultiSelect}
+              onRangeSelect={handleRangeSelect}
             />
           ))
         )}
@@ -1099,6 +1198,8 @@ export function FileExplorerPanel() {
           onRename={handleStartRename}
           onCreateFile={handleCreateFileInDir}
           onCreateFolder={handleCreateFolderInDir}
+          multiSelectedCount={multiSelectedPaths.size}
+          onNewConversationFromFiles={() => setShowNewConvModal(true)}
         />
       )}
 
@@ -1120,6 +1221,14 @@ export function FileExplorerPanel() {
           language={fileLanguage}
           allowScripts={jsEnabled}
           onClose={() => setShowPreviewModal(false)}
+        />
+      )}
+
+      {showNewConvModal && multiSelectedPaths.size > 0 && (
+        <NewConversationFromFilesModal
+          paths={[...multiSelectedPaths]}
+          onConfirm={handleNewConversationFromFiles}
+          onClose={() => setShowNewConvModal(false)}
         />
       )}
     </div>

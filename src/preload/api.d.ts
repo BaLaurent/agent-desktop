@@ -65,6 +65,7 @@ export interface AgentAPI {
     move(sourcePath: string, destDir: string): Promise<string>
     createFile(dirPath: string, name: string): Promise<string>
     createFolder(dirPath: string, name: string): Promise<string>
+    prepareSession(conversationId: number, sourcePaths: string[], method: 'copy' | 'symlink'): Promise<{ cwd: string; count: number }>
   }
   folders: {
     list(): Promise<Folder[]>
