@@ -48,6 +48,7 @@ const DEFAULT_KEYBINDINGS: Record<string, string> = {
   quick_chat: 'Alt+Space',
   quick_voice: 'Alt+Shift+Space',
   show_app: 'Super+A',
+  stop_tts: 'Ctrl+Shift+T',
 }
 
 export function ShortcutSettings() {

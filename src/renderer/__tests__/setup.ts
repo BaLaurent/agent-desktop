@@ -5,6 +5,8 @@ import '@testing-library/jest-dom'
 export let capturedStreamListener: ((chunk: unknown) => void) | null = null
 // Captured conversation-updated listener — set when chatStore module registers its onConversationUpdated handler
 export let capturedConversationUpdatedListener: ((conversationId: number) => void) | null = null
+// Captured TTS state-change listener — set when ttsStore module registers its onStateChange handler
+export let capturedTtsStateListener: ((state: { speaking: boolean; messageId?: number }) => void) | null = null
 
 export const mockAgent = {
   auth: {
@@ -96,6 +98,17 @@ export const mockAgent = {
   whisper: {
     transcribe: vi.fn().mockResolvedValue({ text: '' }),
     validateConfig: vi.fn().mockResolvedValue({ binaryFound: true, modelFound: true, binaryPath: 'whisper-cli', modelPath: '/model.bin' }),
+  },
+  tts: {
+    speak: vi.fn().mockResolvedValue(undefined),
+    speakMessage: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    validate: vi.fn().mockResolvedValue({ provider: null, providerFound: false, playerFound: false, playerPath: '' }),
+    detectPlayers: vi.fn().mockResolvedValue([]),
+    onStateChange: vi.fn().mockImplementation((cb: (state: { speaking: boolean; messageId?: number }) => void) => {
+      capturedTtsStateListener = cb
+      return () => {}
+    }),
   },
   voice: {
     duck: vi.fn().mockResolvedValue(undefined),

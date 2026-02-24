@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCallsSection } from './ToolCallsSection'
-import type { Message } from '../../../shared/types'
+import { TaskFormModal } from '../scheduler/TaskFormModal'
+import { useTtsStore } from '../../stores/ttsStore'
+import { useSettingsStore } from '../../stores/settingsStore'
+import type { Message, CreateScheduledTask } from '../../../shared/types'
 
 interface MessageBubbleProps {
   message: Message
@@ -28,8 +31,17 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [showActions, setShowActions] = useState(false)
+  const [showTaskForm, setShowTaskForm] = useState(false)
 
   const isUser = message.role === 'user'
+
+  const speakingMessageId = useTtsStore((s) => s.speakingMessageId)
+  const { playMessage, stopPlayback } = useTtsStore()
+  const ttsProvider = useSettingsStore((s) => s.settings.tts_provider)
+  const ttsResponseMode = useSettingsStore((s) => s.settings.tts_responseMode)
+  const isSpeakingThis = speakingMessageId === message.id
+  const showTtsButton = !isUser && !!ttsProvider && ttsProvider !== 'off'
+    && !!ttsResponseMode && ttsResponseMode !== 'off'
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(message.content)
@@ -51,6 +63,10 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
     setIsEditing(false)
     setEditContent(message.content)
   }, [message.content])
+
+  const handleScheduleSave = useCallback(async (data: CreateScheduledTask) => {
+    await window.agent.scheduler.create(data)
+  }, [])
 
   return (
     <div
@@ -131,7 +147,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
         </div>
 
         {/* Hover actions */}
-        {showActions && !isEditing && (
+        {(showActions || isSpeakingThis) && !isEditing && (
           <div
             className="absolute -top-3 right-2 flex gap-1 rounded px-1 py-0.5 shadow-md"
             style={{ backgroundColor: 'var(--color-deep)' }}
@@ -144,6 +160,16 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             >
               Copy
             </button>
+            {showTtsButton && (
+              <button
+                onClick={() => isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)}
+                className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+                style={{ color: isSpeakingThis ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
+                title={isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
+              >
+                {isSpeakingThis ? 'Stop' : 'Play'}
+              </button>
+            )}
             {isUser && onEdit && (
               <button
                 onClick={handleStartEdit}
@@ -152,6 +178,16 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
                 title="Edit"
               >
                 Edit
+              </button>
+            )}
+            {isUser && (
+              <button
+                onClick={() => setShowTaskForm(true)}
+                className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--color-text-muted)' }}
+                title="Schedule as recurring task"
+              >
+                Schedule
               </button>
             )}
             {!isUser && isLast && onRegenerate && (
@@ -167,6 +203,15 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
           </div>
         )}
       </div>
+
+      {showTaskForm && (
+        <TaskFormModal
+          initialPrompt={message.content}
+          initialConversationId={message.conversation_id}
+          onSave={handleScheduleSave}
+          onClose={() => setShowTaskForm(false)}
+        />
+      )}
     </div>
   )
 }

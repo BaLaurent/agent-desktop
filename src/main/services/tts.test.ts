@@ -34,6 +34,12 @@ vi.mock('../utils/volume', () => ({
   restoreOtherStreams: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('./messages', () => ({
+  getAISettings: vi.fn(() => ({
+    ttsResponseMode: 'full',
+  })),
+}))
+
 // Mock child_process spawn with controllable process events
 let spawnCallbacks: Array<{
   proc: Record<string, (...args: unknown[]) => void>
@@ -73,13 +79,14 @@ vi.mock('fs', () => ({
 
 // ─── Imports (after mocks) ───────────────────────────────────
 
-import { stop, speak, speakResponse, validateConfig, detectPlayers, registerHandlers } from './tts'
+import { stop, speak, speakResponse, speakMessage, validateConfig, detectPlayers, registerHandlers } from './tts'
 import { findBinaryInPath } from '../utils/env'
 import { getSetting } from '../utils/db'
 import { loadAgentSDK } from './anthropic'
 import { injectApiKeyEnv } from './streaming'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { getMainWindow } from '../index'
+import { getAISettings } from './messages'
 
 const mockFindBinary = vi.mocked(findBinaryInPath)
 const mockGetSetting = vi.mocked(getSetting)
@@ -88,6 +95,7 @@ const mockInjectApiKey = vi.mocked(injectApiKeyEnv)
 const mockDuck = vi.mocked(duckOtherStreams)
 const mockRestore = vi.mocked(restoreOtherStreams)
 const mockGetMainWindow = vi.mocked(getMainWindow)
+const mockGetAISettings = vi.mocked(getAISettings)
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
@@ -155,7 +163,7 @@ describe('tts service', () => {
 
       stop()
 
-      expect(mockWin.webContents.send).toHaveBeenCalledWith('tts:stateChange', { speaking: false })
+      expect(mockWin.webContents.send).toHaveBeenCalledWith('tts:stateChange', { speaking: false, messageId: null })
     })
   })
 
@@ -312,8 +320,8 @@ describe('tts service', () => {
       const allCalls = mockWin.webContents.send.mock.calls.filter(
         (c: unknown[]) => c[0] === 'tts:stateChange'
       )
-      // Last call should be speaking: false
-      expect(allCalls[allCalls.length - 1][1]).toEqual({ speaking: false })
+      // Last call should be speaking: false (messageId is null because no speakMessage active)
+      expect(allCalls[allCalls.length - 1][1]).toEqual({ speaking: false, messageId: null })
     })
 
     it('calls edgetts provider with correct args', async () => {
@@ -759,6 +767,100 @@ describe('tts service', () => {
 
       const result = await ipc.invoke('tts:detectPlayers')
       expect(result).toHaveLength(4)
+    })
+
+    it('tts:speakMessage validates text input', async () => {
+      const ipc = createMockIpcMain()
+      registerHandlers(ipc as any, db)
+
+      await expect(ipc.invoke('tts:speakMessage', 42, 1, 1)).rejects.toThrow('text must be a string')
+    })
+
+    it('tts:speakMessage validates conversationId', async () => {
+      const ipc = createMockIpcMain()
+      registerHandlers(ipc as any, db)
+
+      await expect(ipc.invoke('tts:speakMessage', 'hello', 'bad', 1)).rejects.toThrow('conversationId must be a positive integer')
+    })
+
+    it('tts:speakMessage validates messageId', async () => {
+      const ipc = createMockIpcMain()
+      registerHandlers(ipc as any, db)
+
+      await expect(ipc.invoke('tts:speakMessage', 'hello', 1, 0)).rejects.toThrow('messageId must be a positive integer')
+    })
+
+    it('tts:speakMessage validates negative messageId', async () => {
+      const ipc = createMockIpcMain()
+      registerHandlers(ipc as any, db)
+
+      await expect(ipc.invoke('tts:speakMessage', 'hello', 1, -5)).rejects.toThrow('messageId must be a positive integer')
+    })
+
+    it('tts:speakMessage calls speakMessage with valid args', async () => {
+      settingsMap({ tts_provider: 'off' })
+      const ipc = createMockIpcMain()
+      registerHandlers(ipc as any, db)
+
+      // Should not throw — provider is off so speakResponse returns early
+      await expect(ipc.invoke('tts:speakMessage', 'hello', 1, 42)).resolves.toBeUndefined()
+    })
+  })
+
+  // ── speakMessage ────────────────────────────────────────────
+
+  describe('speakMessage', () => {
+    it('calls getAISettings then speakResponse', async () => {
+      // speakResponse will early-return because provider is 'off'
+      settingsMap({ tts_provider: 'off' })
+      mockGetAISettings.mockReturnValue({ ttsResponseMode: 'full' } as any)
+
+      await speakMessage('hello', db, 1, 42)
+
+      expect(mockGetAISettings).toHaveBeenCalledWith(db, 1)
+    })
+
+    it('sets and clears currentMessageId (visible via notifySpeakingState)', async () => {
+      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
+      mockGetMainWindow.mockReturnValue(mockWin as any)
+      // Use spd-say so speak() doesn't early-return — it reaches notifySpeakingState(true)
+      settingsMap({ tts_provider: 'spd-say' })
+      mockFindBinary.mockReturnValue('/usr/bin/spd-say')
+      mockGetAISettings.mockReturnValue({ ttsResponseMode: 'full' } as any)
+
+      const promise = speakMessage('hello', db, 1, 42)
+      await flush()
+
+      // speak() calls stopInternal() (no notification), then notifySpeakingState(true)
+      // with currentMessageId = 42
+      const trueCall = mockWin.webContents.send.mock.calls.find(
+        (c: unknown[]) => c[0] === 'tts:stateChange' && (c[1] as any).speaking === true
+      )
+      expect(trueCall).toBeDefined()
+      expect(trueCall![1]).toEqual({ speaking: true, messageId: 42 })
+
+      // Complete the spd-say process
+      resolveSpawnExit(0, 0)
+      await promise
+
+      // After completion, currentMessageId should be null — verify by calling stop()
+      mockWin.webContents.send.mockClear()
+      stop()
+      expect(mockWin.webContents.send).toHaveBeenCalledWith('tts:stateChange', { speaking: false, messageId: null })
+    })
+  })
+
+  // ── notifySpeakingState with messageId ──────────────────────
+
+  describe('notifySpeakingState with messageId', () => {
+    it('includes messageId as null when no speakMessage active', () => {
+      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
+      mockGetMainWindow.mockReturnValue(mockWin as any)
+
+      // Calling stop triggers notifySpeakingState(false) with currentMessageId (null)
+      stop()
+
+      expect(mockWin.webContents.send).toHaveBeenCalledWith('tts:stateChange', { speaking: false, messageId: null })
     })
   })
 })

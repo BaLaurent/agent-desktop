@@ -97,6 +97,7 @@ export default function App() {
       focus_search: () => document.querySelector<HTMLInputElement>('[data-search-input]')?.focus(),
       stop_generation: () => useChatStore.getState().stopGeneration(),
       voice_input: () => useVoiceInputStore.getState().toggleRecording(),
+      stop_tts: () => window.agent.tts.stop(),
       cycle_permission_mode: cyclePermissionMode,
     }
 

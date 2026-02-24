@@ -24,6 +24,7 @@ function seedShortcuts(db: Database.Database): void {
     ['quick_chat', 'Alt+Space'],
     ['quick_voice', 'Alt+Shift+Space'],
     ['show_app', 'Super+A'],
+    ['stop_tts', 'Ctrl+Shift+T'],
   ]
 
   for (const [action, keybinding] of defaults) {

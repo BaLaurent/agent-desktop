@@ -11,7 +11,7 @@ import { injectApiKeyEnv } from './streaming'
 import { findBinaryInPath } from '../utils/env'
 import { getSetting } from '../utils/db'
 import { sanitizeError } from '../utils/errors'
-import { validateString } from '../utils/validate'
+import { validateString, validatePositiveInt } from '../utils/validate'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { HAIKU_MODEL } from '../../shared/constants'
 
@@ -19,13 +19,14 @@ import { HAIKU_MODEL } from '../../shared/constants'
 
 let currentProcess: ChildProcess | null = null
 let cachedPlayer: string | null = null
+let currentMessageId: number | null = null
 
 // ─── State notification ──────────────────────────────────────
 
 function notifySpeakingState(speaking: boolean): void {
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
-    win.webContents.send('tts:stateChange', { speaking })
+    win.webContents.send('tts:stateChange', { speaking, messageId: currentMessageId })
   }
 }
 
@@ -268,7 +269,10 @@ function speakWithSpdSay(text: string): Promise<void> {
 
 // ─── Exported functions ──────────────────────────────────────
 
-export function stop(): void {
+/** Kill current process without notification — used internally by speak() to avoid
+ *  clearing currentMessageId and sending a spurious speaking:false before the new
+ *  playback starts. */
+function stopInternal(): void {
   if (currentProcess) {
     try {
       currentProcess.kill('SIGTERM')
@@ -277,11 +281,16 @@ export function stop(): void {
     }
     currentProcess = null
   }
+}
+
+export function stop(): void {
+  stopInternal()
+  currentMessageId = null
   notifySpeakingState(false)
 }
 
 export async function speak(text: string, db: Database.Database): Promise<void> {
-  stop()
+  stopInternal()
 
   const provider = getSetting(db, 'tts_provider')
   if (!provider || provider === 'off') return
@@ -361,6 +370,17 @@ export async function speakResponse(
   }
 }
 
+export async function speakMessage(text: string, db: Database.Database, conversationId: number, messageId: number): Promise<void> {
+  currentMessageId = messageId
+  try {
+    const { getAISettings } = await import('./messages')
+    const aiSettings = getAISettings(db, conversationId)
+    await speakResponse(text, db, conversationId, aiSettings)
+  } finally {
+    currentMessageId = null
+  }
+}
+
 export async function validateConfig(
   db: Database.Database
 ): Promise<{ provider: string; providerFound: boolean; playerFound: boolean; playerPath: string; error?: string }> {
@@ -424,6 +444,13 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
   ipcMain.handle('tts:speak', async (_event, text: unknown) => {
     const validated = validateString(text, 'text', 100_000)
     await speak(validated, db)
+  })
+
+  ipcMain.handle('tts:speakMessage', async (_event, text: unknown, conversationId: unknown, messageId: unknown) => {
+    const t = validateString(text, 'text', 100_000)
+    const cid = validatePositiveInt(conversationId, 'conversationId')
+    const mid = validatePositiveInt(messageId, 'messageId')
+    await speakMessage(t, db, cid, mid)
   })
 
   ipcMain.handle('tts:stop', () => {
