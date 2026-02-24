@@ -877,5 +877,94 @@ describe('files IPC handlers', () => {
       expect(readFileSync(join(destDir, 'b.txt'), 'utf-8')).toBe('bbb')
       expect(readFileSync(join(destDir, 'c.txt'), 'utf-8')).toBe('ccc')
     })
+
+    it('uses custom name from renames map', async () => {
+      const srcFile = join(testDir, 'original.txt')
+      writeFileSync(srcFile, 'content')
+
+      const result = await ipc.invoke('files:prepareSession', 10, [srcFile], 'copy', { [srcFile]: 'renamed.txt' })
+      const destDir = join(sessionsBase, '10')
+
+      expect(result.count).toBe(1)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'renamed.txt'), 'utf-8')).toBe('content')
+    })
+
+    it('dedup still works with custom names from renames', async () => {
+      const src1 = join(testDir, 'a.txt')
+      const src2 = join(testDir, 'b.txt')
+      writeFileSync(src1, 'first')
+      writeFileSync(src2, 'second')
+
+      // Both renamed to same name — dedup should kick in
+      const result = await ipc.invoke('files:prepareSession', 11, [src1, src2], 'copy', {
+        [src1]: 'same.txt',
+        [src2]: 'same.txt',
+      })
+      const destDir = join(sessionsBase, '11')
+
+      expect(result.count).toBe(2)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'same.txt'), 'utf-8')).toBe('first')
+      expect(readFileSync(join(destDir, 'same_1.txt'), 'utf-8')).toBe('second')
+    })
+
+    it('rejects renames with path separators', async () => {
+      const srcFile = join(testDir, 'valid.txt')
+      writeFileSync(srcFile, 'ok')
+
+      await expect(
+        ipc.invoke('files:prepareSession', 12, [srcFile], 'copy', { [srcFile]: 'sub/bad.txt' })
+      ).rejects.toThrow('invalid characters')
+
+      await expect(
+        ipc.invoke('files:prepareSession', 12, [srcFile], 'copy', { [srcFile]: '..\\escape.txt' })
+      ).rejects.toThrow('invalid characters')
+    })
+
+    it('rejects empty name in renames', async () => {
+      const srcFile = join(testDir, 'valid.txt')
+      writeFileSync(srcFile, 'ok')
+
+      await expect(
+        ipc.invoke('files:prepareSession', 13, [srcFile], 'copy', { [srcFile]: '' })
+      ).rejects.toThrow('non-empty string')
+
+      await expect(
+        ipc.invoke('files:prepareSession', 13, [srcFile], 'copy', { [srcFile]: '   ' })
+      ).rejects.toThrow('non-empty string')
+    })
+
+    it('works without renames (backward compatible)', async () => {
+      const srcFile = join(testDir, 'compat.txt')
+      writeFileSync(srcFile, 'data')
+
+      // No renames arg at all — should work like before
+      const result = await ipc.invoke('files:prepareSession', 14, [srcFile], 'copy')
+      const destDir = join(sessionsBase, '14')
+
+      expect(result.count).toBe(1)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'compat.txt'), 'utf-8')).toBe('data')
+    })
+
+    it('ignores renames entries for paths not in sourcePaths', async () => {
+      const srcFile = join(testDir, 'real.txt')
+      writeFileSync(srcFile, 'data')
+
+      // renames has an entry for a path not in sourcePaths — should be ignored
+      const result = await ipc.invoke('files:prepareSession', 15, [srcFile], 'copy', {
+        '/nonexistent/path.txt': 'ghost.txt',
+      })
+      const destDir = join(sessionsBase, '15')
+
+      expect(result.count).toBe(1)
+
+      const { readFileSync } = await import('fs')
+      expect(readFileSync(join(destDir, 'real.txt'), 'utf-8')).toBe('data')
+    })
   })
 })

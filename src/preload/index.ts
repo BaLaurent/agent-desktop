@@ -60,8 +60,8 @@ const api: AgentAPI = {
     move: (sourcePath: string, destDir: string) => withTimeout(ipcRenderer.invoke('files:move', sourcePath, destDir)),
     createFile: (dirPath: string, name: string) => withTimeout(ipcRenderer.invoke('files:createFile', dirPath, name)),
     createFolder: (dirPath: string, name: string) => withTimeout(ipcRenderer.invoke('files:createFolder', dirPath, name)),
-    prepareSession: (conversationId: number, sourcePaths: string[], method: 'copy' | 'symlink') =>
-      withTimeout(ipcRenderer.invoke('files:prepareSession', conversationId, sourcePaths, method), 60000),
+    prepareSession: (conversationId: number, sourcePaths: string[], method: 'copy' | 'symlink', renames?: Record<string, string>) =>
+      withTimeout(ipcRenderer.invoke('files:prepareSession', conversationId, sourcePaths, method, renames), 60000),
   },
   folders: {
     list: () => withTimeout(ipcRenderer.invoke('folders:list')),
@@ -127,11 +127,13 @@ const api: AgentAPI = {
   },
   tts: {
     speak: (text: string) => withTimeout(ipcRenderer.invoke('tts:speak', text), 60000),
+    speakMessage: (text: string, conversationId: number, messageId: number) =>
+      withTimeout(ipcRenderer.invoke('tts:speakMessage', text, conversationId, messageId), 60000),
     stop: () => withTimeout(ipcRenderer.invoke('tts:stop')),
     validate: () => withTimeout(ipcRenderer.invoke('tts:validate')),
     detectPlayers: () => withTimeout(ipcRenderer.invoke('tts:detectPlayers')),
-    onStateChange: (callback: (state: { speaking: boolean }) => void) => {
-      const handler = (_e: Electron.IpcRendererEvent, state: { speaking: boolean }) => callback(state)
+    onStateChange: (callback: (state: { speaking: boolean; messageId?: number }) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, state: { speaking: boolean; messageId?: number }) => callback(state)
       ipcRenderer.on('tts:stateChange', handler)
       return () => { ipcRenderer.removeListener('tts:stateChange', handler) }
     },

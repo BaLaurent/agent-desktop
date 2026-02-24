@@ -999,7 +999,7 @@ export function FileExplorerPanel() {
     useFileExplorerStore.getState().rangeSelect(filePath, visible)
   }, [])
 
-  const handleNewConversationFromFiles = useCallback(async (method: 'copy' | 'symlink') => {
+  const handleNewConversationFromFiles = useCallback(async (method: 'copy' | 'symlink', renames: Record<string, string>) => {
     const { multiSelectedPaths, clearMultiSelection } = useFileExplorerStore.getState()
     const paths = [...multiSelectedPaths]
 
@@ -1014,7 +1014,8 @@ export function FileExplorerPanel() {
       await moveToFolder(newConv.id, folderId)
     }
 
-    const result = await window.agent.files.prepareSession(newConv.id, paths, method)
+    const renamesArg = Object.keys(renames).length > 0 ? renames : undefined
+    const result = await window.agent.files.prepareSession(newConv.id, paths, method, renamesArg)
     await updateConversation(newConv.id, { cwd: result.cwd })
     clearMultiSelection()
   }, [])

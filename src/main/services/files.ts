@@ -375,12 +375,22 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     _event,
     conversationId: number,
     sourcePaths: string[],
-    method: 'copy' | 'symlink'
+    method: 'copy' | 'symlink',
+    renames?: Record<string, string>
   ) => {
     validatePositiveInt(conversationId, 'conversationId')
     if (!Array.isArray(sourcePaths) || sourcePaths.length === 0) throw new Error('sourcePaths required')
     if (sourcePaths.length > 200) throw new Error('Too many files (max 200)')
     if (method !== 'copy' && method !== 'symlink') throw new Error('method must be copy or symlink')
+
+    // Validate renames map if provided
+    if (renames != null) {
+      if (typeof renames !== 'object' || Array.isArray(renames)) throw new Error('renames must be a plain object')
+      for (const [, newName] of Object.entries(renames)) {
+        if (typeof newName !== 'string' || newName.trim() === '') throw new Error('Rename value must be a non-empty string')
+        if (newName.includes('/') || newName.includes('\\') || newName.includes('\0')) throw new Error('Rename value contains invalid characters')
+      }
+    }
 
     const sessionsBase = join(app.getPath('home'), '.agent-desktop', 'sessions-folder')
     const destDir = join(sessionsBase, String(conversationId))
@@ -392,7 +402,7 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
       const resolvedSrc = expandTilde(src)
       validatePathSafe(resolvedSrc)
 
-      const name = basename(resolvedSrc)
+      const name = (renames && renames[src]) ? renames[src].trim() : basename(resolvedSrc)
       let dest = join(destDir, name)
 
       // Inline dedup: try name, then name_1, name_2...

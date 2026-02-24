@@ -65,7 +65,7 @@ export interface AgentAPI {
     move(sourcePath: string, destDir: string): Promise<string>
     createFile(dirPath: string, name: string): Promise<string>
     createFolder(dirPath: string, name: string): Promise<string>
-    prepareSession(conversationId: number, sourcePaths: string[], method: 'copy' | 'symlink'): Promise<{ cwd: string; count: number }>
+    prepareSession(conversationId: number, sourcePaths: string[], method: 'copy' | 'symlink', renames?: Record<string, string>): Promise<{ cwd: string; count: number }>
   }
   folders: {
     list(): Promise<Folder[]>
@@ -130,10 +130,11 @@ export interface AgentAPI {
   }
   tts: {
     speak(text: string): Promise<void>
+    speakMessage(text: string, conversationId: number, messageId: number): Promise<void>
     stop(): Promise<void>
     validate(): Promise<{ provider: string | null; providerFound: boolean; playerFound: boolean; playerPath: string; error?: string }>
     detectPlayers(): Promise<Array<{ name: string; path: string; available: boolean }>>
-    onStateChange(callback: (state: { speaking: boolean }) => void): () => void
+    onStateChange(callback: (state: { speaking: boolean; messageId?: number }) => void): () => void
   }
   openscad: {
     compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
