@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { ScheduledTask, CreateScheduledTask, IntervalUnit } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface Props {
   task?: ScheduledTask | null
@@ -12,6 +13,7 @@ interface Props {
 
 export function TaskFormModal({ task, initialPrompt, initialConversationId, onSave, onClose }: Props) {
   const { conversations, loadConversations } = useConversationsStore()
+  const mobile = useMobileMode()
 
   const effectivePrompt = initialPrompt ?? task?.prompt ?? ''
   const [name, setName] = useState(
@@ -74,11 +76,11 @@ export function TaskFormModal({ task, initialPrompt, initialConversationId, onSa
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-full max-w-lg rounded-lg shadow-xl overflow-hidden"
+        className={`w-full max-w-lg rounded-lg shadow-xl overflow-hidden ${mobile ? 'max-w-[calc(100vw-1rem)]' : ''}`}
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10">
+        <div className={`flex items-center justify-between ${mobile ? 'px-4' : 'px-6'} py-4 border-b border-[var(--color-text-muted)]/10`}>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
             {task ? 'Edit Task' : 'New Scheduled Task'}
           </h2>
@@ -95,7 +97,7 @@ export function TaskFormModal({ task, initialPrompt, initialConversationId, onSa
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className={`${mobile ? 'px-4' : 'px-6'} py-4 space-y-4 overflow-y-auto`} style={{ maxHeight: mobile ? '70dvh' : '70vh' }}>
           {error && (
             <div className="text-sm p-2 rounded" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)', color: 'var(--color-error)' }}>
               {error}

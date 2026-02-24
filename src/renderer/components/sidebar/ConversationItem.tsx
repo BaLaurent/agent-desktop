@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Conversation, Folder } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
 import { useSchedulerStore } from '../../stores/schedulerStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface Props {
   conversation: Conversation & { folder_name?: string }
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
+  const isMobile = useMobileMode()
   const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders } =
     useConversationsStore()
   const hasScheduledTask = useSchedulerStore((s) => s.tasks.some((t) => t.conversation_id === conversation.id))
@@ -20,6 +22,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
   const [showFolderSubmenu, setShowFolderSubmenu] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (isRenaming && inputRef.current) {
@@ -37,7 +40,11 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
       }
     }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('touchstart', handleClick as EventListener)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('touchstart', handleClick as EventListener)
+    }
   }, [showMenu])
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -45,6 +52,42 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
     setMenuPos({ x: e.clientX, y: e.clientY })
     setShowMenu(true)
   }
+
+  const openMenuAt = useCallback((x: number, y: number) => {
+    setMenuPos({ x, y })
+    setShowMenu(true)
+  }, [])
+
+  const handleThreeDotClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    openMenuAt(rect.left, rect.bottom + 4)
+  }, [openMenuAt])
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isMobile) return
+    const touch = e.touches[0]
+    const x = touch.clientX
+    const y = touch.clientY
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null
+      openMenuAt(x, y)
+    }, 500)
+  }, [isMobile, openMenuAt])
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  const handleTouchMove = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
 
   const handleRenameSubmit = () => {
     const trimmed = renameValue.trim()
@@ -98,30 +141,29 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
   return (
     <>
       <div
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', String(conversation.id))
-          e.dataTransfer.effectAllowed = 'move'
-          e.currentTarget.classList.add('sidebar-dragging')
-        }}
-        onDragEnd={(e) => {
-          e.currentTarget.classList.remove('sidebar-dragging')
-        }}
+        {...(!isMobile ? {
+          draggable: true,
+          onDragStart: (e: React.DragEvent) => {
+            e.dataTransfer.setData('text/plain', String(conversation.id))
+            e.dataTransfer.effectAllowed = 'move'
+            e.currentTarget.classList.add('sidebar-dragging')
+          },
+          onDragEnd: (e: React.DragEvent) => {
+            e.currentTarget.classList.remove('sidebar-dragging')
+          },
+          onDoubleClick: () => setIsRenaming(true),
+        } : {})}
         onClick={() => setActiveConversation(conversation.id)}
-        onDoubleClick={() => setIsRenaming(true)}
-        onContextMenu={handleContextMenu}
-        className="py-2 cursor-pointer transition-colors rounded mx-1"
+        onContextMenu={!isMobile ? handleContextMenu : undefined}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchMove}
+        className={`group py-2 cursor-pointer transition-colors rounded mx-1 ${!isActive ? 'hover:bg-[var(--color-bg)]' : ''}`}
         style={{
           paddingLeft: `${depth * 16 + 12}px`,
           paddingRight: '12px',
           backgroundColor: isActive ? 'var(--color-deep)' : 'transparent',
           borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg)'
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'
         }}
         role="treeitem"
         aria-selected={isActive}
@@ -134,7 +176,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameSubmit}
             onKeyDown={handleRenameKeyDown}
-            className="w-full text-sm px-1 py-0.5 rounded outline-none"
+            className={`w-full ${isMobile ? 'text-base' : 'text-sm'} px-1 py-0.5 rounded outline-none`}
             style={{
               backgroundColor: 'var(--color-bg)',
               color: 'var(--color-text)',
@@ -146,7 +188,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           <>
             <div className="flex items-center gap-1.5">
               <div
-                className="text-sm truncate font-medium"
+                className="text-sm truncate font-medium flex-1"
                 style={{ color: 'var(--color-text)' }}
               >
                 {conversation.title}
@@ -162,6 +204,20 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
+              )}
+              {isMobile && (
+                <button
+                  onClick={handleThreeDotClick}
+                  className="p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
+                  style={{ color: 'var(--color-text-muted)' }}
+                  aria-label="Conversation actions"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <circle cx="10" cy="4" r="1.5" />
+                    <circle cx="10" cy="10" r="1.5" />
+                    <circle cx="10" cy="16" r="1.5" />
+                  </svg>
+                </button>
               )}
             </div>
             <div
@@ -193,14 +249,8 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
               setShowMenu(false)
               setIsRenaming(true)
             }}
-            className="w-full text-left px-3 py-1.5 hover:opacity-80"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             role="menuitem"
             aria-label="Rename conversation"
           >
@@ -208,39 +258,32 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </button>
           <div
             className="relative"
-            onMouseEnter={() => setShowFolderSubmenu(true)}
-            onMouseLeave={() => setShowFolderSubmenu(false)}
+            {...(!isMobile ? {
+              onMouseEnter: () => setShowFolderSubmenu(true),
+              onMouseLeave: () => setShowFolderSubmenu(false),
+            } : {})}
           >
             <button
-              className="w-full text-left px-3 py-1.5 hover:opacity-80"
+              className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
               style={{ backgroundColor: 'transparent' }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = 'transparent')
-              }
+              {...(isMobile ? {
+                onClick: () => setShowFolderSubmenu((v) => !v),
+              } : {})}
             >
               Move to folder &rarr;
             </button>
             {showFolderSubmenu && (
               <div
-                className="absolute left-full top-0 rounded shadow-lg py-1 text-sm min-w-[140px]"
+                className={`${isMobile ? 'pl-3' : 'absolute left-full top-0'} rounded shadow-lg py-1 text-sm min-w-[140px]`}
                 style={{
                   backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-bg)',
+                  border: isMobile ? 'none' : '1px solid var(--color-bg)',
                 }}
               >
                 <button
                   onClick={() => handleMoveToFolder(null)}
-                  className="w-full text-left px-3 py-1.5"
+                  className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
                   style={{ backgroundColor: 'transparent' }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = 'transparent')
-                  }
                 >
                   No folder
                 </button>
@@ -248,14 +291,8 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
                   <button
                     key={f.id}
                     onClick={() => handleMoveToFolder(f.id)}
-                    className="w-full text-left px-3 py-1.5"
+                    className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
                     style={{ backgroundColor: 'transparent' }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor = 'transparent')
-                    }
                   >
                     {f.name}
                   </button>
@@ -265,14 +302,8 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </div>
           <button
             onClick={() => handleExport('markdown')}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             role="menuitem"
             aria-label="Export conversation as Markdown"
           >
@@ -280,14 +311,8 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </button>
           <button
             onClick={() => handleExport('json')}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             role="menuitem"
             aria-label="Export conversation as JSON"
           >
@@ -295,14 +320,8 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </button>
           <button
             onClick={handleGenerateTitle}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             role="menuitem"
             aria-label="Generate title with AI"
           >
@@ -311,14 +330,8 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
           <button
             onClick={handleDelete}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             role="menuitem"
             aria-label="Delete conversation"
           >

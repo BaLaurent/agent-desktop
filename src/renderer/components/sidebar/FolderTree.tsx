@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { Folder } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import { ConversationItem } from './ConversationItem'
 import { EmptyState } from './EmptyState'
 import { FolderSettingsPopover } from '../settings/FolderSettingsPopover'
@@ -9,6 +10,7 @@ import type { McpServerName } from '../settings/FolderSettingsPopover'
 import { useMcpStore } from '../../stores/mcpStore'
 
 export function SidebarTree() {
+  const isMobile = useMobileMode()
   const {
     folders,
     conversations,
@@ -34,6 +36,43 @@ export function SidebarTree() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const openFolderMenuAt = useCallback((folderId: number, x: number, y: number) => {
+    setMenuPos({ x, y })
+    setMenuFolderId(folderId)
+  }, [])
+
+  const handleFolderThreeDotClick = useCallback((e: React.MouseEvent, folderId: number) => {
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    openFolderMenuAt(folderId, rect.left, rect.bottom + 4)
+  }, [openFolderMenuAt])
+
+  const handleFolderTouchStart = useCallback((e: React.TouchEvent, folderId: number) => {
+    if (!isMobile) return
+    const touch = e.touches[0]
+    const x = touch.clientX
+    const y = touch.clientY
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null
+      openFolderMenuAt(folderId, x, y)
+    }, 500)
+  }, [isMobile, openFolderMenuAt])
+
+  const handleFolderTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  const handleFolderTouchMove = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
 
   const globalSettings = useSettingsStore((s) => s.settings)
   const setSetting = useSettingsStore((s) => s.setSetting)
@@ -63,7 +102,11 @@ export function SidebarTree() {
       }
     }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('touchstart', handleClick as EventListener)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('touchstart', handleClick as EventListener)
+    }
   }, [menuFolderId])
 
   const isSearching = searchQuery.trim().length > 0
@@ -186,23 +229,22 @@ export function SidebarTree() {
     return (
       <div key={folder.id}>
         <div
-          className={`group flex items-center gap-1 px-2 py-1 cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}`}
+          className={`group flex items-center gap-1 px-2 ${isMobile ? 'py-2' : 'py-1'} cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${!isDragOver ? ' hover:bg-[var(--color-bg)]' : ''}`}
           style={{
             paddingLeft: `${depth * 16 + 8}px`,
             color: 'var(--color-text)',
           }}
           onClick={() => toggleExpand(folder.id)}
-          onContextMenu={(e) => handleContextMenu(e, folder.id)}
-          onDrop={(e) => handleDrop(e, folder.id)}
-          onDragOver={handleDragOver}
-          onDragEnter={(e) => handleFolderDragEnter(e, folder.id)}
-          onDragLeave={handleFolderDragLeave}
-          onMouseEnter={(e) => {
-            if (!isDragOver) e.currentTarget.style.backgroundColor = 'var(--color-bg)'
-          }}
-          onMouseLeave={(e) => {
-            if (!isDragOver) e.currentTarget.style.backgroundColor = 'transparent'
-          }}
+          onContextMenu={!isMobile ? (e) => handleContextMenu(e, folder.id) : undefined}
+          {...(!isMobile ? {
+            onDrop: (e: React.DragEvent) => handleDrop(e, folder.id),
+            onDragOver: handleDragOver,
+            onDragEnter: (e: React.DragEvent) => handleFolderDragEnter(e, folder.id),
+            onDragLeave: handleFolderDragLeave,
+          } : {})}
+          onTouchStart={(e) => handleFolderTouchStart(e, folder.id)}
+          onTouchEnd={handleFolderTouchEnd}
+          onTouchMove={handleFolderTouchMove}
           role="treeitem"
           aria-expanded={isExpanded}
           aria-label={`Folder: ${folder.name}`}
@@ -220,7 +262,7 @@ export function SidebarTree() {
                 if (e.key === 'Enter') handleRenameSubmit(folder.id)
                 if (e.key === 'Escape') setRenamingId(null)
               }}
-              className="flex-1 text-sm px-1 rounded outline-none"
+              className={`flex-1 ${isMobile ? 'text-base' : 'text-sm'} px-1 rounded outline-none`}
               style={{
                 backgroundColor: 'var(--color-bg)',
                 color: 'var(--color-text)',
@@ -244,7 +286,7 @@ export function SidebarTree() {
                 </span>
               )}
               <button
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-[var(--color-surface)]"
+                className={`${isMobile ? 'opacity-100 p-2' : 'opacity-0 group-hover:opacity-100 p-0.5'} transition-opacity rounded hover:bg-[var(--color-surface)]`}
                 onClick={(e) => handleNewConversationInFolder(folder.id, e)}
                 title="New conversation in this folder"
                 aria-label={`New conversation in ${folder.name}`}
@@ -265,6 +307,20 @@ export function SidebarTree() {
                   <line x1="9" y1="11" x2="15" y2="11" />
                 </svg>
               </button>
+              {isMobile && (
+                <button
+                  onClick={(e) => handleFolderThreeDotClick(e, folder.id)}
+                  className="p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
+                  style={{ color: 'var(--color-text-muted)' }}
+                  aria-label="Folder actions"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <circle cx="10" cy="4" r="1.5" />
+                    <circle cx="10" cy="10" r="1.5" />
+                    <circle cx="10" cy="16" r="1.5" />
+                  </svg>
+                </button>
+              )}
             </>
           )}
         </div>
@@ -310,19 +366,15 @@ export function SidebarTree() {
         return (
           <>
             <div
-              className={`group flex items-center gap-1 px-2 py-1 cursor-pointer rounded mx-1 text-sm${dragOverUnfiled ? ' sidebar-drop-active' : ''}`}
+              className={`group flex items-center gap-1 px-2 ${isMobile ? 'py-2' : 'py-1'} cursor-pointer rounded mx-1 text-sm${dragOverUnfiled ? ' sidebar-drop-active' : ''}${!dragOverUnfiled ? ' hover:bg-[var(--color-bg)]' : ''}`}
               style={{ color: 'var(--color-text)' }}
               onClick={() => setSetting('sidebar_unfiledExpanded', unfiledExpanded ? 'false' : 'true')}
-              onDrop={(e) => handleDrop(e, null)}
-              onDragOver={handleDragOver}
-              onDragEnter={handleUnfiledDragEnter}
-              onDragLeave={handleUnfiledDragLeave}
-              onMouseEnter={(e) => {
-                if (!dragOverUnfiled) e.currentTarget.style.backgroundColor = 'var(--color-bg)'
-              }}
-              onMouseLeave={(e) => {
-                if (!dragOverUnfiled) e.currentTarget.style.backgroundColor = 'transparent'
-              }}
+              {...(!isMobile ? {
+                onDrop: (e: React.DragEvent) => handleDrop(e, null),
+                onDragOver: handleDragOver,
+                onDragEnter: handleUnfiledDragEnter,
+                onDragLeave: handleUnfiledDragLeave,
+              } : {})}
               role="treeitem"
               aria-expanded={unfiledExpanded}
               aria-label="Unfiled conversations"
@@ -390,27 +442,15 @@ export function SidebarTree() {
               }
               setMenuFolderId(null)
             }}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
           >
             Rename
           </button>
           <button
             onClick={() => handleCreateSubfolder(menuFolderId!)}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
           >
             Create subfolder
           </button>
@@ -419,28 +459,16 @@ export function SidebarTree() {
               setOverrideFolderId(menuFolderId)
               setMenuFolderId(null)
             }}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
           >
             Folder Settings
           </button>
           <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
           <button
             onClick={() => handleDelete(menuFolderId!)}
-            className="w-full text-left px-3 py-1.5"
+            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
             style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
           >
             Delete folder
           </button>
@@ -486,7 +514,7 @@ export function SidebarTree() {
                       deleteFolder(deleteTarget.id, 'delete')
                       setDeleteTarget(null)
                     }}
-                    className="w-full px-3 py-2 rounded text-sm font-medium text-left transition-opacity hover:opacity-90 bg-error text-contrast"
+                    className={`w-full px-3 ${isMobile ? 'py-3' : 'py-2'} rounded text-sm font-medium text-left transition-opacity hover:opacity-90 bg-error text-contrast`}
                     aria-label="Delete folder and all conversations"
                   >
                     Delete folder and {convCount} conversation{convCount !== 1 ? 's' : ''}
@@ -497,7 +525,7 @@ export function SidebarTree() {
                     deleteFolder(deleteTarget.id)
                     setDeleteTarget(null)
                   }}
-                  className="w-full px-3 py-2 rounded text-sm font-medium text-left transition-opacity hover:opacity-80"
+                  className={`w-full px-3 ${isMobile ? 'py-3' : 'py-2'} rounded text-sm font-medium text-left transition-opacity hover:opacity-80`}
                   style={{
                     backgroundColor: 'var(--color-bg)',
                     color: 'var(--color-text)',
@@ -508,7 +536,7 @@ export function SidebarTree() {
                 </button>
                 <button
                   onClick={() => setDeleteTarget(null)}
-                  className="w-full px-3 py-2 rounded text-sm font-medium text-left transition-opacity hover:opacity-80"
+                  className={`w-full px-3 ${isMobile ? 'py-3' : 'py-2'} rounded text-sm font-medium text-left transition-opacity hover:opacity-80`}
                   style={{
                     backgroundColor: 'transparent',
                     color: 'var(--color-text-muted)',

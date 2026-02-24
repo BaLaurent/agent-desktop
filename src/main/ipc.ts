@@ -2,6 +2,10 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import type Database from 'better-sqlite3'
 import { sanitizeError } from './utils/errors'
 
+// Exported dispatch map: allows non-IPC callers (e.g. WebSocket bridge) to invoke
+// the same handlers registered via ipcMain.handle(). Keyed by channel name.
+export const ipcDispatch = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+
 import { registerHandlers as authHandlers } from './services/auth'
 import { registerHandlers as conversationsHandlers } from './services/conversations'
 import { registerHandlers as messagesHandlers } from './services/messages'
@@ -24,6 +28,7 @@ import { registerHandlers as schedulerHandlers } from './services/scheduler'
 import { registerHandlers as ttsHandlers } from './services/tts'
 import { registerHandlers as updaterHandlers } from './services/updater'
 import { registerHandlers as jupyterHandlers } from './services/jupyter'
+import { registerHandlers as webServerHandlers } from './services/webServer'
 
 const serviceModules = [
   authHandlers,
@@ -61,6 +66,15 @@ function withSanitizedErrors(ipcMain: IpcMain): IpcMain {
         throw new Error(sanitizeError(err))
       }
     })
+    // Mirror into ipcDispatch so WebSocket bridge can call the same handlers.
+    // No handler uses event.sender — all have `_event`, so passing null is safe.
+    ipcDispatch.set(channel, async (...args: unknown[]) => {
+      try {
+        return await listener(null as unknown as IpcMainInvokeEvent, ...args)
+      } catch (err) {
+        throw new Error(sanitizeError(err))
+      }
+    })
   }
   return wrapped
 }
@@ -74,6 +88,7 @@ export function registerAllHandlers(ipcMain: IpcMain, db: Database.Database): vo
   commandsHandlers(safeIpc)
   updaterHandlers(safeIpc)
   jupyterHandlers(safeIpc)
+  webServerHandlers(safeIpc)
   ensureThemeDir().catch((err) => console.error('[themes] Failed to ensure theme dir:', err))
   ensureKnowledgesDir().catch((err) => console.error('[knowledge] Failed to ensure knowledges dir:', err))
 }

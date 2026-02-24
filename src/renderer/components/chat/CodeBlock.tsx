@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface CodeBlockProps {
   language?: string
@@ -7,6 +8,7 @@ interface CodeBlockProps {
 }
 
 export function CodeBlock({ language, children, defaultCollapsed }: CodeBlockProps) {
+  const mobile = useMobileMode()
   const lineCount = children.split('\n').length
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? lineCount > 10)
   const [copied, setCopied] = useState(false)
@@ -32,7 +34,7 @@ export function CodeBlock({ language, children, defaultCollapsed }: CodeBlockPro
       >
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+          className={`flex items-center gap-1.5 hover:opacity-80 transition-opacity ${mobile ? 'py-3 px-3' : ''}`}
           style={{ color: 'var(--color-text-muted)' }}
           aria-expanded={!collapsed}
           aria-label={`Toggle code block (${lineCount} lines)`}
@@ -54,7 +56,7 @@ export function CodeBlock({ language, children, defaultCollapsed }: CodeBlockPro
         </button>
         <button
           onClick={handleCopy}
-          className="px-2 py-0.5 rounded text-xs transition-colors hover:opacity-80"
+          className={`rounded text-xs transition-colors hover:opacity-80 ${mobile ? 'py-3 px-3' : 'px-2 py-0.5'}`}
           style={{ color: 'var(--color-text-muted)' }}
           aria-label="Copy code to clipboard"
         >

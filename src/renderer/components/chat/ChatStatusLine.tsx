@@ -3,6 +3,7 @@ import { MODEL_OPTIONS, PERMISSION_OPTIONS, PERMISSION_LABELS, shortenModelName 
 import { CheckIcon } from '../icons/CheckIcon'
 import { ChevronDownIcon } from '../icons/ChevronDownIcon'
 import { Checkbox } from '../ui/Checkbox'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 export interface McpServerEntry {
   name: string
@@ -29,6 +30,7 @@ interface ChatStatusLineProps {
 }
 
 export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChange, onPermissionModeChange, onMcpServerToggle, kbCollections, onKbCollectionToggle, onKbAccessToggle }: ChatStatusLineProps) {
+  const mobile = useMobileMode()
   const shortModel = shortenModelName(model)
   const modeLabel = PERMISSION_LABELS[permissionMode] || permissionMode
   const [modelOpen, setModelOpen] = useState(false)
@@ -60,12 +62,16 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
       }
     }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('touchstart', handleClick as EventListener)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('touchstart', handleClick as EventListener)
+    }
   }, [modelOpen, modeOpen, mcpOpen, kbOpen])
 
   return (
     <div
-      className="text-[10px] px-1 mt-1 flex items-center gap-1.5"
+      className={`px-1 mt-1 flex items-center ${mobile ? 'text-[10px] gap-1 overflow-x-auto' : 'text-[10px] gap-1.5'}`}
       style={{ color: 'var(--color-text-muted)' }}
       aria-label="Chat status"
     >
@@ -73,18 +79,18 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
       <div className="relative" ref={modelRef}>
         <button
           onClick={() => onModelChange && setModelOpen((v) => !v)}
-          className="hover:opacity-70 transition-opacity inline-flex items-center gap-0.5"
+          className={`hover:opacity-70 transition-opacity inline-flex items-center gap-0.5 whitespace-nowrap ${mobile ? 'py-1 px-1' : ''}`}
           style={{ cursor: onModelChange ? 'pointer' : 'default' }}
           aria-label="Change model"
           aria-expanded={modelOpen}
           aria-haspopup="listbox"
         >
           <span>{shortModel}</span>
-          {onModelChange && <ChevronDownIcon className="opacity-60" />}
+          {onModelChange && !mobile && <ChevronDownIcon className="opacity-60" />}
         </button>
         {modelOpen && (
           <div
-            className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[140px] py-1 z-50"
+            className={`absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[140px] py-1 z-50 ${mobile ? 'max-w-[calc(100vw-2rem)]' : ''}`}
             style={{
               backgroundColor: 'var(--color-surface)',
               border: '1px solid var(--color-text-muted)',
@@ -101,7 +107,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                   onModelChange!(opt.value)
                   setModelOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:opacity-80 transition-opacity flex items-center justify-between"
+                className={`w-full text-left px-3 hover:opacity-80 transition-opacity flex items-center justify-between ${mobile ? 'py-2.5' : 'py-1.5'}`}
                 style={{
                   color: opt.value === model ? 'var(--color-primary)' : 'var(--color-text)',
                   backgroundColor: opt.value === model ? 'var(--color-bg)' : 'transparent',
@@ -119,18 +125,18 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
       <div className="relative" ref={modeRef}>
         <button
           onClick={() => onPermissionModeChange && setModeOpen((v) => !v)}
-          className="hover:opacity-70 transition-opacity inline-flex items-center gap-0.5"
+          className={`hover:opacity-70 transition-opacity inline-flex items-center gap-0.5 whitespace-nowrap ${mobile ? 'py-1 px-1' : ''}`}
           style={{ cursor: onPermissionModeChange ? 'pointer' : 'default' }}
           aria-label="Change permission mode"
           aria-expanded={modeOpen}
           aria-haspopup="listbox"
         >
           <span>{modeLabel}</span>
-          {onPermissionModeChange && <ChevronDownIcon className="opacity-60" />}
+          {onPermissionModeChange && !mobile && <ChevronDownIcon className="opacity-60" />}
         </button>
         {modeOpen && (
           <div
-            className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[130px] py-1 z-50"
+            className={`absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[130px] py-1 z-50 ${mobile ? 'max-w-[calc(100vw-2rem)]' : ''}`}
             style={{
               backgroundColor: 'var(--color-surface)',
               border: '1px solid var(--color-text-muted)',
@@ -147,7 +153,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                   onPermissionModeChange!(opt.value)
                   setModeOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:opacity-80 transition-opacity flex items-center justify-between"
+                className={`w-full text-left px-3 hover:opacity-80 transition-opacity flex items-center justify-between ${mobile ? 'py-2.5' : 'py-1.5'}`}
                 style={{
                   color: opt.value === permissionMode ? 'var(--color-primary)' : 'var(--color-text)',
                   backgroundColor: opt.value === permissionMode ? 'var(--color-bg)' : 'transparent',
@@ -167,7 +173,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
           <div className="relative" ref={mcpRef}>
             <button
               onClick={() => onMcpServerToggle && setMcpOpen((v) => !v)}
-              className="inline-flex items-center gap-0.5 hover:opacity-70 transition-opacity"
+              className={`inline-flex items-center gap-0.5 hover:opacity-70 transition-opacity whitespace-nowrap ${mobile ? 'py-1 px-1' : ''}`}
               style={{
                 cursor: onMcpServerToggle ? 'pointer' : 'default',
                 opacity: activeCount === mcpServers.length ? 1 : 0.7,
@@ -181,11 +187,11 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                 <path d="M11.42 1.58a1.5 1.5 0 00-2.12 0L6.17 4.71a1.5 1.5 0 000 2.12l.71.71-3.17 3.17a1.5 1.5 0 000 2.12l.71.71a1.5 1.5 0 002.12 0l3.17-3.17.71.71a1.5 1.5 0 002.12 0l3.13-3.13a1.5 1.5 0 000-2.12L11.42 1.58zM10.36 2.64l4.24 4.24-3.13 3.13-4.24-4.24 3.13-3.13zM6.93 11.07L3.76 7.9l-.71.71 3.17 3.17-.71.71-3.17-3.17.71-.71 3.17 3.17-.29-.71z" />
               </svg>
               {activeCount}/{mcpServers.length} MCP
-              {onMcpServerToggle && <ChevronDownIcon className="opacity-60" />}
+              {onMcpServerToggle && !mobile && <ChevronDownIcon className="opacity-60" />}
             </button>
             {mcpOpen && (
               <div
-                className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[160px] py-1 z-50"
+                className={`absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[160px] py-1 z-50 ${mobile ? 'max-w-[calc(100vw-2rem)]' : ''}`}
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   border: '1px solid var(--color-text-muted)',
@@ -197,7 +203,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                   <button
                     key={server.name}
                     onClick={() => onMcpServerToggle!(server.name)}
-                    className="w-full text-left px-3 py-1.5 hover:opacity-80 transition-opacity flex items-center gap-2"
+                    className={`w-full text-left px-3 hover:opacity-80 transition-opacity flex items-center gap-2 ${mobile ? 'py-2.5' : 'py-1.5'}`}
                     style={{ color: 'var(--color-text)' }}
                     role="checkbox"
                     aria-checked={server.active}
@@ -218,7 +224,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
           <div className="relative" ref={kbRef}>
             <button
               onClick={() => onKbCollectionToggle && setKbOpen((v) => !v)}
-              className="inline-flex items-center gap-0.5 hover:opacity-70 transition-opacity"
+              className={`inline-flex items-center gap-0.5 hover:opacity-70 transition-opacity whitespace-nowrap ${mobile ? 'py-1 px-1' : ''}`}
               style={{
                 cursor: onKbCollectionToggle ? 'pointer' : 'default',
                 opacity: kbSelectedCount > 0 ? 1 : 0.7,
@@ -232,11 +238,11 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                 <path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 000 2.5v11a.5.5 0 00.707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 00.78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0016 13.5v-11a.5.5 0 00-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.81 8.985.936 8 1.783z" />
               </svg>
               {kbSelectedCount} KB
-              {onKbCollectionToggle && <ChevronDownIcon className="opacity-60" />}
+              {onKbCollectionToggle && !mobile && <ChevronDownIcon className="opacity-60" />}
             </button>
             {kbOpen && (
               <div
-                className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[200px] py-1 z-50"
+                className={`absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[200px] py-1 z-50 ${mobile ? 'max-w-[calc(100vw-2rem)]' : ''}`}
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   border: '1px solid var(--color-text-muted)',
@@ -247,7 +253,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                 {kbCollections.map((col) => (
                   <div
                     key={col.name}
-                    className="flex items-center gap-2 px-3 py-1.5"
+                    className={`flex items-center gap-2 px-3 ${mobile ? 'py-2.5' : 'py-1.5'}`}
                     style={{ color: 'var(--color-text)' }}
                   >
                     <button
@@ -262,7 +268,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                     {col.selected && onKbAccessToggle && (
                       <button
                         onClick={() => onKbAccessToggle(col.name)}
-                        className="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold transition-opacity hover:opacity-80"
+                        className={`flex-shrink-0 rounded font-bold transition-opacity hover:opacity-80 ${mobile ? 'px-2.5 py-1.5 text-[11px]' : 'px-1.5 py-0.5 text-[9px]'}`}
                         style={{
                           backgroundColor: col.access === 'readwrite' ? 'var(--color-warning)' : 'var(--color-primary)',
                           color: 'var(--color-text-contrast)',
@@ -278,7 +284,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
                 <hr style={{ borderColor: 'var(--color-text-muted)', opacity: 0.3, margin: '2px 0' }} />
                 <button
                   onClick={() => { window.agent.kb.openKnowledgesFolder(); setKbOpen(false) }}
-                  className="w-full text-left px-3 py-1.5 hover:opacity-80 transition-opacity"
+                  className={`w-full text-left px-3 hover:opacity-80 transition-opacity ${mobile ? 'py-2.5' : 'py-1.5'}`}
                   style={{ color: 'var(--color-text-muted)' }}
                 >
                   Open Knowledges Folder

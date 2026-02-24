@@ -170,6 +170,11 @@ const api: AgentAPI = {
       return () => { ipcRenderer.removeListener('updates:status', handler) }
     },
   },
+  server: {
+    start: (port?: number) => withTimeout(ipcRenderer.invoke('server:start', port)),
+    stop: () => withTimeout(ipcRenderer.invoke('server:stop')),
+    getStatus: () => withTimeout(ipcRenderer.invoke('server:getStatus')),
+  },
   jupyter: {
     startKernel: (filePath: string, kernelName?: string) => withTimeout(ipcRenderer.invoke('jupyter:startKernel', filePath, kernelName)),
     executeCell: (filePath: string, code: string) => withTimeout(ipcRenderer.invoke('jupyter:executeCell', filePath, code)),

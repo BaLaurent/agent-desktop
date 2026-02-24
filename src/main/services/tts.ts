@@ -9,6 +9,7 @@ import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { injectApiKeyEnv } from './streaming'
 import { findBinaryInPath } from '../utils/env'
+import { broadcast } from '../utils/broadcast'
 import { getSetting } from '../utils/db'
 import { sanitizeError } from '../utils/errors'
 import { validateString, validatePositiveInt } from '../utils/validate'
@@ -28,6 +29,7 @@ function notifySpeakingState(speaking: boolean): void {
   if (win && !win.isDestroyed()) {
     win.webContents.send('tts:stateChange', { speaking, messageId: currentMessageId })
   }
+  broadcast('tts:stateChange', { speaking, messageId: currentMessageId })
 }
 
 // ─── Internal helpers ────────────────────────────────────────

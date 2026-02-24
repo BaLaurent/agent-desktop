@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CodeBlock } from './CodeBlock'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import type { StreamPart } from '../../../shared/types'
 
 type ToolPart = Extract<StreamPart, { type: 'tool' }>
@@ -9,6 +10,7 @@ interface ToolUseBlockProps {
 }
 
 export function ToolUseBlock({ tool }: ToolUseBlockProps) {
+  const mobile = useMobileMode()
   const isRunning = tool.status === 'running'
   const hasInput = tool.input && Object.keys(tool.input).length > 0
   const hasOutput = !isRunning && !!tool.output
@@ -76,7 +78,7 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
             {hasInput && (
               <button
                 onClick={() => setShowInput((s) => !s)}
-                className="px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                className={`rounded transition-opacity hover:opacity-80 ${mobile ? 'px-3 py-2 text-xs' : 'px-1.5 py-0.5 text-[10px]'}`}
                 style={{ color: 'var(--color-tool)' }}
                 aria-expanded={showInput}
                 aria-label="Toggle tool input"
@@ -87,7 +89,7 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
             {hasOutput && (
               <button
                 onClick={() => setShowOutput((s) => !s)}
-                className="px-1.5 py-0.5 rounded text-[10px] transition-opacity hover:opacity-80"
+                className={`rounded transition-opacity hover:opacity-80 ${mobile ? 'px-3 py-2 text-xs' : 'px-1.5 py-0.5 text-[10px]'}`}
                 style={{ color: 'var(--color-tool)' }}
                 aria-expanded={showOutput}
                 aria-label="Toggle tool output"

@@ -2,8 +2,16 @@ import { useState, useEffect, useCallback } from 'react'
 import { useShortcutsStore } from '../../stores/shortcutsStore'
 import { formatKeybinding } from '../../utils/shortcutMatcher'
 import type { SystemInfo } from '../../../shared/types'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice', 'show_app', 'stop_tts'])
+
+/** Check if the key part of a keybinding contains non-ASCII chars (e.g. ², §, µ) that Hyprland may not recognize. */
+function hasSpecialKey(keybinding: string): boolean {
+  const parts = keybinding.split('+')
+  const key = parts[parts.length - 1]
+  return /[^\x20-\x7E]/.test(key)
+}
 
 function formatActionName(action: string): string {
   return action
@@ -56,6 +64,7 @@ export function ShortcutSettings() {
   const [recordingId, setRecordingId] = useState<number | null>(null)
   const [conflict, setConflict] = useState<string | null>(null)
   const [sessionType, setSessionType] = useState<SystemInfo['sessionType'] | null>(null)
+  const mobile = useMobileMode()
 
   useEffect(() => {
     loadShortcuts()
@@ -103,6 +112,22 @@ export function ShortcutSettings() {
   const appShortcuts = shortcuts.filter((s) => !GLOBAL_SHORTCUT_ACTIONS.has(s.action))
   const globalShortcuts = shortcuts.filter((s) => GLOBAL_SHORTCUT_ACTIONS.has(s.action))
 
+  if (mobile) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div
+          className="rounded px-3 py-3 text-sm leading-relaxed"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text-muted)',
+          }}
+        >
+          Keyboard shortcuts require a physical keyboard and are not available in web mode.
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* App shortcuts */}
@@ -145,6 +170,7 @@ export function ShortcutSettings() {
             recordingId={recordingId}
             conflict={conflict}
             onRecord={(id) => { setConflict(null); setRecordingId(recordingId === id ? null : id) }}
+            warnSpecialKeys={sessionType === 'wayland'}
           />
         </div>
       )}
@@ -178,11 +204,13 @@ function ShortcutTable({
   recordingId,
   conflict,
   onRecord,
+  warnSpecialKeys,
 }: {
   shortcuts: { id: number; action: string; keybinding: string }[]
   recordingId: number | null
   conflict: string | null
   onRecord: (id: number) => void
+  warnSpecialKeys?: boolean
 }) {
   return (
     <div className="flex flex-col">
@@ -227,16 +255,26 @@ function ShortcutTable({
                 )}
               </span>
             ) : (
-              <span
-                className="inline-block px-2 py-1 rounded text-xs font-mono"
-                style={{
-                  backgroundColor: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-text-muted)',
-                  opacity: 0.3,
-                }}
-              >
-                {formatKeybinding(shortcut.keybinding)}
+              <span className="flex flex-col gap-1">
+                <span
+                  className="inline-block px-2 py-1 rounded text-xs font-mono"
+                  style={{
+                    backgroundColor: 'var(--color-bg)',
+                    color: 'var(--color-text)',
+                    border: '1px solid var(--color-text-muted)',
+                    opacity: 0.3,
+                  }}
+                >
+                  {formatKeybinding(shortcut.keybinding)}
+                </span>
+                {warnSpecialKeys && hasSpecialKey(shortcut.keybinding) && (
+                  <span
+                    className="text-[10px] leading-tight"
+                    style={{ color: 'var(--color-warning, #f59e0b)' }}
+                  >
+                    Special key — may not work with Hyprland
+                  </span>
+                )}
               </span>
             )}
           </span>

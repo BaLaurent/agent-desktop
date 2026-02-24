@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useConversationsStore } from '../../stores/conversationsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 export function SearchBar() {
+  const isMobile = useMobileMode()
   const [value, setValue] = useState('')
   const searchConversations = useConversationsStore((s) => s.searchConversations)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -57,7 +59,7 @@ export function SearchBar() {
         value={value}
         onChange={handleChange}
         placeholder="Search conversations..."
-        className="w-full pl-8 pr-8 py-1.5 rounded text-sm outline-none"
+        className={`w-full pl-8 pr-8 py-1.5 rounded ${isMobile ? 'text-base' : 'text-sm'} outline-none`}
         style={{
           backgroundColor: 'var(--color-bg)',
           color: 'var(--color-text)',
@@ -68,7 +70,7 @@ export function SearchBar() {
       {value && (
         <button
           onClick={handleClear}
-          className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full text-xs"
+          className={`absolute right-5 top-1/2 -translate-y-1/2 ${isMobile ? 'w-8 h-8' : 'w-4 h-4'} flex items-center justify-center rounded-full text-xs`}
           style={{ color: 'var(--color-text-muted)' }}
           aria-label="Clear search"
         >

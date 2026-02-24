@@ -1,19 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuthStore } from '../../stores/authStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 export function UserProfile() {
   const { user, logout } = useAuthStore()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const mobile = useMobileMode()
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false)
       }
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
   }, [])
 
   if (!user) return null
@@ -29,7 +35,7 @@ export function UserProfile() {
     <div ref={ref} className="relative" style={{ WebkitAppRegion: 'no-drag' as never }}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-2 py-1 rounded-md transition-colors hover:opacity-80"
+        className={`flex items-center gap-2 rounded-md transition-colors hover:opacity-80 ${mobile ? 'min-w-[44px] min-h-[44px] justify-center px-2 py-2' : 'px-2 py-1'}`}
         title={user.email}
       >
         {/* Avatar */}
@@ -54,7 +60,7 @@ export function UserProfile() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 rounded-md shadow-lg py-1 min-w-[180px] z-50"
+          className={`absolute right-0 top-full mt-1 rounded-md shadow-lg py-1 min-w-[180px] z-50 ${mobile ? 'max-w-[calc(100vw-2rem)]' : ''}`}
           style={{
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-bg)',
@@ -75,7 +81,7 @@ export function UserProfile() {
               setOpen(false)
               logout()
             }}
-            className="w-full text-left px-3 py-2 text-sm transition-colors hover:opacity-80"
+            className={`w-full text-left px-3 text-sm transition-colors hover:opacity-80 ${mobile ? 'py-3' : 'py-2'}`}
             style={{ color: 'var(--color-error)' }}
           >
             Logout

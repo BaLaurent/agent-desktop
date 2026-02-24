@@ -14,6 +14,7 @@ import { NewConversationFromFilesModal } from './NewConversationFromFilesModal'
 import type { FileNode } from '../../../shared/types'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useConversationsStore } from '../../stores/conversationsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 function getFileExtension(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
@@ -307,6 +308,7 @@ function FileTreeNode({
   const expanded = node.isDirectory && expandedPaths.has(node.path)
   const autoExpandTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isRenaming = node.path === renamingPath
+  const mobile = useMobileMode()
 
   const handleCtxMenu = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -379,13 +381,13 @@ function FileTreeNode({
         <div
           className={`flex items-center${isDropTarget ? ' explorer-drop-active' : ''}`}
           style={{ backgroundColor: isDirMultiSelected ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : undefined }}
-          draggable={!isRenaming}
-          onDragStart={handleDragStartNode}
-          onDragEnd={handleDragEndNode}
-          onDragOver={handleFolderDragOver}
-          onDragEnter={handleFolderDragEnter}
-          onDragLeave={handleFolderDragLeave}
-          onDrop={handleFolderDrop}
+          draggable={!isRenaming && !mobile}
+          onDragStart={mobile ? undefined : handleDragStartNode}
+          onDragEnd={mobile ? undefined : handleDragEndNode}
+          onDragOver={mobile ? undefined : handleFolderDragOver}
+          onDragEnter={mobile ? undefined : handleFolderDragEnter}
+          onDragLeave={mobile ? undefined : handleFolderDragLeave}
+          onDrop={mobile ? undefined : handleFolderDrop}
         >
           <button
             onClick={(e) => {
@@ -401,7 +403,7 @@ function FileTreeNode({
               }
             }}
             onContextMenu={handleCtxMenu}
-            className="w-full flex items-center gap-1 py-0.5 text-sm hover:opacity-80 transition-opacity text-left text-body"
+            className={`w-full flex items-center gap-1 ${mobile ? 'py-2' : 'py-0.5'} text-sm hover:opacity-80 transition-opacity text-left text-body`}
             style={{ paddingLeft: depth * 16 + 8 }}
             aria-expanded={expanded}
             aria-label={`Folder ${node.name}`}
@@ -479,9 +481,9 @@ function FileTreeNode({
             ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)'
             : 'transparent',
       }}
-      draggable={!isRenaming}
-      onDragStart={handleDragStartNode}
-      onDragEnd={handleDragEndNode}
+      draggable={!isRenaming && !mobile}
+      onDragStart={mobile ? undefined : handleDragStartNode}
+      onDragEnd={mobile ? undefined : handleDragEndNode}
     >
       <button
         onClick={(e) => {
@@ -497,7 +499,7 @@ function FileTreeNode({
           }
         }}
         onContextMenu={handleCtxMenu}
-        className="flex-1 min-w-0 flex items-center gap-1 py-0.5 text-sm hover:opacity-80 transition-opacity text-left text-body"
+        className={`flex-1 min-w-0 flex items-center gap-1 ${mobile ? 'py-2' : 'py-0.5'} text-sm hover:opacity-80 transition-opacity text-left text-body`}
         aria-selected={isSelected}
         aria-label={`File ${node.name}`}
       >

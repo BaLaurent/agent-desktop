@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { SlashCommand } from '../../../shared/types'
 import { fuzzyMatch, fuzzyHighlight } from '../../utils/fuzzyMatch'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface SlashCommandDropdownProps {
   commands: SlashCommand[]
@@ -13,6 +14,7 @@ interface SlashCommandDropdownProps {
 export function SlashCommandDropdown({ commands, filter, selectedIndex, onSelect, onClose }: SlashCommandDropdownProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLButtonElement>(null)
+  const mobile = useMobileMode()
 
   const filtered = filter
     ? commands
@@ -29,15 +31,19 @@ export function SlashCommandDropdown({ commands, filter, selectedIndex, onSelect
     }
   }, [selectedIndex])
 
-  // Click-outside to close
+  // Click-outside to close (mousedown + touchstart for mobile)
   useEffect(() => {
-    const handle = (e: MouseEvent) => {
+    const handle = (e: MouseEvent | TouchEvent) => {
       if (listRef.current && !listRef.current.contains(e.target as Node)) {
         onClose()
       }
     }
     document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
+    document.addEventListener('touchstart', handle)
+    return () => {
+      document.removeEventListener('mousedown', handle)
+      document.removeEventListener('touchstart', handle)
+    }
   }, [onClose])
 
   if (filtered.length === 0) {
@@ -59,7 +65,7 @@ export function SlashCommandDropdown({ commands, filter, selectedIndex, onSelect
   return (
     <div
       ref={listRef}
-      className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[280px] max-h-[240px] overflow-y-auto py-1 z-50"
+      className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[280px] max-w-[calc(100vw-2rem)] max-h-[240px] overflow-y-auto py-1 z-50"
       style={{
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-text-muted)',
@@ -76,7 +82,7 @@ export function SlashCommandDropdown({ commands, filter, selectedIndex, onSelect
             role="option"
             aria-selected={isSelected}
             onClick={() => onSelect(cmd)}
-            className="w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors"
+            className={`w-full text-left px-3 ${mobile ? 'py-2.5' : 'py-1.5'} flex items-center gap-2 transition-colors`}
             style={{
               backgroundColor: isSelected ? 'var(--color-bg)' : 'transparent',
               color: 'var(--color-text)',

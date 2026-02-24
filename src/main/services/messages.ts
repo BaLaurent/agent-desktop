@@ -7,6 +7,7 @@ import { app } from 'electron'
 import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv, notifyConversationUpdated } from './streaming'
 import { loadAgentSDK } from './anthropic'
 import { getMainWindow } from '../index'
+import { broadcast } from '../utils/broadcast'
 import type { AISettings } from './streaming'
 import type { Message, Attachment, ToolCall, ToolApprovalResponse, AskUserResponse, KnowledgeSelection } from '../../shared/types'
 import { validateString, validatePositiveInt, validatePathSafe } from '../utils/validate'
@@ -503,6 +504,7 @@ async function generateConversationTitle(
   if (win && !win.isDestroyed()) {
     win.webContents.send('conversations:titleUpdated', { id: conversationId, title })
   }
+  broadcast('conversations:titleUpdated', { id: conversationId, title })
   } finally {
     restoreEnv?.()
   }

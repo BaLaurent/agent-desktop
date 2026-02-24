@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { StreamingIndicator } from './StreamingIndicator'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import type { Message, StreamPart } from '../../../shared/types'
 
 function ContextClearedDivider() {
@@ -37,6 +38,7 @@ export function MessageList({
   onRegenerate,
   onStopGeneration,
 }: MessageListProps) {
+  const mobile = useMobileMode()
   const containerRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const isNearBottom = useRef(true)
@@ -86,7 +88,7 @@ export function MessageList({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto px-6 py-4"
+        className={`h-full overflow-y-auto py-4 ${mobile ? 'px-3' : 'px-6'}`}
       >
         <div className={chatLayout !== 'wide' ? 'max-w-3xl mx-auto' : undefined}>
           {messages.map((msg, idx) => {
@@ -123,7 +125,7 @@ export function MessageList({
       {showScrollBtn && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-4 right-6 w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-opacity hover:opacity-90 bg-primary text-contrast"
+          className={`absolute bottom-4 right-6 rounded-full flex items-center justify-center shadow-lg transition-opacity hover:opacity-90 bg-primary text-contrast ${mobile ? 'w-11 h-11' : 'w-8 h-8'}`}
           title="Scroll to bottom"
         >
           ↓

@@ -1,3 +1,4 @@
+import { useMobileMode } from '../../hooks/useMobileMode'
 import type { Attachment } from '../../../shared/types'
 
 interface AttachmentPreviewProps {
@@ -18,6 +19,7 @@ function getExt(name: string): string {
 }
 
 export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewProps) {
+  const mobile = useMobileMode()
   if (attachments.length === 0) return null
 
   return (
@@ -48,7 +50,7 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
             </div>
             <button
               onClick={() => onRemove(index)}
-              className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] leading-none bg-error text-contrast"
+              className={`absolute -top-1 -right-1 rounded-full flex items-center justify-center leading-none bg-error text-contrast ${mobile ? 'w-6 h-6 text-xs' : 'w-4 h-4 text-[10px]'}`}
             >
               x
             </button>

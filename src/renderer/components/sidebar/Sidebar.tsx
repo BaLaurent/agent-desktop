@@ -1,9 +1,11 @@
 import { useEffect, useCallback } from 'react'
 import { useConversationsStore } from '../../stores/conversationsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import { SearchBar } from './SearchBar'
 import { SidebarTree } from './FolderTree'
 
 export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: () => void; onOpenScheduler?: () => void }) {
+  const isMobile = useMobileMode()
   const { loadConversations, loadFolders, createConversation, createFolder } =
     useConversationsStore()
 
@@ -43,19 +45,13 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
         <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
           Conversations
         </span>
-        <div className="flex items-center gap-1">
+        <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-1'}`}>
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
               title="Settings (Ctrl+,)"
-              className="p-1 rounded transition-colors"
+              className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
               style={{ color: 'var(--color-text-muted)' }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = 'transparent')
-              }
               aria-label="Open settings"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,14 +74,8 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
             <button
               onClick={onOpenScheduler}
               title="Scheduled Tasks"
-              className="p-1 rounded transition-colors"
+              className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
               style={{ color: 'var(--color-text-muted)' }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = 'transparent')
-              }
               aria-label="Open scheduled tasks"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,14 +91,8 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
           <button
             onClick={handleImport}
             title="Import conversation"
-            className="p-1 rounded transition-colors"
+            className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
             style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             aria-label="Import conversation"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,14 +107,8 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
           <button
             onClick={handleNewFolder}
             title="New folder"
-            className="p-1 rounded transition-colors"
+            className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
             style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             aria-label="Create new folder"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,14 +123,8 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
           <button
             onClick={handleNewConversation}
             title="New conversation (Ctrl+N)"
-            className="p-1 rounded transition-colors"
+            className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
             style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--color-bg)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
             aria-label="Create new conversation"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

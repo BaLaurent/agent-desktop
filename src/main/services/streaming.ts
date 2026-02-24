@@ -4,6 +4,7 @@ import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { buildCwdRestrictionHooks } from './cwdHooks'
 import { findBinaryInPath, ensureFreshMacOSToken } from '../utils/env'
+import { broadcast } from '../utils/broadcast'
 import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall } from '../../shared/types'
 
 // Per-conversation abort controllers: Map<conversationId, AbortController>
@@ -62,6 +63,8 @@ function sendChunk(type: string, content?: string, extra?: Record<string, string
       win.webContents.send('messages:stream', payload)
     }
   }
+
+  broadcast('messages:stream', payload)
 }
 
 interface MessageParam {
@@ -523,6 +526,7 @@ export function notifyConversationUpdated(conversationId: number): void {
       win.webContents.send('messages:conversationUpdated', conversationId)
     }
   }
+  broadcast('messages:conversationUpdated', conversationId)
 }
 
 export function abortStream(conversationId?: number): void {

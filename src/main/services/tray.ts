@@ -1,5 +1,6 @@
 import { app, Tray, Menu, nativeImage, nativeTheme, BrowserWindow } from 'electron'
 import * as path from 'path'
+import { broadcast } from '../utils/broadcast'
 import { showOverlay } from './quickChat'
 
 let trayInstance: Tray | null = null
@@ -67,6 +68,7 @@ function buildContextMenu(): Menu {
         const win = getWindowFn?.() ?? null
         if (isAlive(win)) {
           win.webContents.send('tray:newConversation')
+          broadcast('tray:newConversation')
         }
       },
     },

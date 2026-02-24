@@ -5,6 +5,7 @@ import { getMainWindow } from '../index'
 import { buildMessageHistory, getAISettings, getSystemPrompt, saveMessage } from './messages'
 import { streamMessage, injectApiKeyEnv, registerStreamWindow } from './streaming'
 import { validateString, validatePositiveInt } from '../utils/validate'
+import { broadcast } from '../utils/broadcast'
 import { sanitizeError } from '../utils/errors'
 import { speak as ttsSpeak } from './tts'
 import { DEFAULT_MODEL } from '../../shared/constants'
@@ -103,6 +104,7 @@ function notifyRenderer(event: string, data: unknown): void {
   if (win && !win.isDestroyed()) {
     win.webContents.send(event, data)
   }
+  broadcast(event, data)
 }
 
 async function executeTask(db: Database.Database, task: ScheduledTask): Promise<void> {

@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import type { Attachment } from '../../../shared/types'
 
 interface FileUploadButtonProps {
@@ -9,6 +10,7 @@ const ACCEPTED =
   '.txt,.md,.js,.ts,.py,.json,.csv,.yaml,.yml,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp'
 
 export function FileUploadButton({ onFilesSelected }: FileUploadButtonProps) {
+  const mobile = useMobileMode()
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleClick = useCallback(() => {
@@ -47,7 +49,7 @@ export function FileUploadButton({ onFilesSelected }: FileUploadButtonProps) {
       />
       <button
         onClick={handleClick}
-        className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-opacity hover:opacity-80"
+        className={`flex-shrink-0 rounded-md flex items-center justify-center transition-opacity hover:opacity-80 ${mobile ? 'w-11 h-11' : 'w-8 h-8'}`}
         style={{
           backgroundColor: 'var(--color-deep)',
           color: 'var(--color-text-muted)',

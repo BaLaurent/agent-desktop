@@ -64,6 +64,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'tts_autoWordLimit',
   'tts_summaryPrompt',
   'tts_responseMode',
+  // Web server
+  'server_enabled',
+  'server_port',
+  'server_autoStart',
 ])
 
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {

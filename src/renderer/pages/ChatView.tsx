@@ -8,6 +8,7 @@ import { VoiceInputButton } from '../components/chat/VoiceInputButton'
 import { AttachmentPreview } from '../components/attachments/AttachmentPreview'
 import { AIOverridesPopover } from '../components/settings/AIOverridesPopover'
 import { ChatStatusLine } from '../components/chat/ChatStatusLine'
+import { useMobileMode } from '../hooks/useMobileMode'
 import { useChatStore } from '../stores/chatStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAuthStore } from '../stores/authStore'
@@ -29,6 +30,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ conversationId, conversationTitle, conversationModel, conversationCwd }: ChatViewProps) {
+  const mobile = useMobileMode()
   const {
     messages,
     clearedAt,
@@ -326,17 +328,17 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div
-          className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b gap-2"
+          className={`flex-shrink-0 flex items-center justify-between py-2 border-b gap-2 ${mobile ? 'pl-14 pr-4' : 'px-4'}`}
           style={{
             borderColor: 'var(--color-surface)',
             backgroundColor: 'var(--color-bg)',
           }}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <h2 className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--color-text)' }}>
+            <h2 className="text-sm font-medium min-w-0 truncate" style={{ color: 'var(--color-text)' }}>
               {conversationTitle || 'New Conversation'}
             </h2>
-            <button
+            {!mobile && <button
               onClick={handleChangeCwd}
               title={`Working directory: ${displayCwd}\nClick to change`}
               className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs truncate max-w-[300px] hover:opacity-80 transition-opacity"
@@ -349,7 +351,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
                 <path d="M1 3.5A1.5 1.5 0 012.5 2h3.879a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 009.56 4H13.5A1.5 1.5 0 0115 5.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
               </svg>
               <span className="truncate">{displayCwd}</span>
-            </button>
+            </button>}
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <div
@@ -364,7 +366,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
             <button
               onClick={() => setShowOverrides((v) => !v)}
               title="AI Settings overrides"
-              className="p-1 rounded hover:opacity-80 transition-opacity"
+              className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'p-2.5' : 'p-1'}`}
               style={{ color: Object.keys(convOverrides).length > 0 ? 'var(--color-primary)' : 'var(--color-text-muted)' }}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -425,54 +427,108 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
 
         {/* Input area with file upload + @ mention + voice buttons */}
         <div
-          className="flex-shrink-0 p-3 border-t"
+          className={`flex-shrink-0 p-3 border-t ${mobile ? 'mobile-safe-bottom' : ''}`}
           style={{ borderColor: 'var(--color-surface)', backgroundColor: 'var(--color-bg)' }}
         >
-          <div className="flex items-center gap-2">
-            <FileUploadButton onFilesSelected={handleFilesSelected} />
-            <button
-              onClick={() => messageInputRef.current?.triggerMention()}
-              className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-opacity hover:opacity-80"
-              style={{
-                backgroundColor: 'var(--color-deep)',
-                color: 'var(--color-text-muted)',
-              }}
-              title="Mention a file (@)"
-              aria-label="Mention file"
-            >
-              <span className="text-sm font-bold">@</span>
-            </button>
-            <VoiceInputButton disabled={!isAuthenticated || !conversationId} />
-            <MessageInput
-              ref={messageInputRef}
-              onSend={handleSend}
-              onPaste={handlePaste}
-              disabled={!isAuthenticated || !conversationId}
-              isStreaming={isStreaming}
-              externalText={autoSendVoice ? undefined : (lastTranscription ?? undefined)}
-              cwd={displayCwd}
-              excludePatterns={excludePatterns}
-              skillsMode={effectiveSettings['ai_skills'] ?? 'off'}
-              disabledSkills={disabledSkills}
-              onCanSendChange={setCanSend}
-            />
-            <button
-              onClick={() => messageInputRef.current?.send()}
-              disabled={!canSend}
-              className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-opacity"
-              style={{
-                backgroundColor: 'var(--color-primary)',
-                opacity: canSend ? 1 : 0.4,
-              }}
-              aria-label="Send message"
-              title="Send message"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
-          </div>
+          {mobile ? (
+            <>
+              {/* Mobile: two rows — action toolbar + input/send */}
+              <div className="flex items-center gap-2 mb-2">
+                <FileUploadButton onFilesSelected={handleFilesSelected} />
+                <button
+                  onClick={() => messageInputRef.current?.triggerMention()}
+                  className="flex-shrink-0 w-11 h-11 rounded-md flex items-center justify-center transition-opacity hover:opacity-80"
+                  style={{
+                    backgroundColor: 'var(--color-deep)',
+                    color: 'var(--color-text-muted)',
+                  }}
+                  title="Mention a file (@)"
+                  aria-label="Mention file"
+                >
+                  <span className="text-sm font-bold">@</span>
+                </button>
+                <VoiceInputButton disabled={!isAuthenticated || !conversationId} />
+              </div>
+              <div className="flex items-center gap-2">
+                <MessageInput
+                  ref={messageInputRef}
+                  onSend={handleSend}
+                  onPaste={handlePaste}
+                  disabled={!isAuthenticated || !conversationId}
+                  isStreaming={isStreaming}
+                  externalText={autoSendVoice ? undefined : (lastTranscription ?? undefined)}
+                  cwd={displayCwd}
+                  excludePatterns={excludePatterns}
+                  skillsMode={effectiveSettings['ai_skills'] ?? 'off'}
+                  disabledSkills={disabledSkills}
+                  onCanSendChange={setCanSend}
+                />
+                <button
+                  onClick={() => messageInputRef.current?.send()}
+                  disabled={!canSend}
+                  className="flex-shrink-0 w-11 h-11 rounded-md flex items-center justify-center transition-opacity"
+                  style={{
+                    backgroundColor: 'var(--color-primary)',
+                    opacity: canSend ? 1 : 0.4,
+                  }}
+                  aria-label="Send message"
+                  title="Send message"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Desktop: single row */
+            <div className="flex items-center gap-2">
+              <FileUploadButton onFilesSelected={handleFilesSelected} />
+              <button
+                onClick={() => messageInputRef.current?.triggerMention()}
+                className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: 'var(--color-deep)',
+                  color: 'var(--color-text-muted)',
+                }}
+                title="Mention a file (@)"
+                aria-label="Mention file"
+              >
+                <span className="text-sm font-bold">@</span>
+              </button>
+              <VoiceInputButton disabled={!isAuthenticated || !conversationId} />
+              <MessageInput
+                ref={messageInputRef}
+                onSend={handleSend}
+                onPaste={handlePaste}
+                disabled={!isAuthenticated || !conversationId}
+                isStreaming={isStreaming}
+                externalText={autoSendVoice ? undefined : (lastTranscription ?? undefined)}
+                cwd={displayCwd}
+                excludePatterns={excludePatterns}
+                skillsMode={effectiveSettings['ai_skills'] ?? 'off'}
+                disabledSkills={disabledSkills}
+                onCanSendChange={setCanSend}
+              />
+              <button
+                onClick={() => messageInputRef.current?.send()}
+                disabled={!canSend}
+                className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-opacity"
+                style={{
+                  backgroundColor: 'var(--color-primary)',
+                  opacity: canSend ? 1 : 0.4,
+                }}
+                aria-label="Send message"
+                title="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {showOverrides && conversationId && (

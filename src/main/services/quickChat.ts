@@ -5,6 +5,7 @@ import type Database from 'better-sqlite3'
 import { registerStreamWindow } from './streaming'
 import { reregister } from './globalShortcuts'
 import { getMainWindow } from '../index'
+import { broadcast } from '../utils/broadcast'
 import { DEFAULT_MODEL } from '../../shared/constants'
 import { duckVolume, restoreVolume } from '../utils/volume'
 
@@ -47,6 +48,7 @@ function ensureConversation(mode?: 'text' | 'voice'): number {
   if (win && !win.isDestroyed()) {
     win.webContents.send('conversations:refresh')
   }
+  broadcast('conversations:refresh')
 
   return newId
 }

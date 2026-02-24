@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVoiceInputStore } from '../../stores/voiceInputStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface VoiceInputButtonProps {
   disabled: boolean
 }
 
 export function VoiceInputButton({ disabled }: VoiceInputButtonProps) {
+  const mobile = useMobileMode()
   const { isRecording, isTranscribing, error, toggleRecording, clearError } = useVoiceInputStore()
   const [showError, setShowError] = useState(false)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
@@ -45,7 +47,7 @@ export function VoiceInputButton({ disabled }: VoiceInputButtonProps) {
       <button
         onClick={handleClick}
         disabled={disabled}
-        className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all hover:opacity-80 ${textColorClass}`}
+        className={`flex-shrink-0 rounded-md flex items-center justify-center transition-all hover:opacity-80 ${mobile ? 'w-11 h-11' : 'w-8 h-8'} ${textColorClass}`}
         style={{
           backgroundColor: buttonColor,
           opacity: disabled ? 0.4 : 1,

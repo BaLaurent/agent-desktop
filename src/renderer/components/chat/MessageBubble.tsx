@@ -4,6 +4,7 @@ import { ToolCallsSection } from './ToolCallsSection'
 import { TaskFormModal } from '../scheduler/TaskFormModal'
 import { useTtsStore } from '../../stores/ttsStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useMobileMode } from '../../hooks/useMobileMode'
 import type { Message, CreateScheduledTask } from '../../../shared/types'
 
 interface MessageBubbleProps {
@@ -32,6 +33,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
   const [editContent, setEditContent] = useState(message.content)
   const [showActions, setShowActions] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const mobile = useMobileMode()
 
   const isUser = message.role === 'user'
 
@@ -71,11 +73,12 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
   return (
     <div
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onMouseEnter={mobile ? undefined : () => setShowActions(true)}
+      onMouseLeave={mobile ? undefined : () => setShowActions(false)}
+      onClick={mobile ? () => { if (!isEditing) setShowActions(prev => !prev) } : undefined}
     >
       <div
-        className={`max-w-[80%] rounded-lg px-4 py-3 relative ${
+        className={`rounded-lg px-4 py-3 relative ${mobile ? 'max-w-[95%]' : 'max-w-[80%]'} ${
           isUser ? 'rounded-br-sm' : 'rounded-bl-sm'
         }`}
         style={{
@@ -97,7 +100,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full rounded p-2 text-sm resize-none"
+              className={`w-full rounded p-2 resize-none ${mobile ? 'text-base' : 'text-sm'}`}
               style={{
                 backgroundColor: 'var(--color-bg)',
                 color: 'var(--color-text)',
@@ -106,16 +109,16 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
               rows={4}
               autoFocus
             />
-            <div className="flex gap-2 mt-2">
+            <div className={`flex gap-2 mt-2 ${mobile ? 'flex-wrap' : ''}`}>
               <button
                 onClick={handleSaveEdit}
-                className="px-3 py-1 rounded text-xs font-medium bg-primary text-contrast"
+                className={`rounded font-medium bg-primary text-contrast ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
               >
                 Save & Send
               </button>
               <button
                 onClick={handleCancelEdit}
-                className="px-3 py-1 rounded text-xs"
+                className={`rounded ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
                 style={{ color: 'var(--color-text-muted)' }}
               >
                 Cancel
@@ -149,12 +152,12 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
         {/* Hover actions */}
         {(showActions || isSpeakingThis) && !isEditing && (
           <div
-            className="absolute -top-3 right-2 flex gap-1 rounded px-1 py-0.5 shadow-md"
+            className={`absolute -top-3 right-2 flex rounded shadow-md ${mobile ? 'gap-2 px-1.5 py-1 flex-wrap' : 'gap-1 px-1 py-0.5'}`}
             style={{ backgroundColor: 'var(--color-deep)' }}
           >
             <button
               onClick={handleCopy}
-              className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+              className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
               style={{ color: 'var(--color-text-muted)' }}
               title="Copy"
             >
@@ -163,7 +166,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {showTtsButton && (
               <button
                 onClick={() => isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)}
-                className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
                 style={{ color: isSpeakingThis ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
                 title={isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
               >
@@ -173,7 +176,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {isUser && onEdit && (
               <button
                 onClick={handleStartEdit}
-                className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Edit"
               >
@@ -183,7 +186,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {isUser && (
               <button
                 onClick={() => setShowTaskForm(true)}
-                className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Schedule as recurring task"
               >
@@ -193,7 +196,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {!isUser && isLast && onRegenerate && (
               <button
                 onClick={onRegenerate}
-                className="px-2 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity"
+                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Regenerate"
               >
