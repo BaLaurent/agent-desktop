@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import type { ChildProcess } from 'child_process'
 import { promises as fsp } from 'fs'
 import * as os from 'os'
@@ -267,6 +267,33 @@ function speakWithSpdSay(text: string): Promise<void> {
   })
 }
 
+/** macOS built-in `say` command — no audio player needed, plays directly. */
+function speakWithSay(text: string, voice?: string): Promise<void> {
+  if (process.platform !== 'darwin') {
+    return Promise.reject(new Error('say is only available on macOS'))
+  }
+  return new Promise((resolve, reject) => {
+    const args = voice ? ['-v', voice, text] : [text]
+    const proc = spawn('say', args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    currentProcess = proc
+    let stderr = ''
+
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.on('error', (err) => {
+      currentProcess = null
+      reject(err)
+    })
+    proc.on('exit', (code) => {
+      if (currentProcess === proc) currentProcess = null
+      if (code !== 0) {
+        reject(new Error(`say exited with code ${code}${stderr.trim() ? ': ' + stderr.trim().slice(0, 200) : ''}`))
+      } else {
+        resolve()
+      }
+    })
+  })
+}
+
 // ─── Exported functions ──────────────────────────────────────
 
 /** Kill current process without notification — used internally by speak() to avoid
@@ -325,6 +352,12 @@ export async function speak(text: string, db: Database.Database): Promise<void> 
         const resolved = findBinaryInPath('spd-say')
         if (!resolved) throw new Error('spd-say binary not found')
         await speakWithSpdSay(cleanText)
+        break
+      }
+      case 'say': {
+        if (process.platform !== 'darwin') throw new Error('say is only available on macOS')
+        const voice = getSetting(db, 'tts_sayVoice') || undefined
+        await speakWithSay(cleanText, voice)
         break
       }
       default:
@@ -424,6 +457,19 @@ export async function validateConfig(
       playerFound = true
       break
     }
+    case 'say': {
+      if (process.platform !== 'darwin') {
+        error = 'say is only available on macOS'
+        break
+      }
+      const resolved = findBinaryInPath('say')
+      providerFound = !!resolved
+      if (!resolved) error = 'say binary not found (unexpected on macOS)'
+      // say plays directly, no separate player needed
+      playerFound = true
+      playerPath = resolved || '/usr/bin/say'
+      break
+    }
     default:
       error = `Unknown provider: ${provider}`
   }
@@ -436,6 +482,26 @@ export function detectPlayers(): { name: string; path: string; available: boolea
     const found = findBinaryInPath(name)
     return { name, path: found || '', available: !!found }
   })
+}
+
+export function listSayVoices(): { name: string; locale: string }[] {
+  if (process.platform !== 'darwin') return []
+  try {
+    const result = spawnSync('say', ['-v', '?'], { encoding: 'utf8', timeout: 5000 })
+    if (!result.stdout) return []
+    return result.stdout
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        // Format: "Voice Name    en_US    # sample text"
+        const match = line.match(/^(.+?)\s{2,}([a-z]{2}_[A-Z]{2,})\s+#/)
+        if (!match) return null
+        return { name: match[1].trim(), locale: match[2] }
+      })
+      .filter((v): v is { name: string; locale: string } => v !== null)
+  } catch {
+    return []
+  }
 }
 
 // ─── IPC handlers ────────────────────────────────────────────
@@ -463,5 +529,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
   ipcMain.handle('tts:detectPlayers', () => {
     return detectPlayers()
+  })
+
+  ipcMain.handle('tts:listSayVoices', () => {
+    return listSayVoices()
   })
 }

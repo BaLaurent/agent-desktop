@@ -132,6 +132,7 @@ const api: AgentAPI = {
     stop: () => withTimeout(ipcRenderer.invoke('tts:stop')),
     validate: () => withTimeout(ipcRenderer.invoke('tts:validate')),
     detectPlayers: () => withTimeout(ipcRenderer.invoke('tts:detectPlayers')),
+    listSayVoices: () => withTimeout(ipcRenderer.invoke('tts:listSayVoices')),
     onStateChange: (callback: (state: { speaking: boolean; messageId?: number }) => void) => {
       const handler = (_e: Electron.IpcRendererEvent, state: { speaking: boolean; messageId?: number }) => callback(state)
       ipcRenderer.on('tts:stateChange', handler)

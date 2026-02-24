@@ -28,13 +28,17 @@ export function TTSSettings() {
   const { settings, setSetting } = useSettingsStore()
 
   const [players, setPlayers] = useState<DetectedPlayer[]>([])
+  const [sayVoices, setSayVoices] = useState<{ name: string; locale: string }[]>([])
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [testing, setTesting] = useState(false)
+
+  const isMacOS = navigator.userAgent.includes('Macintosh')
 
   const provider = settings.tts_provider || ''
   const piperUrl = settings.tts_piperUrl || ''
   const edgettsVoice = settings.tts_edgettsVoice || ''
   const edgettsBinary = settings.tts_edgettsBinary || ''
+  const sayVoice = settings.tts_sayVoice || ''
   const playerPath = settings.tts_playerPath || 'auto'
   const maxLength = settings.tts_maxLength || '2000'
   const responseMode = settings.tts_responseMode || 'off'
@@ -44,6 +48,9 @@ export function TTSSettings() {
   // Detect available audio players on mount
   useEffect(() => {
     window.agent.tts.detectPlayers().then(setPlayers).catch(() => {})
+    if (isMacOS) {
+      window.agent.tts.listSayVoices().then(setSayVoices).catch(() => {})
+    }
   }, [])
 
   const handleTest = useCallback(async () => {
@@ -52,7 +59,7 @@ export function TTSSettings() {
     try {
       const result = await window.agent.tts.validate()
       setValidation(result)
-      if (result.providerFound && (result.playerFound || provider === 'spd-say')) {
+      if (result.providerFound && (result.playerFound || provider === 'spd-say' || provider === 'say')) {
         try {
           await window.agent.tts.speak('This is a test of the text to speech system.')
         } catch (speakErr) {
@@ -70,16 +77,28 @@ export function TTSSettings() {
 
   const isPlayerCustom = playerPath !== 'auto' && !players.some((p) => p.path === playerPath)
   const showPlayerSelect = provider === 'piper' || provider === 'edgetts'
+  const noPlayerNeeded = provider === 'spd-say' || provider === 'say'
 
   return (
     <div className="flex flex-col gap-6">
       {/* Info */}
       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-        Text-to-speech supports three providers:{' '}
-        <span className="font-medium" style={{ color: 'var(--color-text)' }}>Piper</span> (local HTTP server),{' '}
-        <span className="font-medium" style={{ color: 'var(--color-text)' }}>EdgeTTS</span> (Microsoft Edge voices via CLI), and{' '}
-        <span className="font-medium" style={{ color: 'var(--color-text)' }}>spd-say</span> (speech-dispatcher, no extra setup).
-        Piper and EdgeTTS require an audio player (aplay, paplay, ffplay, or mpv) to play generated audio files.
+        {isMacOS ? (
+          <>
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>say</span> is the recommended option — built into macOS, no setup required.
+            {' '}Also available: <span className="font-medium" style={{ color: 'var(--color-text)' }}>Piper</span> (local HTTP server) and{' '}
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>EdgeTTS</span> (Microsoft Edge voices via CLI).
+            Piper and EdgeTTS require an audio player (mpv or ffplay) to play generated audio files.
+          </>
+        ) : (
+          <>
+            Text-to-speech supports three providers:{' '}
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>Piper</span> (local HTTP server),{' '}
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>EdgeTTS</span> (Microsoft Edge voices via CLI), and{' '}
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>spd-say</span> (speech-dispatcher, no extra setup).
+            Piper and EdgeTTS require an audio player (aplay, paplay, ffplay, or mpv) to play generated audio files.
+          </>
+        )}
       </p>
 
       {/* Provider */}
@@ -98,9 +117,10 @@ export function TTSSettings() {
           aria-label="TTS provider"
         >
           <option value="">Off</option>
+          {isMacOS && <option value="say">say (macOS built-in)</option>}
           <option value="piper">Piper (HTTP)</option>
           <option value="edgetts">EdgeTTS</option>
-          <option value="spd-say">spd-say</option>
+          {!isMacOS && <option value="spd-say">spd-say</option>}
         </select>
       </div>
 
@@ -164,6 +184,29 @@ export function TTSSettings() {
             </span>
           </div>
         </>
+      )}
+
+      {/* say: voice picker */}
+      {provider === 'say' && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Voice <span className="font-normal" style={{ color: 'var(--color-text-muted)' }}>(optional)</span>
+          </label>
+          <select
+            value={sayVoice}
+            onChange={(e) => setSetting('tts_sayVoice', e.target.value)}
+            className="w-full px-3 py-2 rounded text-sm outline-none"
+            style={inputStyle}
+            aria-label="say voice"
+          >
+            <option value="">System default</option>
+            {sayVoices.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} ({v.locale})
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {/* Audio Player (Piper & EdgeTTS only) */}

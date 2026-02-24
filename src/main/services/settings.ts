@@ -58,6 +58,7 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'tts_piperUrl',
   'tts_edgettsVoice',
   'tts_edgettsBinary',
+  'tts_sayVoice',
   'tts_playerPath',
   'tts_maxLength',
   'tts_autoWordLimit',

@@ -134,6 +134,7 @@ export interface AgentAPI {
     stop(): Promise<void>
     validate(): Promise<{ provider: string | null; providerFound: boolean; playerFound: boolean; playerPath: string; error?: string }>
     detectPlayers(): Promise<Array<{ name: string; path: string; available: boolean }>>
+    listSayVoices(): Promise<Array<{ name: string; locale: string }>>
     onStateChange(callback: (state: { speaking: boolean; messageId?: number }) => void): () => void
   }
   openscad: {
