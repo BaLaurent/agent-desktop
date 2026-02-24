@@ -3,7 +3,7 @@ import { useShortcutsStore } from '../../stores/shortcutsStore'
 import { formatKeybinding } from '../../utils/shortcutMatcher'
 import type { SystemInfo } from '../../../shared/types'
 
-const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice', 'show_app'])
+const GLOBAL_SHORTCUT_ACTIONS = new Set(['quick_chat', 'quick_voice', 'show_app', 'stop_tts'])
 
 function formatActionName(action: string): string {
   return action

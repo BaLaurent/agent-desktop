@@ -9,6 +9,7 @@ interface ShortcutCallbacks {
   onQuickChat: () => void
   onQuickVoice: () => void
   onShowApp: () => void
+  onStopTts: () => void
 }
 
 let db: Database.Database
@@ -58,16 +59,18 @@ async function doReregister(): Promise<void> {
   const chatKey = readShortcutKeybinding('quick_chat') || 'Alt+Space'
   const voiceKey = readShortcutKeybinding('quick_voice') || 'Alt+Shift+Space'
   const showKey = readShortcutKeybinding('show_app') || 'Super+A'
+  const stopTtsKey = readShortcutKeybinding('stop_tts') || 'Ctrl+Shift+T'
 
   if (sessionType === 'wayland') {
     // Fast path: if session already active, just rebind hyprctl keys (no D-Bus teardown).
     // The portal session and Activated listener stay intact — only the key combos change.
     if (waylandActive) {
-      logToFile(`Rebinding Wayland shortcuts (session alive): chat=${chatKey} voice=${voiceKey} show=${showKey}`)
+      logToFile(`Rebinding Wayland shortcuts (session alive): chat=${chatKey} voice=${voiceKey} show=${showKey} stopTts=${stopTtsKey}`)
       const ok = await rebindWaylandShortcuts([
         { id: 'quick-chat', accelerator: chatKey },
         { id: 'quick-voice', accelerator: voiceKey },
         { id: 'show-app', accelerator: showKey },
+        { id: 'stop-tts', accelerator: stopTtsKey },
       ])
       if (ok) {
         logToFile('Wayland rebind OK')
@@ -78,18 +81,20 @@ async function doReregister(): Promise<void> {
       waylandActive = false
     }
 
-    logToFile(`Registering Wayland shortcuts: chat=${chatKey} voice=${voiceKey} show=${showKey}`)
+    logToFile(`Registering Wayland shortcuts: chat=${chatKey} voice=${voiceKey} show=${showKey} stopTts=${stopTtsKey}`)
     const ok = await registerWaylandShortcuts(
       [
         { id: 'quick-chat', accelerator: chatKey, description: 'Quick Chat' },
         { id: 'quick-voice', accelerator: voiceKey, description: 'Quick Voice' },
         { id: 'show-app', accelerator: showKey, description: 'Show App' },
+        { id: 'stop-tts', accelerator: stopTtsKey, description: 'Stop TTS' },
       ],
       (shortcutId) => {
         logToFile(`Activated: ${shortcutId}`)
         if (shortcutId === 'quick-chat') callbacks.onQuickChat()
         if (shortcutId === 'quick-voice') callbacks.onQuickVoice()
         if (shortcutId === 'show-app') callbacks.onShowApp()
+        if (shortcutId === 'stop-tts') callbacks.onStopTts()
       }
     )
     waylandActive = ok
@@ -115,6 +120,11 @@ async function doReregister(): Promise<void> {
       globalShortcut.register(showKey, callbacks.onShowApp)
     } catch (e) {
       console.warn('[globalShortcuts] Failed to register', showKey, e)
+    }
+    try {
+      globalShortcut.register(stopTtsKey, callbacks.onStopTts)
+    } catch (e) {
+      console.warn('[globalShortcuts] Failed to register', stopTtsKey, e)
     }
   }
 }

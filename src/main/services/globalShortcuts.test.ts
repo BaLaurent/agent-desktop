@@ -63,7 +63,7 @@ describe('globalShortcuts', () => {
       mockSessionType = 'x11'
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
       const db = makeMockDb({ quick_chat: 'Alt+Space', quick_voice: 'Alt+Shift+Space', show_app: 'Super+A' })
-      const cbs = { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() }
+      const cbs = { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() }
 
       registerGlobalShortcuts(db as any, cbs)
       await reregister()
@@ -71,12 +71,13 @@ describe('globalShortcuts', () => {
       expect(mockRegister).toHaveBeenCalledWith('Alt+Space', cbs.onQuickChat)
       expect(mockRegister).toHaveBeenCalledWith('Alt+Shift+Space', cbs.onQuickVoice)
       expect(mockRegister).toHaveBeenCalledWith('Super+A', cbs.onShowApp)
+      expect(mockRegister).toHaveBeenCalledWith('Ctrl+Shift+T', cbs.onStopTts)
     })
 
     it('unregisters all before re-registering on X11', async () => {
       mockSessionType = 'x11'
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
-      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       await reregister()
 
@@ -86,13 +87,14 @@ describe('globalShortcuts', () => {
     it('uses default keybindings when DB returns none', async () => {
       mockSessionType = 'x11'
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
-      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       await reregister()
 
       expect(mockRegister).toHaveBeenCalledWith('Alt+Space', expect.any(Function))
       expect(mockRegister).toHaveBeenCalledWith('Alt+Shift+Space', expect.any(Function))
       expect(mockRegister).toHaveBeenCalledWith('Super+A', expect.any(Function))
+      expect(mockRegister).toHaveBeenCalledWith('Ctrl+Shift+T', expect.any(Function))
     })
   })
 
@@ -100,7 +102,7 @@ describe('globalShortcuts', () => {
     it('uses full registration on first call', async () => {
       mockSessionType = 'wayland'
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
-      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       // Wait for the implicit fire-and-forget reregister() to complete via the lock
       // by calling reregister() which awaits the lock first
@@ -118,7 +120,7 @@ describe('globalShortcuts', () => {
     it('uses rebind (fast path) on subsequent calls when session active', async () => {
       mockSessionType = 'wayland'
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
-      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       // registerGlobalShortcuts fires reregister() internally (fire-and-forget).
       // Our explicit await reregister() waits for that, then runs a second doReregister.
@@ -133,7 +135,7 @@ describe('globalShortcuts', () => {
       mockSessionType = 'wayland'
       mockRebindWayland.mockResolvedValueOnce(false)
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
-      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       // Call 1 (implicit): full registration → waylandActive = true
       // Call 2 (explicit): rebind returns false → falls through to full registration
@@ -146,7 +148,7 @@ describe('globalShortcuts', () => {
       mockSessionType = 'wayland'
       const db = makeMockDb({ quick_chat: 'Ctrl+Space', quick_voice: 'Ctrl+Shift+Space', show_app: 'Super+B' })
       const { registerGlobalShortcuts, reregister } = await import('./globalShortcuts')
-      registerGlobalShortcuts(db as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(db as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       // Call 1 (implicit): full registration
       // Call 2 (explicit): rebind with updated keys
@@ -156,6 +158,7 @@ describe('globalShortcuts', () => {
         { id: 'quick-chat', accelerator: 'Ctrl+Space' },
         { id: 'quick-voice', accelerator: 'Ctrl+Shift+Space' },
         { id: 'show-app', accelerator: 'Super+B' },
+        { id: 'stop-tts', accelerator: 'Ctrl+Shift+T' },
       ])
     })
   })
@@ -164,7 +167,7 @@ describe('globalShortcuts', () => {
     it('unregisters Wayland shortcuts when active', async () => {
       mockSessionType = 'wayland'
       const { registerGlobalShortcuts, reregister, unregisterAll } = await import('./globalShortcuts')
-      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn() })
+      registerGlobalShortcuts(makeMockDb() as any, { onQuickChat: vi.fn(), onQuickVoice: vi.fn(), onShowApp: vi.fn(), onStopTts: vi.fn() })
 
       await reregister()
       await unregisterAll()

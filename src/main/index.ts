@@ -13,6 +13,7 @@ import { showOverlay } from './services/quickChat'
 import { startScheduler, stopScheduler } from './services/scheduler'
 import { startBridge, stopBridge } from './services/schedulerBridge'
 import { shutdownAllKernels } from './services/jupyter'
+import { stop as stopTts } from './services/tts'
 
 // Custom protocol — must be registered before app.ready
 registerPreviewScheme()
@@ -125,6 +126,7 @@ if (!gotLock) {
       onQuickChat: () => showOverlay('text'),
       onQuickVoice: () => showOverlay('voice'),
       onShowApp: () => toggleAppWindow(),
+      onStopTts: () => stopTts(),
     })
 
     startBridge(db)
