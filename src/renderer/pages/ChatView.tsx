@@ -9,6 +9,7 @@ import { AttachmentPreview } from '../components/attachments/AttachmentPreview'
 import { AIOverridesPopover } from '../components/settings/AIOverridesPopover'
 import { ChatStatusLine } from '../components/chat/ChatStatusLine'
 import { useMobileMode } from '../hooks/useMobileMode'
+import { useUiStore } from '../stores/uiStore'
 import { useChatStore } from '../stores/chatStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAuthStore } from '../stores/authStore'
@@ -354,6 +355,19 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
             </button>}
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {mobile && (
+              <button
+                onClick={useUiStore.getState().togglePanel}
+                title="File explorer"
+                className="p-2.5 rounded hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--color-text-muted)' }}
+                aria-label="Open file explorer"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1 3.5A1.5 1.5 0 012.5 2h3.879a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 009.56 4H13.5A1.5 1.5 0 0115 5.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
+                </svg>
+              </button>
+            )}
             <div
               className="text-xs px-2 py-0.5 rounded"
               style={{

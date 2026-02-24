@@ -302,6 +302,11 @@ function generateShim(token: string): string {
       onConversationsRefresh: function(cb) { return subscribe('conversations:refresh', cb); },
       onConversationUpdated: function(cb) { return subscribe('messages:conversationUpdated', cb); },
     },
+    server: {
+      start: noopAsync,
+      stop: noopAsync,
+      getStatus: function() { return Promise.resolve({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, clients: 0, firewallWarning: null }); },
+    },
     window: {
       minimize: noop,
       maximize: noop,
@@ -530,7 +535,7 @@ export function startServer(port: number): Promise<{ url: string; token: string 
       }
     })
 
-    wss = new WebSocketServer({ noServer: true })
+    wss = new WebSocketServer({ noServer: true, maxPayload: 10 * 1024 * 1024 })
 
     httpServer.on('upgrade', (req, socket, head) => {
       const url = new URL(req.url || '/', `http://localhost:${port}`)
@@ -572,35 +577,36 @@ export function startServer(port: number): Promise<{ url: string; token: string 
   })
 }
 
-export function stopServer(): Promise<void> {
-  return new Promise((resolve) => {
-    setBroadcastHandler(() => {})
+export async function stopServer(): Promise<void> {
+  setBroadcastHandler(() => {})
 
-    // Close all WS clients
-    for (const client of authenticatedClients) {
-      client.close()
-    }
-    authenticatedClients.clear()
+  // Close all WS clients
+  for (const client of authenticatedClients) {
+    client.close()
+  }
+  authenticatedClients.clear()
 
-    if (wss) {
-      wss.close()
-      wss = null
-    }
+  // Close WSS first, then HTTP server
+  if (wss) {
+    await new Promise<void>((resolve) => {
+      wss!.close(() => resolve())
+    })
+    wss = null
+  }
 
-    if (httpServer) {
-      httpServer.close(() => {
+  if (httpServer) {
+    await new Promise<void>((resolve) => {
+      httpServer!.close(() => {
         httpServer = null
         serverToken = null
         serverPort = null
         resolve()
       })
-    } else {
-      resolve()
-    }
-  })
+    })
+  }
 }
 
-export function getServerStatus(): {
+export async function getServerStatus(): Promise<{
   running: boolean
   port: number | null
   url: string | null
@@ -610,7 +616,7 @@ export function getServerStatus(): {
   token: string | null
   clients: number
   firewallWarning: string | null
-} {
+}> {
   if (!httpServer || !serverToken) {
     return { running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, clients: 0, firewallWarning: null }
   }
@@ -625,18 +631,32 @@ export function getServerStatus(): {
     hostname: host,
     token: serverToken,
     clients: authenticatedClients.size,
-    firewallWarning: detectFirewallBlock(serverPort!),
+    firewallWarning: await detectFirewallBlock(serverPort!),
   }
 }
 
-// ─── Firewall detection ─────────────────────────────
+// ─── Firewall detection (async + cached) ─────────────
 
-function detectFirewallBlock(port: number): string | null {
+let firewallCache: { result: string | null; port: number; ts: number } | null = null
+const FIREWALL_CACHE_TTL = 60_000 // 60s
+
+async function detectFirewallBlock(port: number): Promise<string | null> {
   if (process.platform !== 'linux') return null
 
+  // Return cached result if fresh
+  if (firewallCache && firewallCache.port === port && Date.now() - firewallCache.ts < FIREWALL_CACHE_TTL) {
+    return firewallCache.result
+  }
+
+  const result = await detectFirewallBlockUncached(port)
+  firewallCache = { result, port, ts: Date.now() }
+  return result
+}
+
+async function detectFirewallBlockUncached(port: number): Promise<string | null> {
   // Check nftables config
   try {
-    const nftConf = fs.readFileSync('/etc/nftables.conf', 'utf-8')
+    const nftConf = await fs.promises.readFile('/etc/nftables.conf', 'utf-8')
     const hasDropPolicy = /chain\s+input\s*\{[^}]*policy\s+drop/s.test(nftConf)
     if (hasDropPolicy) {
       const portAllowed = new RegExp(`tcp\\s+dport\\s+(?:\\{[^}]*\\b${port}\\b[^}]*\\}|\\b${port}\\b)\\s+accept`).test(nftConf)
@@ -650,7 +670,7 @@ function detectFirewallBlock(port: number): string | null {
 
   // Check iptables saved rules
   try {
-    const iptRules = fs.readFileSync('/etc/iptables/iptables.rules', 'utf-8')
+    const iptRules = await fs.promises.readFile('/etc/iptables/iptables.rules', 'utf-8')
     const hasDropPolicy = /:INPUT\s+DROP/.test(iptRules)
     if (hasDropPolicy) {
       const portAllowed = new RegExp(`--dport\\s+${port}\\s+-j\\s+ACCEPT`).test(iptRules)
@@ -664,14 +684,13 @@ function detectFirewallBlock(port: number): string | null {
 
   // Check ufw
   try {
-    const ufwProfiles = fs.readdirSync('/etc/ufw')
+    const ufwProfiles = await fs.promises.readdir('/etc/ufw')
     if (ufwProfiles.length > 0) {
-      const beforeRules = fs.readFileSync('/etc/ufw/before.rules', 'utf-8')
+      const beforeRules = await fs.promises.readFile('/etc/ufw/before.rules', 'utf-8')
       // ufw is active if before.rules exists and has content
       if (beforeRules.length > 100) {
-        // Check if port is explicitly allowed in user rules
         try {
-          const userRules = fs.readFileSync('/etc/ufw/user.rules', 'utf-8')
+          const userRules = await fs.promises.readFile('/etc/ufw/user.rules', 'utf-8')
           const portAllowed = new RegExp(`--dport\\s+${port}\\s+-j\\s+ACCEPT`).test(userRules)
           if (!portAllowed) {
             return `ufw may be blocking port ${port}. Run:\nsudo ufw allow ${port}/tcp`
@@ -737,7 +756,7 @@ export function registerHandlers(ipcMain: IpcMain): void {
     await stopServer()
   })
 
-  ipcMain.handle('server:getStatus', () => {
+  ipcMain.handle('server:getStatus', async () => {
     return getServerStatus()
   })
 }

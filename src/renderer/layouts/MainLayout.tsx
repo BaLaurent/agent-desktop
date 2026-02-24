@@ -7,6 +7,7 @@ import { ChatView } from '../pages/ChatView'
 import { FileExplorerPanel } from '../components/panel/FileExplorerPanel'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { useMobileMode } from '../hooks/useMobileMode'
+import { useEdgeSwipe, useSwipeDismiss } from '../hooks/useEdgeSwipe'
 
 const DEFAULT_RADIUS_PCT = 10
 
@@ -125,6 +126,31 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
     useUiStore.setState({ sidebarVisible: false })
   }, [])
 
+  const closePanel = useCallback(() => {
+    useUiStore.setState({ panelVisible: false })
+  }, [])
+
+  // Mobile: swipe from left edge → open sidebar; swipe from right edge → open file explorer
+  const openSidebar = useCallback(() => {
+    useUiStore.setState({ sidebarVisible: true })
+  }, [])
+  const openPanel = useCallback(() => {
+    useUiStore.setState({ panelVisible: true })
+  }, [])
+  useEdgeSwipe(
+    mobile && !sidebarVisible && !panelVisible ? openSidebar : null,
+    mobile && !panelVisible && !sidebarVisible ? openPanel : null,
+  )
+  // Swipe to dismiss: swipe left closes sidebar, swipe right closes file explorer
+  useSwipeDismiss(
+    mobile && sidebarVisible ? 'left' : null,
+    closeSidebar,
+  )
+  useSwipeDismiss(
+    mobile && panelVisible ? 'right' : null,
+    closePanel,
+  )
+
   const onSidebarResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     const startX = e.clientX
@@ -235,7 +261,30 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
         </ErrorBoundary>
       </div>
 
-      {/* Right panel — hidden in mobile, file explorer not usable on touch */}
+      {/* Right panel — overlay in mobile, inline in desktop */}
+      {mobile && panelVisible && (
+        <>
+          {/* Semi-transparent backdrop */}
+          <div
+            className="fixed inset-0 z-30"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+            onClick={closePanel}
+          />
+          {/* Panel overlay */}
+          <div
+            className="fixed top-0 right-0 z-40 h-full overflow-y-auto"
+            style={{
+              width: 'min(100vw, 360px)',
+              backgroundColor: 'var(--color-surface)',
+              borderLeft: '1px solid var(--color-bg)',
+            }}
+          >
+            <ErrorBoundary>
+              <FileExplorerPanel />
+            </ErrorBoundary>
+          </div>
+        </>
+      )}
       {!mobile && panelVisible && (
         <>
           {/* Resize handle */}

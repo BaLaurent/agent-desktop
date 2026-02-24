@@ -41,7 +41,7 @@ describe('webServer', () => {
     expect(result.token).toBeTruthy()
     expect(result.token.length).toBe(64) // 32 bytes = 64 hex chars
 
-    const status = getServerStatus()
+    const status = await getServerStatus()
     expect(status.running).toBe(true)
     expect(status.port).toBe(port)
     expect(status.clients).toBe(0)
@@ -85,7 +85,7 @@ describe('webServer', () => {
     expect(messages[0]).toEqual({ type: 'auth_result', success: true })
 
     // Check client count
-    const status = getServerStatus()
+    const status = await getServerStatus()
     expect(status.clients).toBe(1)
 
     ws.close()
@@ -169,11 +169,11 @@ describe('webServer', () => {
 
   it('stops cleanly', async () => {
     await startServer(port)
-    expect(getServerStatus().running).toBe(true)
+    expect((await getServerStatus()).running).toBe(true)
 
     await stopServer()
-    expect(getServerStatus().running).toBe(false)
-    expect(getServerStatus().clients).toBe(0)
+    expect((await getServerStatus()).running).toBe(false)
+    expect((await getServerStatus()).clients).toBe(0)
   })
 
   it('returns existing server on double start', async () => {
