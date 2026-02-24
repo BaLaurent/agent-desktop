@@ -41,8 +41,8 @@
 - Context menu: Open Default App, Reveal, Copy Path, Rename (inline), Duplicate, Move to Trash, New Conversation from Files
 - **Multi-file selection**: Ctrl+click (toggle) and Shift+click (range) — OS file manager pattern; `multiSelectedPaths: Set<string>` in store, independent of `selectedFilePath` (viewer)
   - Right-click auto-adds node to multi-selection; context menu shows "New conversation with N items"
-  - `files:prepareSession` IPC: copies or symlinks selected files into new conversation's session folder (dedup with `_1`, `_2` suffixes)
-  - `NewConversationFromFilesModal`: confirmation dialog with copy/symlink method selector
+  - `files:prepareSession` IPC: copies or symlinks selected files into new conversation's session folder (dedup with `_1`, `_2` suffixes); optional `renames?: Record<string, string>` param overrides destination filenames (validated: no `/`, `\`, `\0`, no empty)
+  - `NewConversationFromFilesModal`: confirmation dialog with copy/symlink method selector + click-to-edit filenames (inline rename with validation: empty, duplicates, path separators); `onConfirm(method, renames)` passes only changed entries
   - `getVisibleNodePaths()` pure DFS helper computes range for Shift+click (only expanded nodes)
   - Normal click clears multi-selection; `loadTree`/`clear`/`refresh` reset it
 - `@mention` uses VS Code-style fuzzy matching (`src/renderer/utils/fuzzyMatch.ts`)
