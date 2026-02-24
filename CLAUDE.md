@@ -4,6 +4,7 @@
 - `npm run dev` — start dev server with hot reload
 - `npm run build` — compile TypeScript (output: `out/`)
 - `npm run dist:linux` — package AppImage + deb (output: `release/`)
+- `npm run publish:linux` — build + publish to GitHub Releases with `--publish always` (requires `GH_TOKEN`)
 
 ## Architecture
 - Electron + React + Zustand + Tailwind + SQLite (sql.js / WASM)
@@ -295,8 +296,9 @@
 - Native `Notification` on update-available and update-downloaded
 - Tray wired via `setTrayUpdateCallbacks(checkForUpdates, installUpdate)` from `index.ts` to avoid circular imports
 - `autoUpdater.logger = null` — suppresses verbose console logging (stack traces on check failure)
-- **Gotcha**: 404 for `latest-linux.yml` is expected when no release metadata exists; error handler treats it as `not-available` instead of showing an error
-- **Publishing**: releases must use `electron-builder --publish always` to auto-generate and upload `latest-linux.yml`; manual AppImage uploads won't include update metadata
+- **Gotcha**: 404 for `latest-linux.yml` is expected when no release metadata exists; error handler logs `[updater]` prefix and treats it as `not-available`
+- **Gotcha (artifact naming)**: `artifactName: "${name}-${version}-${arch}.${ext}"` on `linux:` in `electron-builder.yml` — without it, `productName` (with space) causes filename mismatch between builder, updater, and GitHub uploads (space → hyphen vs dot)
+- **Publishing**: releases must use `electron-builder --publish always` (`npm run publish:linux`) to auto-generate and upload `latest-linux.yml`; manual AppImage uploads won't include update metadata
 - AboutSection subscribes to `onStatus()` for real-time UI (progress bar, state-specific buttons)
 
 ## Tray
