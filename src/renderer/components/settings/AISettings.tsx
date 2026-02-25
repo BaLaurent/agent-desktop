@@ -68,7 +68,7 @@ export function AISettings() {
             value={apiKey}
             onChange={(e) => handleApiKeyChange(e.target.value)}
             placeholder="sk-ant-..."
-            className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono"
+            className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono mobile:text-base"
             style={{
               backgroundColor: 'var(--color-bg)',
               color: 'var(--color-text)',
@@ -77,7 +77,7 @@ export function AISettings() {
           />
           <button
             onClick={() => setShowApiKey((v) => !v)}
-            className="px-2 py-1.5 rounded text-xs transition-opacity hover:opacity-70"
+            className="px-2 py-1.5 rounded text-xs transition-opacity hover:opacity-70 mobile:px-4 mobile:py-3 mobile:text-sm"
             style={{ color: 'var(--color-text-muted)' }}
             aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
             title={showApiKey ? 'Hide' : 'Show'}
@@ -103,7 +103,7 @@ export function AISettings() {
             value={baseUrl}
             onChange={(e) => setSetting('ai_baseUrl', e.target.value)}
             placeholder="https://api.anthropic.com"
-            className="w-56 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono"
+            className="w-56 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono mobile:text-base"
             style={{
               backgroundColor: 'var(--color-bg)',
               color: 'var(--color-text)',
@@ -134,7 +134,7 @@ export function AISettings() {
                 setSetting('ai_customModel', '') // clear custom model
               }
             }}
-            className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none"
+            className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
             style={{
               backgroundColor: 'var(--color-bg)',
               color: 'var(--color-text)',
@@ -154,7 +154,7 @@ export function AISettings() {
               value={customModel}
               onChange={(e) => setSetting('ai_customModel', e.target.value)}
               placeholder="anthropic/claude-3.5-sonnet"
-              className="w-48 px-3 py-1.5 rounded text-xs border border-[var(--color-text-muted)]/20 outline-none font-mono"
+              className="w-48 px-3 py-1.5 rounded text-xs border border-[var(--color-text-muted)]/20 outline-none font-mono mobile:text-base"
               style={{
                 backgroundColor: 'var(--color-bg)',
                 color: 'var(--color-text)',
@@ -183,7 +183,7 @@ export function AISettings() {
             const v = Math.max(0, Number(e.target.value) || 0)
             setSetting('ai_maxTurns', String(v))
           }}
-          className="w-20 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right"
+          className="w-20 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right mobile:text-base"
           style={{
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',
@@ -212,7 +212,7 @@ export function AISettings() {
             const v = Math.max(0, Math.min(100000, Number(e.target.value) || 0))
             setSetting('ai_maxThinkingTokens', String(v))
           }}
-          className="w-24 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right"
+          className="w-24 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right mobile:text-base"
           style={{
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',
@@ -241,7 +241,7 @@ export function AISettings() {
             const v = Math.max(0, Math.min(10, Number(e.target.value) || 0))
             setSetting('ai_maxBudgetUsd', String(v))
           }}
-          className="w-24 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right"
+          className="w-24 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right mobile:text-base"
           style={{
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',
@@ -263,7 +263,7 @@ export function AISettings() {
         <select
           value={permissionMode}
           onChange={(e) => setSetting('ai_permissionMode', e.target.value)}
-          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none"
+          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
           style={{
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',
@@ -291,7 +291,7 @@ export function AISettings() {
         <select
           value={skills}
           onChange={(e) => setSetting('ai_skills', e.target.value)}
-          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none"
+          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
           style={{
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',
@@ -397,14 +397,14 @@ export function AISettings() {
                   setSetting('hooks_cwdRestriction', 'false')
                   setConfirmDisable(false)
                 }}
-                className="px-2 py-0.5 rounded text-xs font-medium bg-warning text-base"
+                className="px-2 py-0.5 rounded text-xs font-medium bg-warning text-base mobile:px-4 mobile:py-3 mobile:text-sm"
                 aria-label="Confirm disable CWD restriction"
               >
                 Confirm
               </button>
               <button
                 onClick={() => setConfirmDisable(false)}
-                className="px-2 py-0.5 rounded text-xs"
+                className="px-2 py-0.5 rounded text-xs mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: 'var(--color-text-muted)' }}
                 aria-label="Cancel disable CWD restriction"
               >
@@ -453,7 +453,7 @@ export function AISettings() {
           </div>
           <button
             onClick={() => setShowPromptEditor(true)}
-            className="px-2.5 py-1 rounded text-xs font-medium transition-colors hover:opacity-80"
+            className="px-2.5 py-1 rounded text-xs font-medium transition-colors hover:opacity-80 mobile:px-4 mobile:py-3 mobile:text-sm"
             style={{
               backgroundColor: 'var(--color-bg)',
               color: 'var(--color-text-muted)',
@@ -469,7 +469,7 @@ export function AISettings() {
           onChange={(e) => setSetting('ai_defaultSystemPrompt', e.target.value)}
           rows={4}
           placeholder="Enter a default system prompt..."
-          className="w-full px-3 py-2 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none resize-y"
+          className="w-full px-3 py-2 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none resize-y mobile:text-base"
           style={{
             backgroundColor: 'var(--color-bg)',
             color: 'var(--color-text)',

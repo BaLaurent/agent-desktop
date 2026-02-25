@@ -7,7 +7,7 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
   title: 'Test Conv',
   folder_id: null,
   position: 0,
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-4-6-20250514',
   system_prompt: null,
   cwd: null,
   kb_enabled: 0,

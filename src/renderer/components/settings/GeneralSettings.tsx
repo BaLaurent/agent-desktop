@@ -203,7 +203,7 @@ export function GeneralSettings() {
                     <select
                       value={settings.notificationDesktopMode ?? 'unfocused'}
                       onChange={(e) => setSetting('notificationDesktopMode', e.target.value)}
-                      className="text-xs rounded px-2 py-1 border border-[var(--color-text-muted)]/20"
+                      className="text-xs rounded px-2 py-1 border border-[var(--color-text-muted)]/20 mobile:text-base mobile:py-2"
                       style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)' }}
                       aria-label="Desktop notification trigger mode"
                     >
@@ -234,7 +234,7 @@ export function GeneralSettings() {
           step={30}
           value={settings.streamingTimeoutSeconds ?? '300'}
           onChange={(e) => setSetting('streamingTimeoutSeconds', e.target.value)}
-          className="w-24 text-sm rounded px-2 py-1 border border-[var(--color-text-muted)]/20 text-right"
+          className="w-24 text-sm rounded px-2 py-1 border border-[var(--color-text-muted)]/20 text-right mobile:text-base"
           style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)' }}
           aria-label="Response timeout in seconds"
         />

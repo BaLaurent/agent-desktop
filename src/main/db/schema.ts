@@ -34,7 +34,7 @@ const TABLES = [
     title TEXT NOT NULL DEFAULT 'New Conversation',
     folder_id INTEGER,
     position INTEGER DEFAULT 0,
-    model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
+    model TEXT DEFAULT 'claude-sonnet-4-6-20250514',
     system_prompt TEXT,
     kb_enabled INTEGER DEFAULT 0,
     ai_overrides TEXT,

@@ -2,11 +2,11 @@ import type { AIOverrides } from './types'
 
 // ─── Model Constants ─────────────────────────────────────────
 
-export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
+export const DEFAULT_MODEL = 'claude-sonnet-4-6-20250514'
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 
 export const MODEL_OPTIONS = [
-  { value: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
+  { value: 'claude-sonnet-4-6-20250514', label: 'Sonnet 4.6' },
   { value: 'claude-opus-4-6', label: 'Opus 4.6' },
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
 ] as const

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface ServerStatus {
   running: boolean
@@ -37,7 +36,6 @@ function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () =
 
 export function WebServerSettings() {
   const { settings, setSetting } = useSettingsStore()
-  const mobile = useMobileMode()
   const [status, setStatus] = useState<ServerStatus>({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, clients: 0, firewallWarning: null })
   const [portInput, setPortInput] = useState(settings.server_port || '3484')
   const [showToken, setShowToken] = useState(false)
@@ -139,7 +137,7 @@ export function WebServerSettings() {
           disabled={isEnabled}
           min={1024}
           max={65535}
-          className={`${mobile ? 'w-full' : 'w-32'} px-3 py-1.5 rounded ${mobile ? 'text-base' : 'text-sm'} border`}
+          className="w-32 mobile:w-full px-3 py-1.5 rounded text-sm mobile:text-base border"
           style={{
             backgroundColor: 'var(--color-base)',
             color: 'var(--color-text)',
@@ -205,7 +203,7 @@ export function WebServerSettings() {
               </code>
               <button
                 onClick={copyUrl}
-                className={`${mobile ? 'text-sm px-3 py-2' : 'text-xs px-2 py-1'} rounded`}
+                className="text-xs px-2 py-1 mobile:text-sm mobile:px-3 mobile:py-2 rounded"
                 style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}
               >
                 Copy
@@ -230,7 +228,7 @@ export function WebServerSettings() {
                   onClick={() => {
                     if (status.urlHostname) navigator.clipboard.writeText(status.urlHostname).catch(() => {})
                   }}
-                  className={`${mobile ? 'text-sm px-3 py-2' : 'text-xs px-2 py-1'} rounded`}
+                  className="text-xs px-2 py-1 mobile:text-sm mobile:px-3 mobile:py-2 rounded"
                   style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}
                 >
                   Copy
@@ -253,14 +251,14 @@ export function WebServerSettings() {
               </code>
               <button
                 onClick={() => setShowToken(!showToken)}
-                className={`${mobile ? 'text-sm px-3 py-2' : 'text-xs px-2 py-1'} rounded`}
+                className="text-xs px-2 py-1 mobile:text-sm mobile:px-3 mobile:py-2 rounded"
                 style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
               >
                 {showToken ? 'Hide' : 'Show'}
               </button>
               <button
                 onClick={copyToken}
-                className={`${mobile ? 'text-sm px-3 py-2' : 'text-xs px-2 py-1'} rounded`}
+                className="text-xs px-2 py-1 mobile:text-sm mobile:px-3 mobile:py-2 rounded"
                 style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}
               >
                 Copy
@@ -275,7 +273,7 @@ export function WebServerSettings() {
                 Scan with your phone
               </label>
               <div
-                className={`${mobile ? 'w-64 h-64 max-w-full' : 'w-48 h-48'} p-2 rounded-lg`}
+                className="w-48 h-48 mobile:w-64 mobile:h-64 mobile:max-w-full p-2 rounded-lg"
                 style={{ backgroundColor: '#ffffff' }}
                 dangerouslySetInnerHTML={{ __html: qrSvg }}
               />

@@ -67,7 +67,7 @@ export function FileUploadButton({ onFilesSelected }: FileUploadButtonProps) {
       />
       <button
         onClick={handleClick}
-        className={`flex-shrink-0 rounded-md flex items-center justify-center transition-opacity hover:opacity-80 ${mobile ? 'w-11 h-11' : 'w-8 h-8'}`}
+        className="flex-shrink-0 rounded-md flex items-center justify-center transition-opacity hover:opacity-80 w-8 h-8 mobile:w-11 mobile:h-11"
         style={{
           backgroundColor: 'var(--color-deep)',
           color: 'var(--color-text-muted)',

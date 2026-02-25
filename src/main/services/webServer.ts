@@ -41,6 +41,7 @@ function generateShim(token: string): string {
   return `(function() {
   'use strict';
   window.__AGENT_WEB_MODE__ = true;
+  document.documentElement.classList.add('mobile');
 
   var token = new URLSearchParams(window.location.search).get('token') || sessionStorage.getItem('agent_token') || '';
   if (token) sessionStorage.setItem('agent_token', token);

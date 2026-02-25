@@ -13,7 +13,7 @@ import { TTSSettings } from '../components/settings/TTSSettings'
 import { QuickChatSettings } from '../components/settings/QuickChatSettings'
 import { OpenSCADSettings } from '../components/settings/OpenSCADSettings'
 import { WebServerSettings } from '../components/settings/WebServerSettings'
-import { useMobileMode } from '../hooks/useMobileMode'
+import { useMobileMode, useCompactMode } from '../hooks/useMobileMode'
 
 interface SettingsPageProps {
   onClose: () => void
@@ -58,6 +58,7 @@ const categoryComponents: Record<Category, React.FC | null> = {
 export function SettingsPage({ onClose }: SettingsPageProps) {
   const [activeCategory, setActiveCategory] = useState<Category>('General')
   const mobile = useMobileMode()
+  const compact = useCompactMode()
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -77,13 +78,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       }}
     >
       <div
-        className={`w-full max-w-4xl rounded-lg shadow-xl flex overflow-hidden ${
-          mobile ? 'flex-col max-h-[100dvh] h-full' : 'max-h-[80vh]'
-        }`}
+        className="w-full max-w-4xl rounded-lg shadow-xl flex overflow-hidden max-h-[80vh] mobile:flex-col mobile:max-h-[100dvh] mobile:h-full"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
-        {mobile ? (
-          /* Mobile: horizontal scrollable tab band at top */
+        {compact ? (
+          /* Compact/mobile: horizontal scrollable tab band at top */
           <div
             className="flex-shrink-0 border-b border-[var(--color-text-muted)]/10"
             style={{ backgroundColor: 'var(--color-deep)' }}
@@ -124,7 +123,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </nav>
           </div>
         ) : (
-          /* Desktop: sidebar */
+          /* Wide desktop: sidebar */
           <div
             className="w-[200px] flex-shrink-0 flex flex-col py-4 border-r border-[var(--color-text-muted)]/10"
             style={{ backgroundColor: 'var(--color-deep)' }}
@@ -158,33 +157,31 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header with close button (desktop only — mobile has it in the tab band) */}
-          {!mobile && (
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10">
-              <h2
-                className="text-lg font-semibold"
-                style={{ color: 'var(--color-text)' }}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10 mobile:hidden">
+            <h2
+              className="text-lg font-semibold"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {activeCategory}
+            </h2>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded hover:bg-[var(--color-bg)] transition-colors"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="currentColor"
               >
-                {activeCategory}
-              </h2>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded hover:bg-[var(--color-bg)] transition-colors"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="currentColor"
-                >
-                  <path d="M1.05 1.05a.5.5 0 01.707 0L7 6.293l5.243-5.243a.5.5 0 11.707.707L7.707 7l5.243 5.243a.5.5 0 11-.707.707L7 7.707l-5.243 5.243a.5.5 0 01-.707-.707L6.293 7 1.05 1.757a.5.5 0 010-.707z" />
-                </svg>
-              </button>
-            </div>
-          )}
+                <path d="M1.05 1.05a.5.5 0 01.707 0L7 6.293l5.243-5.243a.5.5 0 11.707.707L7.707 7l5.243 5.243a.5.5 0 11-.707.707L7 7.707l-5.243 5.243a.5.5 0 01-.707-.707L6.293 7 1.05 1.757a.5.5 0 010-.707z" />
+              </svg>
+            </button>
+          </div>
 
           {/* Scrollable body */}
-          <div className={`flex-1 overflow-y-auto overflow-x-hidden ${mobile ? 'px-4' : 'px-6'} py-4`}>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 mobile:px-4 py-4">
             {ActiveComponent ? (
               <ActiveComponent />
             ) : (

@@ -38,7 +38,7 @@ export function SystemPromptEditorModal({ value, onChange, onClose }: SystemProm
       }}
     >
       <div
-        className="flex flex-col w-[90vw] max-w-4xl rounded-lg shadow-2xl overflow-hidden"
+        className="flex flex-col w-[90vw] max-w-4xl rounded-lg shadow-2xl overflow-hidden mobile:max-h-[80dvh]"
         style={{ backgroundColor: 'var(--color-surface)', height: '80vh' }}
       >
         {/* Header */}
@@ -51,7 +51,7 @@ export function SystemPromptEditorModal({ value, onChange, onClose }: SystemProm
           </span>
           <button
             onClick={handleCancel}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-base transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded hover:bg-base transition-colors mobile:w-11 mobile:h-11"
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Close editor"
           >
@@ -86,14 +86,14 @@ export function SystemPromptEditorModal({ value, onChange, onClose }: SystemProm
         >
           <button
             onClick={handleCancel}
-            className="px-4 py-1.5 rounded text-sm transition-colors hover:opacity-80"
+            className="px-4 py-1.5 rounded text-sm transition-colors hover:opacity-80 mobile:py-3"
             style={{ color: 'var(--color-text-muted)' }}
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-1.5 rounded text-sm font-medium transition-colors"
+            className="px-4 py-1.5 rounded text-sm font-medium transition-colors mobile:py-3"
             style={{
               backgroundColor: 'var(--color-primary)',
               color: 'var(--color-text-contrast)',

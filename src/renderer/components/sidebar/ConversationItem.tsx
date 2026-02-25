@@ -176,7 +176,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameSubmit}
             onKeyDown={handleRenameKeyDown}
-            className={`w-full ${isMobile ? 'text-base' : 'text-sm'} px-1 py-0.5 rounded outline-none`}
+            className="w-full text-sm mobile:text-base px-1 py-0.5 rounded outline-none"
             style={{
               backgroundColor: 'var(--color-bg)',
               color: 'var(--color-text)',
@@ -205,20 +205,18 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               )}
-              {isMobile && (
-                <button
-                  onClick={handleThreeDotClick}
-                  className="p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
-                  style={{ color: 'var(--color-text-muted)' }}
-                  aria-label="Conversation actions"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <circle cx="10" cy="4" r="1.5" />
-                    <circle cx="10" cy="10" r="1.5" />
-                    <circle cx="10" cy="16" r="1.5" />
-                  </svg>
-                </button>
-              )}
+              <button
+                onClick={handleThreeDotClick}
+                className="hidden mobile:block p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
+                style={{ color: 'var(--color-text-muted)' }}
+                aria-label="Conversation actions"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <circle cx="10" cy="4" r="1.5" />
+                  <circle cx="10" cy="10" r="1.5" />
+                  <circle cx="10" cy="16" r="1.5" />
+                </svg>
+              </button>
             </div>
             <div
               className="text-xs mt-0.5 truncate"
@@ -249,7 +247,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
               setShowMenu(false)
               setIsRenaming(true)
             }}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
             role="menuitem"
             aria-label="Rename conversation"
@@ -264,7 +262,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
             } : {})}
           >
             <button
-              className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+              className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
               style={{ backgroundColor: 'transparent' }}
               {...(isMobile ? {
                 onClick: () => setShowFolderSubmenu((v) => !v),
@@ -274,15 +272,14 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
             </button>
             {showFolderSubmenu && (
               <div
-                className={`${isMobile ? 'pl-3' : 'absolute left-full top-0'} rounded shadow-lg py-1 text-sm min-w-[140px]`}
+                className="absolute left-full top-0 mobile:static mobile:pl-3 rounded shadow-lg py-1 text-sm min-w-[140px] border border-[var(--color-bg)] mobile:border-0"
                 style={{
                   backgroundColor: 'var(--color-surface)',
-                  border: isMobile ? 'none' : '1px solid var(--color-bg)',
                 }}
               >
                 <button
                   onClick={() => handleMoveToFolder(null)}
-                  className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+                  className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
                   style={{ backgroundColor: 'transparent' }}
                 >
                   No folder
@@ -291,7 +288,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
                   <button
                     key={f.id}
                     onClick={() => handleMoveToFolder(f.id)}
-                    className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+                    className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
                     style={{ backgroundColor: 'transparent' }}
                   >
                     {f.name}
@@ -302,7 +299,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </div>
           <button
             onClick={() => handleExport('markdown')}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
             role="menuitem"
             aria-label="Export conversation as Markdown"
@@ -311,7 +308,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </button>
           <button
             onClick={() => handleExport('json')}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
             role="menuitem"
             aria-label="Export conversation as JSON"
@@ -320,7 +317,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           </button>
           <button
             onClick={handleGenerateTitle}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
             role="menuitem"
             aria-label="Generate title with AI"
@@ -330,7 +327,7 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
           <button
             onClick={handleDelete}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
             role="menuitem"
             aria-label="Delete conversation"

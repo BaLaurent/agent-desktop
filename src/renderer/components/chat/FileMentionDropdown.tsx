@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FileNode } from '../../../shared/types'
 import { fuzzyMatch, fuzzyHighlight } from '../../utils/fuzzyMatch'
-import { useMobileMode } from '../../hooks/useMobileMode'
 
 export interface FlatFile {
   name: string
@@ -45,7 +44,6 @@ interface FileMentionDropdownProps {
 export function FileMentionDropdown({ files, filter, selectedIndex, onSelect, onClose }: FileMentionDropdownProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLButtonElement>(null)
-  const mobile = useMobileMode()
 
   const filtered = filter
     ? files
@@ -111,7 +109,7 @@ export function FileMentionDropdown({ files, filter, selectedIndex, onSelect, on
             role="option"
             aria-selected={isSelected}
             onClick={() => onSelect(file)}
-            className={`w-full text-left px-3 ${mobile ? 'py-2.5' : 'py-1.5'} flex items-center gap-2 transition-colors truncate`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 flex items-center gap-2 transition-colors truncate"
             style={{
               backgroundColor: isSelected ? 'var(--color-bg)' : 'transparent',
               color: 'var(--color-text)',

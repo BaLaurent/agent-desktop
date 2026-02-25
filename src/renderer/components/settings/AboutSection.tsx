@@ -90,7 +90,7 @@ export function AboutSection() {
       <div>
         <button
           onClick={handleOpenGitHub}
-          className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80"
+          className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 mobile:py-3"
           style={{
             backgroundColor: 'var(--color-deep)',
             color: 'var(--color-text)',
@@ -132,7 +132,7 @@ function UpdateSection({
         {(status.state === 'idle' || status.state === 'not-available' || status.state === 'error') && (
           <button
             onClick={onCheck}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast mobile:py-3"
           >
             Check for Updates
           </button>
@@ -140,7 +140,7 @@ function UpdateSection({
         {status.state === 'checking' && (
           <button
             disabled
-            className="px-4 py-2 rounded text-sm font-medium opacity-50 bg-primary text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium opacity-50 bg-primary text-contrast mobile:py-3"
           >
             Checking...
           </button>
@@ -148,7 +148,7 @@ function UpdateSection({
         {status.state === 'available' && (
           <button
             onClick={onDownload}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast mobile:py-3"
           >
             Download Update
           </button>
@@ -156,7 +156,7 @@ function UpdateSection({
         {status.state === 'downloading' && (
           <button
             disabled
-            className="px-4 py-2 rounded text-sm font-medium opacity-50 bg-primary text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium opacity-50 bg-primary text-contrast mobile:py-3"
           >
             Downloading...
           </button>
@@ -164,7 +164,7 @@ function UpdateSection({
         {status.state === 'downloaded' && (
           <button
             onClick={onInstall}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast mobile:py-3"
           >
             Restart to Install
           </button>

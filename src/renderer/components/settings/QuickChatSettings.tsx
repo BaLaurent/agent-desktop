@@ -108,7 +108,7 @@ export function QuickChatSettings() {
         </h4>
         <button
           onClick={handlePurge}
-          className="self-start px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80"
+          className="self-start px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 mobile:py-3"
           style={{
             backgroundColor: 'var(--color-error, #ef4444)',
             color: '#fff',

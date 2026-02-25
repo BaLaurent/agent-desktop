@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-import { useMobileMode } from '../../hooks/useMobileMode'
 import { fileToAttachment } from '../../utils/fileToAttachment'
 import type { Attachment } from '../../../shared/types'
 
@@ -9,7 +8,6 @@ interface FileDropZoneProps {
 }
 
 export function FileDropZone({ children, onFilesDropped }: FileDropZoneProps) {
-  const mobile = useMobileMode()
   const [isDragOver, setIsDragOver] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -50,8 +48,8 @@ export function FileDropZone({ children, onFilesDropped }: FileDropZoneProps) {
       onDrop={handleDrop}
     >
       {children}
-      {isDragOver && !mobile && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-overlay border-2 border-dashed border-primary">
+      {isDragOver && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-overlay border-2 border-dashed border-primary mobile:hidden">
           <span className="text-sm font-medium text-body">
             Drop files here
           </span>

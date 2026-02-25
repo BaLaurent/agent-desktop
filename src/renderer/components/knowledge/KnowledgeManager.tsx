@@ -50,7 +50,7 @@ export function KnowledgeManager() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={handleOpenFolder}
-            className="px-3 py-1.5 rounded-md text-sm font-medium transition-opacity hover:opacity-80"
+            className="px-3 py-1.5 rounded-md text-sm font-medium transition-opacity hover:opacity-80 mobile:py-3"
             style={{
               backgroundColor: 'var(--color-surface)',
               color: 'var(--color-text)',
@@ -62,7 +62,7 @@ export function KnowledgeManager() {
           <button
             onClick={loadCollections}
             disabled={loading}
-            className="px-3 py-1.5 rounded-md text-sm font-medium transition-opacity hover:opacity-80 bg-primary text-contrast"
+            className="px-3 py-1.5 rounded-md text-sm font-medium transition-opacity hover:opacity-80 bg-primary text-contrast mobile:py-3"
             style={{ opacity: loading ? 0.5 : 1 }}
             aria-label="Refresh collections"
           >
@@ -82,7 +82,7 @@ export function KnowledgeManager() {
             <div key={col.name}>
               <button
                 onClick={() => handleToggleExpand(col.name)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-opacity hover:opacity-80"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-opacity hover:opacity-80 mobile:py-3"
                 style={{ backgroundColor: 'var(--color-deep)' }}
                 aria-expanded={expandedCollection === col.name}
               >

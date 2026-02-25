@@ -112,7 +112,7 @@ export function TTSSettings() {
             setSetting('tts_provider', e.target.value)
             setValidation(null)
           }}
-          className="w-full px-3 py-2 rounded text-sm outline-none"
+          className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base mobile:py-2"
           style={inputStyle}
           aria-label="TTS provider"
         >
@@ -135,7 +135,7 @@ export function TTSSettings() {
             value={piperUrl}
             onChange={(e) => setSetting('tts_piperUrl', e.target.value)}
             placeholder="http://localhost:5000"
-            className="w-full px-3 py-2 rounded text-sm outline-none"
+            className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
             style={inputStyle}
             aria-label="Piper server URL"
           />
@@ -157,7 +157,7 @@ export function TTSSettings() {
               value={edgettsVoice}
               onChange={(e) => setSetting('tts_edgettsVoice', e.target.value)}
               placeholder="en-US-AriaNeural"
-              className="w-full px-3 py-2 rounded text-sm outline-none"
+              className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
               style={inputStyle}
               aria-label="EdgeTTS voice"
             />
@@ -175,7 +175,7 @@ export function TTSSettings() {
               value={edgettsBinary}
               onChange={(e) => setSetting('tts_edgettsBinary', e.target.value)}
               placeholder="edge-tts"
-              className="w-full px-3 py-2 rounded text-sm outline-none"
+              className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
               style={inputStyle}
               aria-label="EdgeTTS binary path"
             />
@@ -195,7 +195,7 @@ export function TTSSettings() {
           <select
             value={sayVoice}
             onChange={(e) => setSetting('tts_sayVoice', e.target.value)}
-            className="w-full px-3 py-2 rounded text-sm outline-none"
+            className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
             style={inputStyle}
             aria-label="say voice"
           >
@@ -226,7 +226,7 @@ export function TTSSettings() {
               }
               setValidation(null)
             }}
-            className="w-full px-3 py-2 rounded text-sm outline-none"
+            className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
             style={inputStyle}
             aria-label="Audio player"
           >
@@ -257,7 +257,7 @@ export function TTSSettings() {
             value={playerPath === 'auto' ? '' : playerPath}
             onChange={(e) => setSetting('tts_playerPath', e.target.value)}
             placeholder="/usr/bin/aplay"
-            className="w-full px-3 py-2 rounded text-sm outline-none"
+            className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
             style={inputStyle}
             aria-label="Custom player path"
           />
@@ -280,7 +280,7 @@ export function TTSSettings() {
             min={0}
             max={50000}
             step={100}
-            className="w-32 px-3 py-2 rounded text-sm outline-none"
+            className="w-32 px-3 py-2 rounded text-sm outline-none mobile:text-base"
             style={inputStyle}
             aria-label="Max text length"
           />
@@ -296,7 +296,7 @@ export function TTSSettings() {
           <button
             onClick={handleTest}
             disabled={testing}
-            className="self-start px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 bg-tool text-contrast"
+            className="self-start px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 bg-tool text-contrast mobile:py-3"
             style={{ opacity: testing ? 0.6 : 1 }}
           >
             {testing ? 'Testing...' : 'Test Voice'}
@@ -354,7 +354,7 @@ export function TTSSettings() {
             <select
               value={responseMode}
               onChange={(e) => setSetting('tts_responseMode', e.target.value)}
-              className="w-full px-3 py-2 rounded text-sm outline-none"
+              className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
               style={inputStyle}
               aria-label="TTS response mode"
             >
@@ -381,7 +381,7 @@ export function TTSSettings() {
                 min={10}
                 max={10000}
                 step={10}
-                className="w-32 px-3 py-2 rounded text-sm outline-none"
+                className="w-32 px-3 py-2 rounded text-sm outline-none mobile:text-base"
                 style={inputStyle}
                 aria-label="Auto mode word limit"
               />
@@ -402,7 +402,7 @@ export function TTSSettings() {
                 onChange={(e) => setSetting('tts_summaryPrompt', e.target.value)}
                 placeholder={DEFAULT_SUMMARY_PROMPT}
                 rows={4}
-                className="w-full px-3 py-2 rounded text-sm outline-none resize-y"
+                className="w-full px-3 py-2 rounded text-sm outline-none resize-y mobile:text-base"
                 style={inputStyle}
                 aria-label="Summary prompt"
               />

@@ -15,8 +15,8 @@ const mixedMcp: McpServerEntry[] = [
 
 describe('ChatStatusLine', () => {
   it('renders simplified model name', () => {
-    render(<ChatStatusLine model="claude-sonnet-4-5-20250929" permissionMode="bypassPermissions" mcpServers={noMcp} />)
-    expect(screen.getByText('sonnet-4-5')).toBeDefined()
+    render(<ChatStatusLine model="claude-sonnet-4-6-20250514" permissionMode="bypassPermissions" mcpServers={noMcp} />)
+    expect(screen.getByText('sonnet-4-6')).toBeDefined()
   })
 
   it('renders permission mode label', () => {
@@ -80,7 +80,7 @@ describe('ChatStatusLine', () => {
   it('opens model dropdown on click and lists models', () => {
     render(<ChatStatusLine model="claude-opus-4-6" permissionMode="default" mcpServers={noMcp} onModelChange={() => {}} />)
     fireEvent.click(screen.getByLabelText('Change model'))
-    expect(screen.getByText('Sonnet 4.5')).toBeDefined()
+    expect(screen.getByText('Sonnet 4.6')).toBeDefined()
     expect(screen.getByText('Opus 4.6')).toBeDefined()
     expect(screen.getByText('Haiku 4.5')).toBeDefined()
   })
@@ -96,7 +96,7 @@ describe('ChatStatusLine', () => {
   it('closes model dropdown after selection', () => {
     render(<ChatStatusLine model="claude-opus-4-6" permissionMode="default" mcpServers={noMcp} onModelChange={() => {}} />)
     fireEvent.click(screen.getByLabelText('Change model'))
-    fireEvent.click(screen.getByText('Sonnet 4.5'))
+    fireEvent.click(screen.getByText('Sonnet 4.6'))
     expect(screen.queryByText('Haiku 4.5')).toBeNull()
   })
 

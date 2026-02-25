@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { SlashCommand } from '../../../shared/types'
 import { fuzzyMatch, fuzzyHighlight } from '../../utils/fuzzyMatch'
-import { useMobileMode } from '../../hooks/useMobileMode'
 
 interface SlashCommandDropdownProps {
   commands: SlashCommand[]
@@ -14,7 +13,6 @@ interface SlashCommandDropdownProps {
 export function SlashCommandDropdown({ commands, filter, selectedIndex, onSelect, onClose }: SlashCommandDropdownProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLButtonElement>(null)
-  const mobile = useMobileMode()
 
   const filtered = filter
     ? commands
@@ -82,7 +80,7 @@ export function SlashCommandDropdown({ commands, filter, selectedIndex, onSelect
             role="option"
             aria-selected={isSelected}
             onClick={() => onSelect(cmd)}
-            className={`w-full text-left px-3 ${mobile ? 'py-2.5' : 'py-1.5'} flex items-center gap-2 transition-colors`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 flex items-center gap-2 transition-colors"
             style={{
               backgroundColor: isSelected ? 'var(--color-bg)' : 'transparent',
               color: 'var(--color-text)',

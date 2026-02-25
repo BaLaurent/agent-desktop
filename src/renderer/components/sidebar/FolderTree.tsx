@@ -229,7 +229,7 @@ export function SidebarTree() {
     return (
       <div key={folder.id}>
         <div
-          className={`group flex items-center gap-1 px-2 ${isMobile ? 'py-2' : 'py-1'} cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${!isDragOver ? ' hover:bg-[var(--color-bg)]' : ''}`}
+          className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${!isDragOver ? ' hover:bg-[var(--color-bg)]' : ''}`}
           style={{
             paddingLeft: `${depth * 16 + 8}px`,
             color: 'var(--color-text)',
@@ -262,7 +262,7 @@ export function SidebarTree() {
                 if (e.key === 'Enter') handleRenameSubmit(folder.id)
                 if (e.key === 'Escape') setRenamingId(null)
               }}
-              className={`flex-1 ${isMobile ? 'text-base' : 'text-sm'} px-1 rounded outline-none`}
+              className="flex-1 text-sm mobile:text-base px-1 rounded outline-none"
               style={{
                 backgroundColor: 'var(--color-bg)',
                 color: 'var(--color-text)',
@@ -286,7 +286,7 @@ export function SidebarTree() {
                 </span>
               )}
               <button
-                className={`${isMobile ? 'opacity-100 p-2' : 'opacity-0 group-hover:opacity-100 p-0.5'} transition-opacity rounded hover:bg-[var(--color-surface)]`}
+                className="opacity-0 group-hover:opacity-100 p-0.5 mobile:opacity-100 mobile:p-2 transition-opacity rounded hover:bg-[var(--color-surface)]"
                 onClick={(e) => handleNewConversationInFolder(folder.id, e)}
                 title="New conversation in this folder"
                 aria-label={`New conversation in ${folder.name}`}
@@ -307,20 +307,18 @@ export function SidebarTree() {
                   <line x1="9" y1="11" x2="15" y2="11" />
                 </svg>
               </button>
-              {isMobile && (
-                <button
-                  onClick={(e) => handleFolderThreeDotClick(e, folder.id)}
-                  className="p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
-                  style={{ color: 'var(--color-text-muted)' }}
-                  aria-label="Folder actions"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <circle cx="10" cy="4" r="1.5" />
-                    <circle cx="10" cy="10" r="1.5" />
-                    <circle cx="10" cy="16" r="1.5" />
-                  </svg>
-                </button>
-              )}
+              <button
+                onClick={(e) => handleFolderThreeDotClick(e, folder.id)}
+                className="hidden mobile:block p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
+                style={{ color: 'var(--color-text-muted)' }}
+                aria-label="Folder actions"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <circle cx="10" cy="4" r="1.5" />
+                  <circle cx="10" cy="10" r="1.5" />
+                  <circle cx="10" cy="16" r="1.5" />
+                </svg>
+              </button>
             </>
           )}
         </div>
@@ -366,7 +364,7 @@ export function SidebarTree() {
         return (
           <>
             <div
-              className={`group flex items-center gap-1 px-2 ${isMobile ? 'py-2' : 'py-1'} cursor-pointer rounded mx-1 text-sm${dragOverUnfiled ? ' sidebar-drop-active' : ''}${!dragOverUnfiled ? ' hover:bg-[var(--color-bg)]' : ''}`}
+              className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${dragOverUnfiled ? ' sidebar-drop-active' : ''}${!dragOverUnfiled ? ' hover:bg-[var(--color-bg)]' : ''}`}
               style={{ color: 'var(--color-text)' }}
               onClick={() => setSetting('sidebar_unfiledExpanded', unfiledExpanded ? 'false' : 'true')}
               {...(!isMobile ? {
@@ -442,14 +440,14 @@ export function SidebarTree() {
               }
               setMenuFolderId(null)
             }}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
           >
             Rename
           </button>
           <button
             onClick={() => handleCreateSubfolder(menuFolderId!)}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
           >
             Create subfolder
@@ -459,7 +457,7 @@ export function SidebarTree() {
               setOverrideFolderId(menuFolderId)
               setMenuFolderId(null)
             }}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent' }}
           >
             Folder Settings
@@ -467,7 +465,7 @@ export function SidebarTree() {
           <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
           <button
             onClick={() => handleDelete(menuFolderId!)}
-            className={`w-full text-left px-3 ${isMobile ? 'py-2.5' : 'py-1.5'} hover:bg-[var(--color-bg)]`}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
             style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
           >
             Delete folder
@@ -514,7 +512,7 @@ export function SidebarTree() {
                       deleteFolder(deleteTarget.id, 'delete')
                       setDeleteTarget(null)
                     }}
-                    className={`w-full px-3 ${isMobile ? 'py-3' : 'py-2'} rounded text-sm font-medium text-left transition-opacity hover:opacity-90 bg-error text-contrast`}
+                    className="w-full px-3 py-2 mobile:py-3 rounded text-sm font-medium text-left transition-opacity hover:opacity-90 bg-error text-contrast"
                     aria-label="Delete folder and all conversations"
                   >
                     Delete folder and {convCount} conversation{convCount !== 1 ? 's' : ''}
@@ -525,7 +523,7 @@ export function SidebarTree() {
                     deleteFolder(deleteTarget.id)
                     setDeleteTarget(null)
                   }}
-                  className={`w-full px-3 ${isMobile ? 'py-3' : 'py-2'} rounded text-sm font-medium text-left transition-opacity hover:opacity-80`}
+                  className="w-full px-3 py-2 mobile:py-3 rounded text-sm font-medium text-left transition-opacity hover:opacity-80"
                   style={{
                     backgroundColor: 'var(--color-bg)',
                     color: 'var(--color-text)',
@@ -536,7 +534,7 @@ export function SidebarTree() {
                 </button>
                 <button
                   onClick={() => setDeleteTarget(null)}
-                  className={`w-full px-3 ${isMobile ? 'py-3' : 'py-2'} rounded text-sm font-medium text-left transition-opacity hover:opacity-80`}
+                  className="w-full px-3 py-2 mobile:py-3 rounded text-sm font-medium text-left transition-opacity hover:opacity-80"
                   style={{
                     backgroundColor: 'transparent',
                     color: 'var(--color-text-muted)',

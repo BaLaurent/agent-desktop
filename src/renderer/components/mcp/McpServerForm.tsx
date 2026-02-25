@@ -150,7 +150,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
   }, [name, serverType, command, argRows, envRows, url, headerRows, isValid, isEdit, server, addServer, updateServer, onClose])
 
   const inputClass =
-    'w-full bg-[var(--color-bg)] text-[var(--color-text)] border border-[var(--color-text-muted)]/30 rounded px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]'
+    'w-full bg-[var(--color-bg)] text-[var(--color-text)] border border-[var(--color-text-muted)]/30 rounded px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] mobile:text-base'
 
   const typeOptions: { value: McpTransportType; label: string }[] = [
     { value: 'stdio', label: 'stdio' },
@@ -161,7 +161,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div
-        className="w-full max-w-md rounded-lg p-5 flex flex-col gap-4 shadow-xl max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md rounded-lg p-5 flex flex-col gap-4 shadow-xl max-h-[90vh] overflow-y-auto mobile:max-h-[90dvh]"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -229,7 +229,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
                 </label>
                 <button
                   onClick={handleAddArg}
-                  className="text-xs px-2 py-0.5 rounded transition-opacity hover:opacity-80"
+                  className="text-xs px-2 py-0.5 rounded transition-opacity hover:opacity-80 mobile:px-4 mobile:py-3 mobile:text-sm"
                   style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
                 >
                   + Add
@@ -250,7 +250,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
                   />
                   <button
                     onClick={() => handleRemoveArg(i)}
-                    className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-xs transition-opacity hover:opacity-80"
+                    className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-xs transition-opacity hover:opacity-80 mobile:w-11 mobile:h-11"
                     style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-error)' }}
                   >
                     x
@@ -267,7 +267,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
                 </label>
                 <button
                   onClick={handleAddEnv}
-                  className="text-xs px-2 py-0.5 rounded transition-opacity hover:opacity-80"
+                  className="text-xs px-2 py-0.5 rounded transition-opacity hover:opacity-80 mobile:px-4 mobile:py-3 mobile:text-sm"
                   style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
                 >
                   + Add
@@ -291,7 +291,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
                   />
                   <button
                     onClick={() => handleRemoveEnv(i)}
-                    className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-xs transition-opacity hover:opacity-80"
+                    className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-xs transition-opacity hover:opacity-80 mobile:w-11 mobile:h-11"
                     style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-error)' }}
                   >
                     x
@@ -323,7 +323,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
                 </label>
                 <button
                   onClick={handleAddHeader}
-                  className="text-xs px-2 py-0.5 rounded transition-opacity hover:opacity-80"
+                  className="text-xs px-2 py-0.5 rounded transition-opacity hover:opacity-80 mobile:px-4 mobile:py-3 mobile:text-sm"
                   style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
                 >
                   + Add
@@ -347,7 +347,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
                   />
                   <button
                     onClick={() => handleRemoveHeader(i)}
-                    className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-xs transition-opacity hover:opacity-80"
+                    className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center text-xs transition-opacity hover:opacity-80 mobile:w-11 mobile:h-11"
                     style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-error)' }}
                   >
                     x
@@ -362,7 +362,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80"
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 mobile:py-3"
             style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
           >
             Cancel
@@ -370,7 +370,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
           <button
             onClick={handleSave}
             disabled={!isValid || saving}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-40 bg-primary text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-40 bg-primary text-contrast mobile:py-3"
           >
             {saving ? 'Saving...' : isEdit ? 'Update' : 'Add'}
           </button>

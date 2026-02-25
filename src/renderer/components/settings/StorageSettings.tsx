@@ -121,7 +121,7 @@ export function StorageSettings() {
           <button
             onClick={handleClearCache}
             disabled={clearing}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-error text-contrast"
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-error text-contrast mobile:py-3"
           >
             {clearing ? 'Clearing...' : 'Clear Application Logs'}
           </button>
@@ -163,14 +163,14 @@ export function StorageSettings() {
               <button
                 onClick={handlePurge}
                 disabled={purging}
-                className="px-3 py-1.5 rounded text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 bg-error text-contrast"
+                className="px-3 py-1.5 rounded text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 bg-error text-contrast mobile:px-4 mobile:py-3 mobile:text-sm"
               >
                 {purging ? 'Purging...' : 'Confirm'}
               </button>
               <button
                 onClick={() => setConfirmTarget(null)}
                 disabled={purging}
-                className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   color: 'var(--color-text-muted)',
@@ -184,7 +184,7 @@ export function StorageSettings() {
             <button
               onClick={() => setConfirmTarget('conversations')}
               disabled={purging}
-              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 shrink-0"
+              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 shrink-0 mobile:px-4 mobile:py-3 mobile:text-sm"
               style={{
                 color: 'var(--color-error)',
                 border: '1px solid var(--color-error)',
@@ -211,14 +211,14 @@ export function StorageSettings() {
               <button
                 onClick={handlePurge}
                 disabled={purging}
-                className="px-3 py-1.5 rounded text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 bg-error text-contrast"
+                className="px-3 py-1.5 rounded text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 bg-error text-contrast mobile:px-4 mobile:py-3 mobile:text-sm"
               >
                 {purging ? 'Resetting...' : 'Confirm'}
               </button>
               <button
                 onClick={() => setConfirmTarget(null)}
                 disabled={purging}
-                className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   color: 'var(--color-text-muted)',
@@ -232,7 +232,7 @@ export function StorageSettings() {
             <button
               onClick={() => setConfirmTarget('all')}
               disabled={purging}
-              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 shrink-0"
+              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 shrink-0 mobile:px-4 mobile:py-3 mobile:text-sm"
               style={{
                 color: 'var(--color-error)',
                 border: '1px solid var(--color-error)',

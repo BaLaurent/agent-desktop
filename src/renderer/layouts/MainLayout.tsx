@@ -6,7 +6,7 @@ import { Sidebar } from '../components/sidebar/Sidebar'
 import { ChatView } from '../pages/ChatView'
 import { FileExplorerPanel } from '../components/panel/FileExplorerPanel'
 import { ErrorBoundary } from '../components/ErrorBoundary'
-import { useMobileMode } from '../hooks/useMobileMode'
+import { useMobileMode, useCompactMode } from '../hooks/useMobileMode'
 import { useEdgeSwipe, useSwipeDismiss } from '../hooks/useEdgeSwipe'
 
 const DEFAULT_RADIUS_PCT = 10
@@ -112,15 +112,26 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
   const sidebarRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const mobile = useMobileMode()
+  const compact = useCompactMode()
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null
 
-  // Mobile: auto-close sidebar when user selects a conversation
+  // Compact/mobile: auto-close sidebar when user selects a conversation
   useEffect(() => {
-    if (mobile && activeConversationId && sidebarVisible) {
+    if (compact && activeConversationId && sidebarVisible) {
       useUiStore.setState({ sidebarVisible: false })
     }
-  }, [mobile, activeConversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [compact, activeConversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-close sidebar+panel when viewport shrinks into compact mode
+  const prevCompact = useRef(compact)
+  useEffect(() => {
+    if (compact && !prevCompact.current) {
+      if (sidebarVisible) useUiStore.setState({ sidebarVisible: false })
+      if (panelVisible) useUiStore.setState({ panelVisible: false })
+    }
+    prevCompact.current = compact
+  }, [compact]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeSidebar = useCallback(() => {
     useUiStore.setState({ sidebarVisible: false })
@@ -193,8 +204,8 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
-      {/* Mobile sidebar overlay: backdrop + fixed sidebar */}
-      {mobile && sidebarVisible && (
+      {/* Compact/mobile sidebar overlay: backdrop + fixed sidebar */}
+      {compact && sidebarVisible && (
         <>
           {/* Semi-transparent backdrop */}
           <div
@@ -206,7 +217,7 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
           <div
             className="fixed top-0 left-0 z-40 h-full overflow-y-auto"
             style={{
-              width: 'min(280px, calc(100vw - 60px))',
+              width: mobile ? 'min(280px, calc(100vw - 60px))' : 280,
               backgroundColor: 'var(--color-surface)',
               borderRight: '1px solid var(--color-bg)',
             }}
@@ -218,8 +229,8 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
         </>
       )}
 
-      {/* Desktop sidebar: inline in flex layout */}
-      {!mobile && sidebarVisible && (
+      {/* Wide desktop sidebar: inline in flex layout */}
+      {!compact && sidebarVisible && (
         <>
           <div
             ref={sidebarRef}
@@ -261,8 +272,8 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
         </ErrorBoundary>
       </div>
 
-      {/* Right panel — overlay in mobile, inline in desktop */}
-      {mobile && panelVisible && (
+      {/* Right panel — overlay in compact/mobile, inline in wide desktop */}
+      {compact && panelVisible && (
         <>
           {/* Semi-transparent backdrop */}
           <div
@@ -274,7 +285,7 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
           <div
             className="fixed top-0 right-0 z-40 h-full overflow-y-auto"
             style={{
-              width: 'min(100vw, 360px)',
+              width: mobile ? 'min(100vw, 360px)' : 400,
               backgroundColor: 'var(--color-surface)',
               borderLeft: '1px solid var(--color-bg)',
             }}
@@ -285,7 +296,7 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
           </div>
         </>
       )}
-      {!mobile && panelVisible && (
+      {!compact && panelVisible && (
         <>
           {/* Resize handle */}
           <div

@@ -12,7 +12,7 @@ import {
 
 describe('shortenModelName', () => {
   it('strips claude- prefix and date suffix', () => {
-    expect(shortenModelName('claude-sonnet-4-5-20250929')).toBe('sonnet-4-5')
+    expect(shortenModelName('claude-sonnet-4-6-20250514')).toBe('sonnet-4-6')
     expect(shortenModelName('claude-opus-4-6')).toBe('opus-4-6')
     expect(shortenModelName('claude-haiku-4-5-20251001')).toBe('haiku-4-5')
   })

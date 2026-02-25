@@ -8,7 +8,7 @@ import { VoiceInputButton } from '../components/chat/VoiceInputButton'
 import { AttachmentPreview } from '../components/attachments/AttachmentPreview'
 import { AIOverridesPopover } from '../components/settings/AIOverridesPopover'
 import { ChatStatusLine } from '../components/chat/ChatStatusLine'
-import { useMobileMode } from '../hooks/useMobileMode'
+import { useMobileMode, useCompactMode } from '../hooks/useMobileMode'
 import { useUiStore } from '../stores/uiStore'
 import { useChatStore } from '../stores/chatStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -32,6 +32,7 @@ interface ChatViewProps {
 
 export function ChatView({ conversationId, conversationTitle, conversationModel, conversationCwd }: ChatViewProps) {
   const mobile = useMobileMode()
+  const compact = useCompactMode()
   const {
     messages,
     clearedAt,
@@ -329,7 +330,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div
-          className={`flex-shrink-0 flex items-center justify-between py-2 border-b gap-2 ${mobile ? 'pl-14 pr-4' : 'px-4'}`}
+          className="flex-shrink-0 flex items-center justify-between py-2 border-b gap-2 px-4 mobile:pl-14 mobile:pr-4"
           style={{
             borderColor: 'var(--color-surface)',
             backgroundColor: 'var(--color-bg)',
@@ -339,10 +340,10 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
             <h2 className="text-sm font-medium min-w-0 truncate" style={{ color: 'var(--color-text)' }}>
               {conversationTitle || 'New Conversation'}
             </h2>
-            {!mobile && <button
+            <button
               onClick={handleChangeCwd}
               title={`Working directory: ${displayCwd}\nClick to change`}
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs truncate max-w-[300px] hover:opacity-80 transition-opacity"
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs truncate max-w-[300px] hover:opacity-80 transition-opacity compact:hidden"
               style={{
                 backgroundColor: 'var(--color-surface)',
                 color: 'var(--color-text-muted)',
@@ -352,22 +353,20 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
                 <path d="M1 3.5A1.5 1.5 0 012.5 2h3.879a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 009.56 4H13.5A1.5 1.5 0 0115 5.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
               </svg>
               <span className="truncate">{displayCwd}</span>
-            </button>}
+            </button>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {mobile && (
-              <button
-                onClick={useUiStore.getState().togglePanel}
-                title="File explorer"
-                className="p-2.5 rounded hover:opacity-80 transition-opacity"
-                style={{ color: 'var(--color-text-muted)' }}
-                aria-label="Open file explorer"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1 3.5A1.5 1.5 0 012.5 2h3.879a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 009.56 4H13.5A1.5 1.5 0 0115 5.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
-                </svg>
-              </button>
-            )}
+            <button
+              onClick={useUiStore.getState().togglePanel}
+              title="File explorer"
+              className="hidden compact:flex p-2.5 rounded hover:opacity-80 transition-opacity items-center justify-center"
+              style={{ color: 'var(--color-text-muted)' }}
+              aria-label="Open file explorer"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 3.5A1.5 1.5 0 012.5 2h3.879a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 009.56 4H13.5A1.5 1.5 0 0115 5.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
+              </svg>
+            </button>
             <div
               className="text-xs px-2 py-0.5 rounded"
               style={{
@@ -380,7 +379,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
             <button
               onClick={() => setShowOverrides((v) => !v)}
               title="AI Settings overrides"
-              className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'p-2.5' : 'p-1'}`}
+              className="rounded hover:opacity-80 transition-opacity p-1 mobile:p-2.5"
               style={{ color: Object.keys(convOverrides).length > 0 ? 'var(--color-primary)' : 'var(--color-text-muted)' }}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -441,12 +440,12 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
 
         {/* Input area with file upload + @ mention + voice buttons */}
         <div
-          className={`flex-shrink-0 p-3 border-t ${mobile ? 'mobile-safe-bottom' : ''}`}
+          className="flex-shrink-0 p-3 border-t mobile-safe-bottom"
           style={{ borderColor: 'var(--color-surface)', backgroundColor: 'var(--color-bg)' }}
         >
-          {mobile ? (
+          {compact ? (
             <>
-              {/* Mobile: two rows — action toolbar + input/send */}
+              {/* Compact/mobile: two rows — action toolbar + input/send */}
               <div className="flex items-center gap-2 mb-2">
                 <FileUploadButton onFilesSelected={handleFilesSelected} />
                 <button
@@ -496,7 +495,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
               </div>
             </>
           ) : (
-            /* Desktop: single row */
+            /* Wide desktop: single row */
             <div className="flex items-center gap-2">
               <FileUploadButton onFilesSelected={handleFilesSelected} />
               <button

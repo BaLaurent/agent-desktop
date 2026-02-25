@@ -1,11 +1,9 @@
 import { useEffect, useCallback } from 'react'
 import { useConversationsStore } from '../../stores/conversationsStore'
-import { useMobileMode } from '../../hooks/useMobileMode'
 import { SearchBar } from './SearchBar'
 import { SidebarTree } from './FolderTree'
 
 export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: () => void; onOpenScheduler?: () => void }) {
-  const isMobile = useMobileMode()
   const { loadConversations, loadFolders, createConversation, createFolder } =
     useConversationsStore()
 
@@ -42,17 +40,15 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
         className="flex items-center justify-between px-3 py-3 flex-shrink-0"
         style={{ borderBottom: '1px solid var(--color-bg)' }}
       >
-        {!isMobile && (
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            Conversations
-          </span>
-        )}
-        <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-1'}`}>
+        <span className="text-sm font-semibold mobile:hidden" style={{ color: 'var(--color-text)' }}>
+          Conversations
+        </span>
+        <div className="flex items-center gap-1 mobile:gap-2">
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
               title="Settings (Ctrl+,)"
-              className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
+              className="p-1 mobile:w-11 mobile:h-11 mobile:flex mobile:items-center mobile:justify-center mobile:p-0 rounded transition-colors hover:bg-[var(--color-bg)]"
               style={{ color: 'var(--color-text-muted)' }}
               aria-label="Open settings"
             >
@@ -76,7 +72,7 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
             <button
               onClick={onOpenScheduler}
               title="Scheduled Tasks"
-              className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
+              className="p-1 mobile:w-11 mobile:h-11 mobile:flex mobile:items-center mobile:justify-center mobile:p-0 rounded transition-colors hover:bg-[var(--color-bg)]"
               style={{ color: 'var(--color-text-muted)' }}
               aria-label="Open scheduled tasks"
             >
@@ -93,7 +89,7 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
           <button
             onClick={handleImport}
             title="Import conversation"
-            className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
+            className="p-1 mobile:w-11 mobile:h-11 mobile:flex mobile:items-center mobile:justify-center mobile:p-0 rounded transition-colors hover:bg-[var(--color-bg)]"
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Import conversation"
           >
@@ -109,7 +105,7 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
           <button
             onClick={handleNewFolder}
             title="New folder"
-            className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
+            className="p-1 mobile:w-11 mobile:h-11 mobile:flex mobile:items-center mobile:justify-center mobile:p-0 rounded transition-colors hover:bg-[var(--color-bg)]"
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Create new folder"
           >
@@ -125,7 +121,7 @@ export function Sidebar({ onOpenSettings, onOpenScheduler }: { onOpenSettings?: 
           <button
             onClick={handleNewConversation}
             title="New conversation (Ctrl+N)"
-            className={`${isMobile ? 'w-11 h-11 flex items-center justify-center' : 'p-1'} rounded transition-colors hover:bg-[var(--color-bg)]`}
+            className="p-1 mobile:w-11 mobile:h-11 mobile:flex mobile:items-center mobile:justify-center mobile:p-0 rounded transition-colors hover:bg-[var(--color-bg)]"
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Create new conversation"
           >

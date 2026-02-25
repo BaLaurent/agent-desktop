@@ -8,8 +8,7 @@ import { ModelPreview } from '../artifacts/ModelPreview'
 import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 import { NotebookPreview } from '../artifacts/NotebookPreview'
-import { CodeEditorModal } from './CodeEditorModal'
-import { PreviewModal } from './PreviewModal'
+import { ExpandedViewerModal } from './ExpandedViewerModal'
 import { NewConversationFromFilesModal } from './NewConversationFromFilesModal'
 import type { FileNode } from '../../../shared/types'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -403,7 +402,7 @@ function FileTreeNode({
               }
             }}
             onContextMenu={handleCtxMenu}
-            className={`w-full flex items-center gap-1 ${mobile ? 'py-2' : 'py-0.5'} text-sm hover:opacity-80 transition-opacity text-left text-body`}
+            className="w-full flex items-center gap-1 py-0.5 mobile:py-2 text-sm hover:opacity-80 transition-opacity text-left text-body"
             style={{ paddingLeft: depth * 16 + 8 }}
             aria-expanded={expanded}
             aria-label={`Folder ${node.name}`}
@@ -499,7 +498,7 @@ function FileTreeNode({
           }
         }}
         onContextMenu={handleCtxMenu}
-        className={`flex-1 min-w-0 flex items-center gap-1 ${mobile ? 'py-2' : 'py-0.5'} text-sm hover:opacity-80 transition-opacity text-left text-body`}
+        className="flex-1 min-w-0 flex items-center gap-1 py-0.5 mobile:py-2 text-sm hover:opacity-80 transition-opacity text-left text-body"
         aria-selected={isSelected}
         aria-label={`File ${node.name}`}
       >
@@ -829,8 +828,7 @@ export function FileExplorerPanel() {
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [jsEnabled, setJsEnabled] = useState(false)
   const [jsPromptDismissed, setJsPromptDismissed] = useState(false)
-  const [showCodeModal, setShowCodeModal] = useState(false)
-  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [showExpandedModal, setShowExpandedModal] = useState(false)
 
   // DnD state
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
@@ -871,8 +869,7 @@ export function FileExplorerPanel() {
       setJsEnabled(false)
     }
     setJsPromptDismissed(false)
-    setShowCodeModal(false)
-    setShowPreviewModal(false)
+    setShowExpandedModal(false)
   }, [selectedFilePath])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
@@ -1146,13 +1143,7 @@ export function FileExplorerPanel() {
                 isThemesCwd={themesCwd}
                 jsEnabled={jsEnabled}
                 onToggleJs={() => setJsEnabled((v) => !v)}
-                onExpand={() => {
-                  if (isMonacoActive(fileLanguage, selectedFilePath, viewMode)) {
-                    setShowCodeModal(true)
-                  } else {
-                    setShowPreviewModal(true)
-                  }
-                }}
+                onExpand={() => setShowExpandedModal(true)}
                 onExportStl={getFileExtension(selectedFilePath) === 'scad' ? handleExportStl : undefined}
                 exporting={exporting}
               />
@@ -1206,24 +1197,17 @@ export function FileExplorerPanel() {
         />
       )}
 
-      {/* Expanded code editor modal */}
-      {showCodeModal && selectedFilePath && fileContent !== null && (
-        <CodeEditorModal
-          value={editorContent ?? fileContent!}
-          onChange={(v) => useFileExplorerStore.getState().setEditorContent(v)}
-          onClose={() => setShowCodeModal(false)}
-          language={fileLanguage}
-          filename={getBasename(selectedFilePath)}
-        />
-      )}
-
-      {showPreviewModal && selectedFilePath && fileContent !== null && (
-        <PreviewModal
+      {/* Expanded viewer modal (source/preview with toggle) */}
+      {showExpandedModal && selectedFilePath && fileContent !== null && (
+        <ExpandedViewerModal
           filePath={selectedFilePath}
-          content={fileContent}
+          content={editorContent ?? fileContent}
           language={fileLanguage}
           allowScripts={jsEnabled}
-          onClose={() => setShowPreviewModal(false)}
+          initialMode={isMonacoActive(fileLanguage, selectedFilePath, viewMode) ? 'source' : 'preview'}
+          canToggle={hasPreviewMode(fileLanguage, selectedFilePath)}
+          onChange={(v) => useFileExplorerStore.getState().setEditorContent(v)}
+          onClose={() => setShowExpandedModal(false)}
         />
       )}
 

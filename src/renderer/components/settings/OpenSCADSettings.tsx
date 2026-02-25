@@ -69,7 +69,7 @@ export function OpenSCADSettings() {
           value={binaryPath}
           onChange={(e) => saveBinaryPath(e.target.value)}
           placeholder="openscad"
-          className="w-full px-3 py-2 rounded text-sm outline-none"
+          className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
           style={inputStyle}
           aria-label="OpenSCAD binary path"
         />
@@ -82,7 +82,7 @@ export function OpenSCADSettings() {
         <button
           onClick={handleTest}
           disabled={testing}
-          className="self-start px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 bg-tool text-contrast"
+          className="self-start px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 bg-tool text-contrast mobile:py-3"
           style={{ opacity: testing ? 0.6 : 1 }}
         >
           {testing ? 'Testing...' : 'Test Configuration'}

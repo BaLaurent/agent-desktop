@@ -5,7 +5,6 @@ import { parseOverrides } from '../../utils/resolveAISettings'
 import { useClickOutside } from '../../hooks/useClickOutside'
 import { useOverrideDraft } from '../../hooks/useOverrideDraft'
 import { OverrideFormFields } from './OverrideFormFields'
-import { useMobileMode } from '../../hooks/useMobileMode'
 
 export type { McpServerName } from '../../../shared/constants'
 
@@ -26,7 +25,6 @@ export function FolderSettingsPopover({
 }: FolderSettingsPopoverProps) {
   const [cwdValue, setCwdValue] = useState(folder.default_cwd || '')
   const popoverRef = useRef<HTMLDivElement>(null)
-  const mobile = useMobileMode()
   useClickOutside(popoverRef, onClose)
 
   const {
@@ -49,7 +47,7 @@ export function FolderSettingsPopover({
   return (
     <div
       ref={popoverRef}
-      className={`fixed z-50 rounded-lg shadow-xl text-sm flex flex-col max-w-[calc(100vw-1.5rem)] ${mobile ? 'w-full' : 'w-[360px]'}`}
+      className="fixed z-50 rounded-lg shadow-xl text-sm flex flex-col max-w-[calc(100vw-1.5rem)] w-[360px] mobile:w-full max-h-[80vh] mobile:max-h-[80dvh]"
       style={{
         top: '50%',
         left: '50%',
@@ -57,7 +55,6 @@ export function FolderSettingsPopover({
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-text-muted)',
         color: 'var(--color-text)',
-        maxHeight: mobile ? '80dvh' : '80vh',
       }}
     >
       {/* Header */}
@@ -100,16 +97,14 @@ export function FolderSettingsPopover({
               }}
               aria-label="Default working directory path"
             />
-            {!mobile && (
-              <button
-                onClick={handleBrowseCwd}
-                className="px-2 py-1 rounded text-xs flex-shrink-0"
-                style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                aria-label="Browse for directory"
-              >
-                Browse
-              </button>
-            )}
+            <button
+              onClick={handleBrowseCwd}
+              className="px-2 py-1 rounded text-xs flex-shrink-0 mobile:hidden"
+              style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+              aria-label="Browse for directory"
+            >
+              Browse
+            </button>
             {cwdValue && (
               <button
                 onClick={() => setCwdValue('')}
@@ -154,14 +149,14 @@ export function FolderSettingsPopover({
       >
         <button
           onClick={onClose}
-          className={`rounded text-xs ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1'}`}
+          className="rounded text-xs px-3 py-1 mobile:px-4 mobile:py-3 mobile:text-sm"
           style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-muted)' }}
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
-          className={`rounded text-xs bg-primary text-contrast ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1'}`}
+          className="rounded text-xs bg-primary text-contrast px-3 py-1 mobile:px-4 mobile:py-3 mobile:text-sm"
         >
           Save
         </button>

@@ -150,7 +150,7 @@ export function AppearanceSettings() {
                 const v = e.target.value
                 if (v !== '' && Number(v) >= 8 && Number(v) <= 32) setSetting('fontSize', v)
               }}
-              className="w-16 bg-surface text-body border border-muted rounded px-2 py-1 text-sm text-center outline-none focus:border-primary"
+              className="w-16 bg-surface text-body border border-muted rounded px-2 py-1 text-sm text-center outline-none focus:border-primary mobile:text-base"
               aria-label="Font size in pixels"
             />
             <span className="text-xs text-muted">px</span>
@@ -165,7 +165,7 @@ export function AppearanceSettings() {
               <button
                 key={mode}
                 onClick={() => setSetting('chatLayout', mode)}
-                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors mobile:px-4 mobile:py-3 mobile:text-sm ${
                   (settings.chatLayout ?? 'tight') === mode
                     ? 'bg-primary text-contrast'
                     : 'bg-surface text-body'
@@ -215,7 +215,7 @@ export function AppearanceSettings() {
                 const v = e.target.value
                 if (v !== '' && Number(v) >= 0 && Number(v) <= 50) setSetting('panelButtonRadius', v)
               }}
-              className="w-16 bg-surface text-body border border-muted rounded px-2 py-1 text-sm text-center outline-none focus:border-primary"
+              className="w-16 bg-surface text-body border border-muted rounded px-2 py-1 text-sm text-center outline-none focus:border-primary mobile:text-base"
               aria-label="Panel button proximity radius"
             />
             <span className="text-xs text-muted">%</span>
@@ -232,13 +232,13 @@ export function AppearanceSettings() {
           <div className="flex gap-2">
             <button
               onClick={handleOpenFolder}
-              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-90 bg-deep text-body"
+              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-90 bg-deep text-body mobile:px-4 mobile:py-3 mobile:text-sm"
             >
               Open Themes Folder
             </button>
             <button
               onClick={handleStartCreate}
-              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-90 bg-primary text-contrast"
+              className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-90 bg-primary text-contrast mobile:px-4 mobile:py-3 mobile:text-sm"
             >
               Create New Theme
             </button>
@@ -288,7 +288,7 @@ export function AppearanceSettings() {
                   <div className="flex gap-1 absolute top-2 right-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleStartEdit(theme) }}
-                      className="w-6 h-6 rounded flex items-center justify-center text-xs hover:bg-surface transition-colors text-muted"
+                      className="w-6 h-6 rounded flex items-center justify-center text-xs hover:bg-surface transition-colors text-muted mobile:w-11 mobile:h-11"
                       title="Edit theme"
                     >
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -298,7 +298,7 @@ export function AppearanceSettings() {
                     {deleteConfirm === theme.filename ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(theme.filename) }}
-                        className="w-6 h-6 rounded flex items-center justify-center text-xs transition-colors bg-error text-contrast"
+                        className="w-6 h-6 rounded flex items-center justify-center text-xs transition-colors bg-error text-contrast mobile:w-11 mobile:h-11"
                         title="Confirm delete"
                       >
                         !
@@ -306,7 +306,7 @@ export function AppearanceSettings() {
                     ) : (
                       <button
                         onClick={(e) => { e.stopPropagation(); setDeleteConfirm(theme.filename) }}
-                        className="w-6 h-6 rounded flex items-center justify-center text-xs hover:bg-surface transition-colors text-muted"
+                        className="w-6 h-6 rounded flex items-center justify-center text-xs hover:bg-surface transition-colors text-muted mobile:w-11 mobile:h-11"
                         title="Delete theme"
                       >
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -335,7 +335,7 @@ export function AppearanceSettings() {
                 Filename
               </label>
               <input
-                className="w-full max-w-xs bg-surface text-body border border-muted rounded px-3 py-2 text-sm outline-none focus:border-primary"
+                className="w-full max-w-xs bg-surface text-body border border-muted rounded px-3 py-2 text-sm outline-none focus:border-primary mobile:text-base"
                 value={newFilename}
                 onChange={(e) => setNewFilename(e.target.value)}
                 placeholder="my-theme.css"

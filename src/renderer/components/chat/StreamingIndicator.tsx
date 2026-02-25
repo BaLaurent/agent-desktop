@@ -3,7 +3,6 @@ import { ToolUseBlock } from './ToolUseBlock'
 import { ToolApprovalBlock } from './ToolApprovalBlock'
 import { AskUserBlock } from './AskUserBlock'
 import { McpStatusBlock } from './McpStatusBlock'
-import { useMobileMode } from '../../hooks/useMobileMode'
 import type { StreamPart } from '../../../shared/types'
 
 interface StreamingIndicatorProps {
@@ -12,13 +11,12 @@ interface StreamingIndicatorProps {
 }
 
 export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorProps) {
-  const mobile = useMobileMode()
   const hasContent = streamParts.length > 0
 
   return (
     <div className="flex justify-start mb-4">
       <div
-        className={`rounded-lg rounded-bl-sm px-4 py-3 ${mobile ? 'max-w-[95%]' : 'max-w-[80%]'}`}
+        className="rounded-lg rounded-bl-sm px-4 py-3 max-w-[80%] mobile:max-w-[95%]"
         style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
         role="status"
         aria-live="polite"
@@ -62,7 +60,7 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
         {/* Stop button */}
         <button
           onClick={onStop}
-          className={`mt-2 rounded font-medium transition-colors hover:opacity-90 bg-error text-contrast ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
+          className="mt-2 rounded font-medium transition-colors hover:opacity-90 bg-error text-contrast px-3 py-1 text-xs mobile:px-4 mobile:py-3 mobile:text-sm"
           aria-label="Stop generating response"
         >
           Stop generating

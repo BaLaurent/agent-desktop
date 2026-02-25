@@ -78,7 +78,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
       onClick={mobile ? () => { if (!isEditing) setShowActions(prev => !prev) } : undefined}
     >
       <div
-        className={`rounded-lg px-4 py-3 relative ${mobile ? 'max-w-[95%]' : 'max-w-[80%]'} ${
+        className={`rounded-lg px-4 py-3 relative max-w-[80%] mobile:max-w-[95%] ${
           isUser ? 'rounded-br-sm' : 'rounded-bl-sm'
         }`}
         style={{
@@ -100,7 +100,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className={`w-full rounded p-2 resize-none ${mobile ? 'text-base' : 'text-sm'}`}
+              className="w-full rounded p-2 resize-none text-sm mobile:text-base"
               style={{
                 backgroundColor: 'var(--color-bg)',
                 color: 'var(--color-text)',
@@ -109,16 +109,16 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
               rows={4}
               autoFocus
             />
-            <div className={`flex gap-2 mt-2 ${mobile ? 'flex-wrap' : ''}`}>
+            <div className="flex gap-2 mt-2 mobile:flex-wrap">
               <button
                 onClick={handleSaveEdit}
-                className={`rounded font-medium bg-primary text-contrast ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
+                className="rounded font-medium bg-primary text-contrast px-3 py-1 text-xs mobile:px-4 mobile:py-3 mobile:text-sm"
               >
                 Save & Send
               </button>
               <button
                 onClick={handleCancelEdit}
-                className={`rounded ${mobile ? 'px-4 py-3 text-sm' : 'px-3 py-1 text-xs'}`}
+                className="rounded px-3 py-1 text-xs mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: 'var(--color-text-muted)' }}
               >
                 Cancel
@@ -152,12 +152,12 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
         {/* Hover actions */}
         {(showActions || isSpeakingThis) && !isEditing && (
           <div
-            className={`absolute -top-3 right-2 flex rounded shadow-md ${mobile ? 'gap-2 px-1.5 py-1 flex-wrap' : 'gap-1 px-1 py-0.5'}`}
+            className="absolute -top-3 right-2 flex rounded shadow-md gap-1 px-1 py-0.5 mobile:gap-2 mobile:px-1.5 mobile:py-1 mobile:flex-wrap"
             style={{ backgroundColor: 'var(--color-deep)' }}
           >
             <button
               onClick={handleCopy}
-              className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
+              className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
               style={{ color: 'var(--color-text-muted)' }}
               title="Copy"
             >
@@ -166,7 +166,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {showTtsButton && (
               <button
                 onClick={() => isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)}
-                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
+                className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: isSpeakingThis ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
                 title={isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
               >
@@ -176,7 +176,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {isUser && onEdit && (
               <button
                 onClick={handleStartEdit}
-                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
+                className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Edit"
               >
@@ -186,7 +186,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {isUser && (
               <button
                 onClick={() => setShowTaskForm(true)}
-                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
+                className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Schedule as recurring task"
               >
@@ -196,7 +196,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
             {!isUser && isLast && onRegenerate && (
               <button
                 onClick={onRegenerate}
-                className={`rounded hover:opacity-80 transition-opacity ${mobile ? 'px-4 py-3 text-sm' : 'px-2 py-0.5 text-[10px]'}`}
+                className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Regenerate"
               >

@@ -17,7 +17,7 @@ export const mockAgent = {
   conversations: {
     list: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue({ id: 1, title: 'Test', messages: [] }),
-    create: vi.fn().mockResolvedValue({ id: 1, title: 'New Conversation', folder_id: null, position: 0, model: 'claude-sonnet-4-5-20250929', system_prompt: null, cwd: null, kb_enabled: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+    create: vi.fn().mockResolvedValue({ id: 1, title: 'New Conversation', folder_id: null, position: 0, model: 'claude-sonnet-4-6-20250514', system_prompt: null, cwd: null, kb_enabled: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     update: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     export: vi.fn().mockResolvedValue(''),

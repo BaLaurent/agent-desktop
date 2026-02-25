@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHand
 import { useSettingsStore } from '../../stores/settingsStore'
 import { FileMentionDropdown, flattenFileTree } from './FileMentionDropdown'
 import { SlashCommandDropdown } from './SlashCommandDropdown'
-import { useMobileMode } from '../../hooks/useMobileMode'
 import type { FlatFile } from './FileMentionDropdown'
 import type { FileNode, SlashCommand } from '../../../shared/types'
 import { fuzzyMatch } from '../../utils/fuzzyMatch'
@@ -27,7 +26,6 @@ interface MessageInputProps {
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
   function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, skillsMode, disabledSkills, onCanSendChange, onPaste }, ref) {
-    const mobile = useMobileMode()
     const [content, setContent] = useState('')
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
@@ -362,7 +360,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
 
     return (
       <div
-        className="flex-1 flex items-end gap-2 rounded-lg px-3 py-2 relative"
+        className="flex-1 min-w-0 flex items-end gap-2 rounded-lg px-3 py-2 relative"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         {slashOpen && (
@@ -392,7 +390,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           placeholder={disabled ? 'Sign in to start chatting...' : 'Message Claude... (@ to mention files, / for commands)'}
           disabled={disabled}
           rows={1}
-          className={`flex-1 resize-none bg-transparent outline-none leading-6 ${mobile ? 'text-base' : 'text-sm'}`}
+          className="flex-1 min-w-0 resize-none bg-transparent outline-none leading-6 text-sm mobile:text-base"
           style={{ color: 'var(--color-text)', maxHeight: `${6 * 24}px` }}
           aria-label="Message input"
         />

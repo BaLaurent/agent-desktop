@@ -126,7 +126,7 @@ describe('Conversations Service', () => {
 
   it('import creates new conversation with messages', async () => {
     const data = JSON.stringify({
-      conversation: { title: 'Imported Chat', model: 'claude-sonnet-4-5-20250929' },
+      conversation: { title: 'Imported Chat', model: 'claude-sonnet-4-6-20250514' },
       messages: [
         { role: 'user', content: 'imported question', created_at: '2025-01-01T00:00:00Z' },
         { role: 'assistant', content: 'imported answer', created_at: '2025-01-01T00:00:01Z' },

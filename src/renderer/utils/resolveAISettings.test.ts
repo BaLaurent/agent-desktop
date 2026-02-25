@@ -47,11 +47,11 @@ describe('resolveAISettings', () => {
   })
 
   describe('resolveEffectiveSettings', () => {
-    const global = { ai_model: 'claude-sonnet-4-5-20250929', ai_maxTurns: '5' }
+    const global = { ai_model: 'claude-sonnet-4-6-20250514', ai_maxTurns: '5' }
 
     it('returns global values when no overrides', () => {
       const result = resolveEffectiveSettings(global, {}, {})
-      expect(result['ai_model']).toBe('claude-sonnet-4-5-20250929')
+      expect(result['ai_model']).toBe('claude-sonnet-4-6-20250514')
       expect(result['ai_maxTurns']).toBe('5')
     })
 
