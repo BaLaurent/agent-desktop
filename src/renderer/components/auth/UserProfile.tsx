@@ -58,7 +58,7 @@ export function UserProfile() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 rounded-md shadow-lg py-1 min-w-[180px] z-50 mobile:max-w-[calc(100vw-2rem)]"
+          className="absolute right-0 top-full mt-1 rounded-md shadow-lg py-1 min-w-[180px] z-50 compact:max-w-[calc(100vw-2rem)]"
           style={{
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-bg)',

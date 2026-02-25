@@ -128,8 +128,9 @@ export default function App() {
   const showTitlebar = useSettingsStore((s) => s.settings.showTitlebar) !== 'false'
   const mobile = useMobileMode()
 
+
   return (
-    <div className="flex flex-col h-screen" style={{ height: '100dvh' }}>
+    <div className="flex flex-col h-screen w-full overflow-hidden" style={{ height: '100dvh' }}>
       {showTitlebar ? (
         <Titlebar onOpenSettings={openSettings} />
       ) : !mobile ? (

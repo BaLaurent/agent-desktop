@@ -38,7 +38,7 @@ export function SystemPromptEditorModal({ value, onChange, onClose }: SystemProm
       }}
     >
       <div
-        className="flex flex-col w-[90vw] max-w-4xl rounded-lg shadow-2xl overflow-hidden mobile:max-h-[80dvh]"
+        className="flex flex-col w-[90vw] max-w-4xl rounded-lg shadow-2xl overflow-hidden compact:max-h-[80dvh]"
         style={{ backgroundColor: 'var(--color-surface)', height: '80vh' }}
       >
         {/* Header */}

@@ -77,7 +77,7 @@ export function FileMentionDropdown({ files, filter, selectedIndex, onSelect, on
     return (
       <div
         ref={listRef}
-        className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[280px] py-2 px-3 z-50"
+        className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[280px] max-w-[calc(100vw-2rem)] py-2 px-3 z-50"
         style={{
           backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-text-muted)',

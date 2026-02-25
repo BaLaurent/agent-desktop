@@ -35,7 +35,7 @@ export function AIOverridesPopover({
   return (
     <div
       ref={popoverRef}
-      className="fixed z-50 rounded-lg shadow-xl text-sm flex flex-col max-w-[calc(100vw-1.5rem)] w-[340px] mobile:w-full max-h-[80vh] mobile:max-h-[80dvh]"
+      className="fixed z-50 rounded-lg shadow-xl text-sm flex flex-col max-w-[calc(100vw-1.5rem)] w-[340px] compact:w-full max-h-[80vh] compact:max-h-[80dvh]"
       style={{
         top: '50%',
         left: '50%',

@@ -16,8 +16,10 @@ function getIsCompact(): boolean {
 
 // Keep .mobile and .compact classes on <html> in sync
 function syncClasses() {
-  document.documentElement.classList.toggle('mobile', getIsMobile())
-  document.documentElement.classList.toggle('compact', getIsCompact())
+  const mobile = getIsMobile()
+  const compact = getIsCompact()
+  document.documentElement.classList.toggle('mobile', mobile)
+  document.documentElement.classList.toggle('compact', compact)
 }
 
 // Module-level: sync immediately + on every resize

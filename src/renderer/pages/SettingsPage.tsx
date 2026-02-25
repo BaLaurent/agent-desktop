@@ -78,7 +78,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       }}
     >
       <div
-        className="w-full max-w-4xl rounded-lg shadow-xl flex overflow-hidden max-h-[80vh] mobile:flex-col mobile:max-h-[100dvh] mobile:h-full"
+        className="w-full max-w-4xl rounded-lg shadow-xl flex overflow-hidden max-h-[80vh] compact:flex-col compact:max-h-[100dvh] compact:h-full"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         {compact ? (
@@ -157,7 +157,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header with close button (desktop only — mobile has it in the tab band) */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10 mobile:hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10 compact:hidden">
             <h2
               className="text-lg font-semibold"
               style={{ color: 'var(--color-text)' }}
@@ -181,7 +181,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 mobile:px-4 py-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 compact:px-4 py-4">
             {ActiveComponent ? (
               <ActiveComponent />
             ) : (

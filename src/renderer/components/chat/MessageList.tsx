@@ -86,7 +86,7 @@ export function MessageList({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto py-4 px-6 mobile:px-3"
+        className="h-full overflow-y-auto overflow-x-hidden py-4 px-6 mobile:px-3"
       >
         <div className={chatLayout !== 'wide' ? 'max-w-3xl mx-auto' : undefined}>
           {messages.map((msg, idx) => {

@@ -161,7 +161,7 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div
-        className="w-full max-w-md rounded-lg p-5 flex flex-col gap-4 shadow-xl max-h-[90vh] overflow-y-auto mobile:max-h-[90dvh]"
+        className="w-full max-w-md rounded-lg p-5 flex flex-col gap-4 shadow-xl max-h-[90vh] overflow-y-auto compact:max-h-[90dvh]"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>

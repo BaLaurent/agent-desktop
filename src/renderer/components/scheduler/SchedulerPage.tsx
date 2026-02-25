@@ -48,11 +48,11 @@ export function SchedulerPage({ onClose }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-full max-w-3xl mobile:max-w-[calc(100vw-1rem)] rounded-lg shadow-xl flex flex-col overflow-hidden max-h-[80vh] mobile:max-h-[80dvh]"
+        className="w-full max-w-3xl compact:max-w-[calc(100vw-1rem)] rounded-lg shadow-xl flex flex-col overflow-hidden max-h-[80vh] compact:max-h-[80dvh]"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 mobile:px-4 py-4 border-b border-[var(--color-text-muted)]/10 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 compact:px-4 py-4 border-b border-[var(--color-text-muted)]/10 flex-shrink-0">
           <div className="flex items-center gap-3">
             <svg className="w-5 h-5" style={{ color: 'var(--color-primary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -90,7 +90,7 @@ export function SchedulerPage({ onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 mobile:px-4 py-4">
+        <div className="flex-1 overflow-y-auto px-6 compact:px-4 py-4">
           {loading && tasks.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</span>

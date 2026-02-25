@@ -257,7 +257,7 @@ export function MainLayout({ onOpenSettings, onOpenScheduler }: { onOpenSettings
 
       {/* Main content — ChatView */}
       <div
-        className="flex-1 flex flex-col overflow-hidden relative mobile-safe-bottom"
+        className="flex-1 min-w-0 flex flex-col overflow-hidden relative mobile-safe-bottom"
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <PanelEdgeButton side="left" isOpen={sidebarVisible} onClick={toggleSidebar} radiusPct={panelButtonRadiusPct} alwaysVisible={panelButtonAlwaysVisible} mobile={mobile} />

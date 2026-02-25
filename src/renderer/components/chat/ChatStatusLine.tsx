@@ -88,7 +88,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
         </button>
         {modelOpen && (
           <div
-            className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[140px] py-1 z-50 mobile:max-w-[calc(100vw-2rem)]"
+            className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[140px] py-1 z-50 compact:max-w-[calc(100vw-2rem)]"
             style={{
               backgroundColor: 'var(--color-surface)',
               border: '1px solid var(--color-text-muted)',
@@ -134,7 +134,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
         </button>
         {modeOpen && (
           <div
-            className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[130px] py-1 z-50 mobile:max-w-[calc(100vw-2rem)]"
+            className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[130px] py-1 z-50 compact:max-w-[calc(100vw-2rem)]"
             style={{
               backgroundColor: 'var(--color-surface)',
               border: '1px solid var(--color-text-muted)',
@@ -189,7 +189,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
             </button>
             {mcpOpen && (
               <div
-                className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[160px] py-1 z-50 mobile:max-w-[calc(100vw-2rem)]"
+                className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[160px] py-1 z-50 compact:max-w-[calc(100vw-2rem)]"
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   border: '1px solid var(--color-text-muted)',
@@ -240,7 +240,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
             </button>
             {kbOpen && (
               <div
-                className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[200px] py-1 z-50 mobile:max-w-[calc(100vw-2rem)]"
+                className="absolute bottom-full left-0 mb-1 rounded shadow-lg text-xs min-w-[200px] py-1 z-50 compact:max-w-[calc(100vw-2rem)]"
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   border: '1px solid var(--color-text-muted)',

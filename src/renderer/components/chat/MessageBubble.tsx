@@ -72,13 +72,13 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
 
   return (
     <div
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}
+      className={`flex min-w-0 ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}
       onMouseEnter={mobile ? undefined : () => setShowActions(true)}
       onMouseLeave={mobile ? undefined : () => setShowActions(false)}
       onClick={mobile ? () => { if (!isEditing) setShowActions(prev => !prev) } : undefined}
     >
       <div
-        className={`rounded-lg px-4 py-3 relative max-w-[80%] mobile:max-w-[95%] ${
+        className={`rounded-lg px-4 py-3 relative max-w-[80%] compact:max-w-[95%] ${
           isUser ? 'rounded-br-sm' : 'rounded-bl-sm'
         }`}
         style={{

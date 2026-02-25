@@ -162,7 +162,7 @@ export function ExpandedViewerModal({
       }}
     >
       <div
-        className="flex flex-col w-[96vw] max-w-[1600px] rounded-lg shadow-2xl overflow-hidden mobile:max-h-[100dvh] h-[92vh] mobile:h-[100dvh]"
+        className="flex flex-col w-[96vw] max-w-[1600px] rounded-lg shadow-2xl overflow-hidden compact:max-h-[100dvh] h-[92vh] compact:h-[100dvh]"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
         {/* Header */}
