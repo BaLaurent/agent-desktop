@@ -47,7 +47,7 @@
   - `getVisibleNodePaths()` pure DFS helper computes range for Shift+click (only expanded nodes)
   - Normal click clears multi-selection; `loadTree`/`clear`/`refresh` reset it
 - `@mention` uses VS Code-style fuzzy matching (`src/renderer/utils/fuzzyMatch.ts`)
-- **Expand button**: "Expand" button routes to `CodeEditorModal` (source/code mode) or `PreviewModal` (preview/images); visible for all file types
+- **Expand button**: "Expand" button opens `ExpandedViewerModal` — unified full-screen modal replacing the former `CodeEditorModal`/`PreviewModal` split; handles source editing (Monaco) and preview (HTML/MD/image/SVG/Mermaid) in one component; visible for all file types
 - **Markdown anchor links**: headings get slugified `id` attributes; `#` links scroll within container instead of calling `openExternal`
   - **Gotcha**: browser URL-encodes accented chars in href (`é` → `%C3%A9`) — must `decodeURIComponent` before slugifying
   - **Gotcha**: `slugify` uses Unicode `\p{L}\p{N}` (not `\w`) to preserve accented characters
