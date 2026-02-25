@@ -20,6 +20,7 @@
 - Vite 5.x required (electron-vite peer dep)
 - **asar: false** in electron-builder.yml — required because Agent SDK resolves `cli.js` via `import.meta.url` which lands inside `app.asar`; system `node` cannot read asar archives
 - **Fonts**: `@fontsource/jetbrains-mono` bundled (imported in `main.tsx`) — ensures monospace code rendering works regardless of system fonts; critical for box-drawing chars in ASCII diagrams
+- **Window sizing**: BrowserWindow config has NO `minWidth`/`minHeight` — on Wayland (Hyprland), compositors can force windows smaller than declared minimums, but Electron keeps web content at `minWidth` pixels, causing visible horizontal overflow. Root element uses `w-full overflow-hidden` + html/body get explicit `height: 100%`/`overflow: hidden`
 
 ## Theming System
 - CSS custom properties (`--color-*`) in theme `.css` files at `~/.agent-desktop/themes/`; Tailwind maps to them in `tailwind.config.ts`
@@ -352,6 +353,7 @@
 ## Mobile Ergonomics (Web Server)
 - `useMobileMode()` hook (`src/renderer/hooks/useMobileMode.ts`): returns `true` when `window.__AGENT_WEB_MODE__` is set (injected by web server shim); used across 30+ renderer components
 - **Pattern**: `const mobile = useMobileMode()` → conditional Tailwind classes; no media queries — mode is binary (Electron vs web)
+- **Tailwind variant migration**: `mobile:` variant replaced with `compact:` custom variant (via `tailwind.config.ts`); both scale content proportionally on small viewports and force two-row input layout on narrow screens — prefer `compact:` for new code
 - **Touch targets**: 44px minimum (`w-11 h-11` or `py-3` + text) on all interactive elements in mobile mode
 - **Input font**: `text-base` (16px) on `<textarea>`/`<input>` to prevent iOS auto-zoom on focus
 - **Viewport height**: `100dvh` instead of `100vh` — accounts for mobile browser URL bar (App root, modals, settings)
