@@ -4,7 +4,9 @@
 - `npm run dev` — start dev server with hot reload
 - `npm run build` — compile TypeScript (output: `out/`)
 - `npm run dist:linux` — package AppImage + deb (output: `release/`)
-- `npm run publish:linux` — build + publish to GitHub Releases with `--publish always` (requires `GH_TOKEN`)
+- `npm run dist:win` — package NSIS installer + portable exe (output: `release/`, requires Wine on Linux)
+- `npm run publish:linux` — build + publish Linux to GitHub Releases with `--publish always` (requires `GH_TOKEN`)
+- `npm run publish:win` — build + publish Windows to GitHub Releases with `--publish always` (requires `GH_TOKEN` + Wine on Linux)
 
 ## Architecture
 - Electron + React + Zustand + Tailwind + SQLite (sql.js / WASM)
