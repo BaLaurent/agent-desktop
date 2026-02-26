@@ -24,6 +24,7 @@ interface ConversationsState {
   moveToFolder: (conversationId: number, folderId: number | null) => Promise<void>
   exportConversation: (id: number, format: 'markdown' | 'json') => Promise<string>
   importConversation: (data: string) => Promise<void>
+  forkConversation: (conversationId: number, messageId: number) => Promise<Conversation>
 }
 
 const WEB_MODE = typeof window !== 'undefined' && !!(window as any).__AGENT_WEB_MODE__
@@ -186,6 +187,14 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
   importConversation: async (data) => {
     await window.agent.conversations.import(data)
     await get().loadConversations()
+  },
+
+  forkConversation: async (conversationId, messageId) => {
+    const conversation = await window.agent.conversations.fork(conversationId, messageId)
+    set((s) => ({ conversations: [conversation, ...s.conversations] }))
+    set({ activeConversationId: conversation.id })
+    if (WEB_MODE) sessionStorage.setItem(SESSION_KEY, String(conversation.id))
+    return conversation
   },
 }))
 
