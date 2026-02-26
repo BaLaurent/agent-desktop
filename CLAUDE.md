@@ -39,7 +39,7 @@
 - **`/clear`**: just sets `cleared_at` with no AI call
 - **`allowedTools` wildcards** (`mcp__<name>__*`) REQUIRED — MCP tools unusable without them, even with bypass
 - **`bypassPermissions`** is the only mode that sets `allowDangerouslySkipPermissions`
-- **Tests**: `createTestDb()` is async — all `beforeEach` must `await`; tests colocated as `*.test.ts`
+- **Tests**: `createTestDb()` is async — all `beforeEach` must `await`; tests colocated as `*.test.ts`; coverage thresholds enforced (70% lines, 60% branches) via v8 provider
 - **Tailwind variant**: prefer `compact:` over `mobile:` for new code
 - **Async I/O only**: all main-thread file I/O uses `fs.promises.*` — no sync methods
 - **ContextMenu**: shared `ContextMenu`/`ContextMenuItem`/`ContextMenuDivider` in `src/renderer/components/shared/` — all context menus use this; draggable by default
