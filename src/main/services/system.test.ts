@@ -215,13 +215,13 @@ describe('System Service', () => {
 
   describe('system:purgeConversations', () => {
     it('deletes conversations and folders, preserves settings', async () => {
-      // Add test data
+      // Add test data (default folder already exists from migration)
       db.prepare('INSERT INTO folders (name) VALUES (?)').run('Test Folder')
       db.prepare('INSERT INTO conversations (title) VALUES (?)').run('Test Conv')
 
       const result = await ipc.invoke('system:purgeConversations')
       expect(result.conversations).toBe(1)
-      expect(result.folders).toBe(1)
+      expect(result.folders).toBe(2) // default folder + Test Folder
 
       // Verify deletion
       const convs = db.prepare('SELECT COUNT(*) as c FROM conversations').get() as { c: number }
@@ -234,10 +234,10 @@ describe('System Service', () => {
       expect(settings.c).toBeGreaterThan(0)
     })
 
-    it('returns zero counts when no data to delete', async () => {
+    it('returns default folder count when no user data to delete', async () => {
       const result = await ipc.invoke('system:purgeConversations')
       expect(result.conversations).toBe(0)
-      expect(result.folders).toBe(0)
+      expect(result.folders).toBe(1) // default folder
     })
   })
 
