@@ -55,6 +55,7 @@ export interface Folder {
   name: string
   parent_id: number | null
   position: number
+  is_default: number // 0 or 1 (SQLite boolean)
   ai_overrides: string | null // JSON AIOverrides
   default_cwd: string | null
   color: string | null
