@@ -343,6 +343,24 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           return
         }
 
+        // Insert tab character when no dropdown is open
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          const textarea = e.currentTarget as HTMLTextAreaElement
+          const { selectionStart, selectionEnd } = textarea
+          const val = textarea.value
+          const newValue = val.substring(0, selectionStart) + '\t' + val.substring(selectionEnd)
+          // Use native setter to trigger React's onChange
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype, 'value'
+          )!.set!
+          nativeInputValueSetter.call(textarea, newValue)
+          textarea.dispatchEvent(new Event('input', { bubbles: true }))
+          // Restore cursor position after the inserted tab
+          textarea.selectionStart = textarea.selectionEnd = selectionStart + 1
+          return
+        }
+
         if (sendOnEnter === 'false') {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault()
