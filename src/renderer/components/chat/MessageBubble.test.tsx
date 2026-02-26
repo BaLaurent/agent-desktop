@@ -486,4 +486,102 @@ describe('MessageBubble', () => {
     fireEvent.click(forkBtn)
     expect(onFork).toHaveBeenCalledWith(7)
   })
+
+  // ── Hook system message extraction tests ─────────────────────
+
+  it('extracts hook-system-message tags from assistant content', () => {
+    const content = '<hook-system-message>Lint passed</hook-system-message>\nHere is the result'
+    render(<MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />)
+    // Hook message rendered in its own box
+    expect(screen.getByText('Lint passed')).toBeInTheDocument()
+    // Clean content rendered separately
+    expect(screen.getByText('Here is the result')).toBeInTheDocument()
+  })
+
+  it('renders multiple hook messages in separate boxes', () => {
+    const content = '<hook-system-message>Hook A</hook-system-message>\n<hook-system-message>Hook B</hook-system-message>\nMain content'
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />,
+    )
+    expect(screen.getByText('Hook A')).toBeInTheDocument()
+    expect(screen.getByText('Hook B')).toBeInTheDocument()
+    expect(screen.getByText('Main content')).toBeInTheDocument()
+    // Each hook message gets its own styled box
+    const hookBoxes = container.querySelectorAll('.mb-2.rounded.px-3.py-2.text-xs.border')
+    expect(hookBoxes).toHaveLength(2)
+  })
+
+  it('hook messages render through MarkdownRenderer', () => {
+    const content = '<hook-system-message>**bold hook**</hook-system-message>\nNormal text'
+    render(<MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />)
+    // MarkdownRenderer mock renders data-testid="markdown"
+    const markdowns = screen.getAllByTestId('markdown')
+    const hookMarkdown = markdowns.find((el) => el.textContent === '**bold hook**')
+    expect(hookMarkdown).toBeDefined()
+  })
+
+  it('does not extract hook tags from user messages', () => {
+    const content = '<hook-system-message>Should not extract</hook-system-message>\nUser text'
+    render(<MessageBubble message={makeMessage({ role: 'user', content })} isLast={false} />)
+    // User messages render raw content including the tag text
+    const markdown = screen.getByTestId('markdown')
+    expect(markdown.textContent).toContain('<hook-system-message>')
+  })
+
+  it('cleanContent strips leading newlines after tag removal', () => {
+    const content = '<hook-system-message>Hook msg</hook-system-message>\n\n\nActual response'
+    render(<MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />)
+    // The clean content MarkdownRenderer should get 'Actual response' (no leading newlines)
+    const markdowns = screen.getAllByTestId('markdown')
+    const mainContent = markdowns.find((el) => el.textContent === 'Actual response')
+    expect(mainContent).toBeDefined()
+  })
+
+  it('copy uses cleanContent for assistant messages with hook tags', async () => {
+    const content = '<hook-system-message>Hook info</hook-system-message>\nClean text only'
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    fireEvent.click(screen.getByTitle('Copy'))
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Clean text only')
+  })
+
+  it('copy uses raw content for user messages (no hook stripping)', async () => {
+    const content = 'Hello with <hook-system-message>tag</hook-system-message>'
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content })} isLast={false} />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    fireEvent.click(screen.getByTitle('Copy'))
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(content)
+  })
+
+  it('TTS playMessage uses cleanContent for assistant messages', () => {
+    const content = '<hook-system-message>Hook data</hook-system-message>\nSpeakable text'
+    const msg = makeMessage({ role: 'assistant', id: 20, conversation_id: 3, content })
+    const { container } = render(<MessageBubble message={msg} isLast={false} />)
+    fireEvent.mouseEnter(container.firstChild as Element)
+    fireEvent.click(screen.getByTitle('Play TTS'))
+    expect(ttsStoreMock.playMessage).toHaveBeenCalledWith(20, 'Speakable text', 3)
+  })
+
+  it('assistant message without hook tags renders normally', () => {
+    render(
+      <MessageBubble message={makeMessage({ role: 'assistant', content: 'Plain response' })} isLast={false} />,
+    )
+    const markdowns = screen.getAllByTestId('markdown')
+    expect(markdowns.some((el) => el.textContent === 'Plain response')).toBe(true)
+  })
+
+  it('context menu copy uses cleanContent for assistant with hooks', () => {
+    const content = '<hook-system-message>ctx hook</hook-system-message>\nContext clean text'
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />,
+    )
+    rightClickBubble(container)
+    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy')!
+    fireEvent.click(copyBtn)
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Context clean text')
+  })
 })

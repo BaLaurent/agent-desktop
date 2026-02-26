@@ -65,10 +65,36 @@ describe('StreamingIndicator', () => {
       { type: 'system_message', content: 'No event label' },
     ]
     const { container } = render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
-    // Only the content span should exist inside the system message div
     const sysDiv = container.querySelector('.my-2.rounded.px-3.py-2')
     expect(sysDiv).not.toBeNull()
-    expect(sysDiv!.querySelectorAll('span')).toHaveLength(1)
-    expect(sysDiv!.querySelector('span')!.textContent).toBe('No event label')
+    // No hookEvent span should exist
+    expect(sysDiv!.querySelectorAll('span')).toHaveLength(0)
+    // Content is rendered via MarkdownRenderer (mocked as div)
+    expect(sysDiv!.querySelector('[data-testid="markdown"]')).toHaveTextContent('No event label')
+  })
+
+  it('renders system_message content through MarkdownRenderer', () => {
+    const parts: StreamPart[] = [
+      { type: 'system_message', content: '**bold** hook output' },
+    ]
+    render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
+    // MarkdownRenderer mock renders a div with data-testid="markdown"
+    const markdowns = screen.getAllByTestId('markdown')
+    expect(markdowns.some((el) => el.textContent === '**bold** hook output')).toBe(true)
+  })
+
+  it('renders hookEvent label as span alongside MarkdownRenderer content', () => {
+    const parts: StreamPart[] = [
+      { type: 'system_message', content: 'Check result', hookEvent: 'PostToolUse' },
+    ]
+    const { container } = render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
+    const sysDiv = container.querySelector('.my-2.rounded.px-3.py-2')
+    expect(sysDiv).not.toBeNull()
+    // hookEvent renders as a span
+    const hookSpan = sysDiv!.querySelector('span')
+    expect(hookSpan).not.toBeNull()
+    expect(hookSpan!.textContent).toBe('PostToolUse')
+    // content renders via MarkdownRenderer
+    expect(sysDiv!.querySelector('[data-testid="markdown"]')).toHaveTextContent('Check result')
   })
 })
