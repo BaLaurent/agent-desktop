@@ -247,6 +247,41 @@ describe('Conversations Service', () => {
       expect(forkFull.messages[1].tool_calls).toBe('[{"name":"bash","input":"ls"}]')
     })
 
+    it('fork from message before cleared_at ignores the boundary', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Pre-Clear Fork') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'old-msg', '2025-01-01T00:00:01Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'assistant', 'old-reply', '2025-01-01T00:00:02Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'new-msg', '2025-01-01T00:00:04Z')
+      await ipc.invoke('conversations:update', conv.id, { cleared_at: '2025-01-01T00:00:03Z' })
+      const targetMsg = db.prepare("SELECT * FROM messages WHERE content = 'old-reply'").get() as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, targetMsg.id) as any
+      const forkFull = await ipc.invoke('conversations:get', fork.id) as any
+      expect(forkFull.messages).toHaveLength(2)
+      expect(forkFull.messages[0].content).toBe('old-msg')
+      expect(forkFull.messages[1].content).toBe('old-reply')
+      expect(fork.compact_summary).toBeNull()
+    })
+
+    it('fork from after cleared_at copies compact_summary', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Compact Fork') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'old', '2025-01-01T00:00:01Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'recent', '2025-01-01T00:00:04Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'assistant', 'reply', '2025-01-01T00:00:05Z')
+      await ipc.invoke('conversations:update', conv.id, {
+        cleared_at: '2025-01-01T00:00:03Z',
+        compact_summary: 'Summary of old conversation',
+      })
+      const targetMsg = db.prepare("SELECT * FROM messages WHERE content = 'reply'").get() as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, targetMsg.id) as any
+      const forkFull = await ipc.invoke('conversations:get', fork.id) as any
+      expect(forkFull.messages).toHaveLength(2)
+      expect(forkFull.messages[0].content).toBe('recent')
+      expect(fork.compact_summary).toBe('Summary of old conversation')
+      expect(fork.cleared_at).toBeNull()
+    })
+
     it('throws on invalid conversationId', async () => {
       await expect(ipc.invoke('conversations:fork', -1, 1)).rejects.toThrow()
     })

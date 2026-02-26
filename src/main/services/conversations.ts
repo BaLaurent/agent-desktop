@@ -213,22 +213,31 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
         const newId = result.lastInsertRowid
 
         const clearedAt = source.cleared_at as string | null
-        if (clearedAt) {
+        const targetCreatedAt = targetMessage.created_at as string
+
+        if (clearedAt && targetCreatedAt > clearedAt) {
+          // Target is after the clear boundary — only copy post-cleared messages
           db.prepare(
             `INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at, updated_at)
              SELECT ?, role, content, attachments, tool_calls, created_at, updated_at
              FROM messages
              WHERE conversation_id = ? AND created_at <= ? AND created_at > ?
              ORDER BY created_at ASC`
-          ).run(newId, sourceConversationId, targetMessage.created_at, clearedAt)
+          ).run(newId, sourceConversationId, targetCreatedAt, clearedAt)
+          // Carry over compact_summary so the AI retains pre-cleared context
+          if (source.compact_summary) {
+            db.prepare('UPDATE conversations SET compact_summary = ? WHERE id = ?')
+              .run(source.compact_summary, newId)
+          }
         } else {
+          // No cleared_at, or target is before/at cleared_at — copy all messages up to target
           db.prepare(
             `INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at, updated_at)
              SELECT ?, role, content, attachments, tool_calls, created_at, updated_at
              FROM messages
              WHERE conversation_id = ? AND created_at <= ?
              ORDER BY created_at ASC`
-          ).run(newId, sourceConversationId, targetMessage.created_at)
+          ).run(newId, sourceConversationId, targetCreatedAt)
         }
 
         return newId
