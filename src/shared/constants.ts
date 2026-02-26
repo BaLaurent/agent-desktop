@@ -51,8 +51,14 @@ export const SKILLS_TOGGLE_OPTIONS = [
 export const TTS_RESPONSE_OPTIONS = [
   { value: 'off', label: 'Off' },
   { value: 'full', label: 'Full Response' },
-  { value: 'summary', label: 'Summary (Haiku)' },
+  { value: 'summary', label: 'Summary' },
   { value: 'auto', label: 'Auto (Full or Summary)' },
+] as const
+
+export const TTS_SUMMARY_MODEL_OPTIONS = [
+  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+  { value: 'claude-sonnet-4-6-20250514', label: 'Sonnet 4.6' },
+  { value: 'claude-opus-4-6', label: 'Opus 4.6' },
 ] as const
 
 // ─── AI Override Setting Definitions ─────────────────────────

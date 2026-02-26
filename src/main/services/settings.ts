@@ -66,6 +66,7 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'tts_autoWordLimit',
   'tts_summaryPrompt',
   'tts_responseMode',
+  'tts_summaryModel',
   // Web server
   'server_enabled',
   'server_port',

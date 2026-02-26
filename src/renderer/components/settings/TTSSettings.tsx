@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { TTS_SUMMARY_MODEL_OPTIONS } from '../../../shared/constants'
 
 interface DetectedPlayer {
   name: string
@@ -44,6 +45,10 @@ export function TTSSettings() {
   const responseMode = settings.tts_responseMode || 'off'
   const autoWordLimit = settings.tts_autoWordLimit || '200'
   const summaryPrompt = settings.tts_summaryPrompt || ''
+  const summaryModel = settings.tts_summaryModel || ''
+
+  const isPresetModel = !summaryModel || TTS_SUMMARY_MODEL_OPTIONS.some(o => o.value === summaryModel)
+  const isCustomModel = summaryModel !== '' && !isPresetModel
 
   // Detect available audio players on mount
   useEffect(() => {
@@ -360,13 +365,55 @@ export function TTSSettings() {
             >
               <option value="off">Off</option>
               <option value="full">Full Response</option>
-              <option value="summary">Summary (Haiku)</option>
+              <option value="summary">Summary</option>
               <option value="auto">Auto (Full or Summary)</option>
             </select>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               Automatically speak AI responses. &quot;Auto&quot; reads in full if under the word limit, otherwise summarizes.
             </span>
           </div>
+
+          {/* Summary Model */}
+          {(responseMode === 'summary' || responseMode === 'auto') && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                Summary Model
+              </label>
+              <select
+                value={isCustomModel ? '__custom__' : (summaryModel || TTS_SUMMARY_MODEL_OPTIONS[0].value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === '__custom__') {
+                    setSetting('tts_summaryModel', '')
+                  } else {
+                    setSetting('tts_summaryModel', val)
+                  }
+                }}
+                className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base mobile:py-2"
+                style={inputStyle}
+                aria-label="TTS summary model"
+              >
+                {TTS_SUMMARY_MODEL_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+                <option value="__custom__">Custom</option>
+              </select>
+              {isCustomModel && (
+                <input
+                  type="text"
+                  value={summaryModel}
+                  onChange={(e) => setSetting('tts_summaryModel', e.target.value)}
+                  placeholder="model-name"
+                  className="w-full px-3 py-2 rounded text-sm outline-none mobile:text-base"
+                  style={inputStyle}
+                  aria-label="Custom summary model"
+                />
+              )}
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Model used to generate TTS summaries. Use &quot;Custom&quot; for third-party API models.
+              </span>
+            </div>
+          )}
 
           {/* Auto mode: word limit */}
           {responseMode === 'auto' && (
@@ -386,7 +433,7 @@ export function TTSSettings() {
                 aria-label="Auto mode word limit"
               />
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Responses under this word count are read in full; longer ones are summarized via Haiku.
+                Responses under this word count are read in full; longer ones are summarized.
               </span>
             </div>
           )}
@@ -407,7 +454,7 @@ export function TTSSettings() {
                 aria-label="Summary prompt"
               />
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Prompt sent to Haiku to summarize responses for speech. Use <code>{'{response}'}</code> as a placeholder for the AI response text.
+                Prompt used to summarize responses for speech. Use <code>{'{response}'}</code> as a placeholder for the AI response text.
               </span>
             </div>
           )}

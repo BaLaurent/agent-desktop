@@ -118,7 +118,7 @@ function playAudioFile(filePath: string, db: Database.Database): Promise<void> {
 async function generateSummary(
   content: string,
   db: Database.Database,
-  aiSettings: { ttsSummaryPrompt?: string; apiKey?: string; baseUrl?: string }
+  aiSettings: { ttsSummaryPrompt?: string; ttsSummaryModel?: string; apiKey?: string; baseUrl?: string }
 ): Promise<string> {
   const truncatedContent = content.slice(0, 4000)
 
@@ -137,10 +137,11 @@ async function generateSummary(
     const sdk = await loadAgentSDK()
 
     let summary = ''
+    const summaryModel = aiSettings.ttsSummaryModel || HAIKU_MODEL
     const agentQuery = sdk.query({
       prompt,
       options: {
-        model: HAIKU_MODEL,
+        model: summaryModel,
         maxTurns: 1,
         allowDangerouslySkipPermissions: true,
         permissionMode: 'bypassPermissions',

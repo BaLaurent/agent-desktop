@@ -107,6 +107,7 @@ export interface AISettings {
   ttsResponseMode?: 'off' | 'full' | 'summary' | 'auto'
   ttsAutoWordLimit?: number
   ttsSummaryPrompt?: string
+  ttsSummaryModel?: string
 }
 
 /**
