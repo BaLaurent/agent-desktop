@@ -81,6 +81,7 @@
 - **Auto-title**: no `outputFormat: json_schema` — causes SDK internal tool_use cycle exhausting `maxTurns: 1`
 - **Stream isolation**: `streamBuffers` dict keyed by conversationId — a conversation is streaming iff its ID is a key (no separate flag)
 - **Compact summary injection**: `buildMessageHistory` prepends `compact_summary` as `[Previous conversation summary]` with role `assistant`
+- **Hook system messages**: `hook_response` output is JSON-parsed for `systemMessage` field — sent as `system_message` stream chunk with `hookName`/`hookEvent` metadata; non-JSON output silently ignored
 
 ## Quick Chat & TTS Gotchas
 - **Shortcut re-toggle**: voice sends stop-recording, text hides; only creates new window if hidden/destroyed

@@ -42,4 +42,33 @@ describe('StreamingIndicator', () => {
     render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
     expect(screen.getByTestId('mcp-status')).toHaveTextContent('1 servers')
   })
+
+  it('renders system_message content', () => {
+    const parts: StreamPart[] = [
+      { type: 'system_message', content: 'Lint check passed' },
+    ]
+    render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
+    expect(screen.getByText('Lint check passed')).toBeInTheDocument()
+  })
+
+  it('renders hookEvent label before system_message content', () => {
+    const parts: StreamPart[] = [
+      { type: 'system_message', content: 'All tests green', hookEvent: 'PreToolUse' },
+    ]
+    render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
+    expect(screen.getByText('PreToolUse')).toBeInTheDocument()
+    expect(screen.getByText('All tests green')).toBeInTheDocument()
+  })
+
+  it('does not render hookEvent span when hookEvent is absent', () => {
+    const parts: StreamPart[] = [
+      { type: 'system_message', content: 'No event label' },
+    ]
+    const { container } = render(<StreamingIndicator streamParts={parts} onStop={vi.fn()} />)
+    // Only the content span should exist inside the system message div
+    const sysDiv = container.querySelector('.my-2.rounded.px-3.py-2')
+    expect(sysDiv).not.toBeNull()
+    expect(sysDiv!.querySelectorAll('span')).toHaveLength(1)
+    expect(sysDiv!.querySelector('span')!.textContent).toBe('No event label')
+  })
 })

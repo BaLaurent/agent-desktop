@@ -535,6 +535,62 @@ describe('chatStore', () => {
       expect(useChatStore.getState().streamParts).toEqual([])
     })
 
+    it('system_message chunk creates system_message StreamPart in buffer and view', () => {
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+
+      const listener = getStreamListener()
+      listener({
+        type: 'system_message',
+        content: 'Hook says hello',
+        hookName: 'pre-commit',
+        hookEvent: 'PreToolUse',
+        conversationId: 1,
+      })
+
+      const state = useChatStore.getState()
+      expect(state.streamParts).toHaveLength(1)
+      expect(state.streamParts[0]).toEqual({
+        type: 'system_message',
+        content: 'Hook says hello',
+        hookName: 'pre-commit',
+        hookEvent: 'PreToolUse',
+      })
+      expect(state.streamBuffers[1]).toHaveLength(1)
+    })
+
+    it('system_message chunk without content is ignored', () => {
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+
+      const listener = getStreamListener()
+      listener({
+        type: 'system_message',
+        conversationId: 1,
+      } as StreamChunk)
+
+      expect(useChatStore.getState().streamParts).toEqual([])
+      expect(useChatStore.getState().streamBuffers[1]).toEqual([])
+    })
+
+    it('system_message chunk without hookName/hookEvent still works', () => {
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+
+      const listener = getStreamListener()
+      listener({
+        type: 'system_message',
+        content: 'Just a message',
+        conversationId: 1,
+      })
+
+      const state = useChatStore.getState()
+      expect(state.streamParts).toHaveLength(1)
+      expect(state.streamParts[0]).toEqual({
+        type: 'system_message',
+        content: 'Just a message',
+        hookName: undefined,
+        hookEvent: undefined,
+      })
+    })
+
     it('isStreaming is cleared after sendMessage resolves even if done chunk was dropped', async () => {
       mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
 

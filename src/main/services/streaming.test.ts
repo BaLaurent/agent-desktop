@@ -577,6 +577,219 @@ describe('streamMessage — system init (MCP status)', () => {
   })
 })
 
+describe('streamMessage — system hook_response', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+  })
+
+  function getSystemMessageChunks() {
+    return mockSendFn.mock.calls.filter(
+      (call: unknown[]) => call[0] === 'messages:stream' && (call[1] as { type: string }).type === 'system_message'
+    )
+  }
+
+  it('sends system_message chunk when hook_response output contains systemMessage JSON', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: {
+                type: 'system',
+                subtype: 'hook_response',
+                hook_name: 'pre-commit',
+                hook_event: 'PreToolUse',
+                output: JSON.stringify({ systemMessage: 'Lint passed' }),
+              },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system prompt',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const chunks = getSystemMessageChunks()
+    expect(chunks).toHaveLength(1)
+    const payload = chunks[0][1] as { type: string; content: string; hookName: string; hookEvent: string }
+    expect(payload.content).toBe('Lint passed')
+    expect(payload.hookName).toBe('pre-commit')
+    expect(payload.hookEvent).toBe('PreToolUse')
+  })
+
+  it('extracts systemMessage from stdout when output is absent', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: {
+                type: 'system',
+                subtype: 'hook_response',
+                hook_name: 'validator',
+                stdout: JSON.stringify({ systemMessage: 'From stdout' }),
+              },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system prompt',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const chunks = getSystemMessageChunks()
+    expect(chunks).toHaveLength(1)
+    expect((chunks[0][1] as { content: string }).content).toBe('From stdout')
+  })
+
+  it('ignores hook_response when output is not valid JSON', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: {
+                type: 'system',
+                subtype: 'hook_response',
+                output: 'plain text, not JSON',
+              },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system prompt',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(getSystemMessageChunks()).toHaveLength(0)
+  })
+
+  it('ignores hook_response when JSON lacks systemMessage field', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: {
+                type: 'system',
+                subtype: 'hook_response',
+                output: JSON.stringify({ otherField: 'value' }),
+              },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system prompt',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(getSystemMessageChunks()).toHaveLength(0)
+  })
+
+  it('omits hookName and hookEvent from payload when not present on system message', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: {
+                type: 'system',
+                subtype: 'hook_response',
+                output: JSON.stringify({ systemMessage: 'No hook info' }),
+              },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system prompt',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const chunks = getSystemMessageChunks()
+    expect(chunks).toHaveLength(1)
+    const payload = chunks[0][1] as Record<string, unknown>
+    expect(payload.content).toBe('No hook info')
+    expect(payload).not.toHaveProperty('hookName')
+    expect(payload).not.toHaveProperty('hookEvent')
+  })
+
+  it('ignores hook_response when output and stdout are both empty', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: {
+                type: 'system',
+                subtype: 'hook_response',
+              },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system prompt',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(getSystemMessageChunks()).toHaveLength(0)
+  })
+})
+
 describe('notifyConversationUpdated', () => {
   beforeEach(() => {
     mockSendFn.mockClear()
