@@ -45,4 +45,33 @@ describe('MessageInput', () => {
 
     expect(onSend).not.toHaveBeenCalled()
   })
+
+  it('Tab inserts a tab character when no dropdown is open', () => {
+    render(<MessageInput onSend={vi.fn()} disabled={false} isStreaming={false} />)
+
+    const textarea = screen.getByPlaceholderText('Message Claude... (@ to mention files, / for commands)') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'hello' } })
+    // Place cursor at end
+    textarea.selectionStart = textarea.selectionEnd = 5
+
+    const prevented = !fireEvent.keyDown(textarea, { key: 'Tab' })
+
+    expect(prevented).toBe(true)
+    expect(textarea.value).toBe('hello\t')
+    expect(textarea.selectionStart).toBe(6)
+  })
+
+  it('Tab inserts a tab character at cursor position mid-text', () => {
+    render(<MessageInput onSend={vi.fn()} disabled={false} isStreaming={false} />)
+
+    const textarea = screen.getByPlaceholderText('Message Claude... (@ to mention files, / for commands)') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'helloworld' } })
+    // Place cursor between "hello" and "world"
+    textarea.selectionStart = textarea.selectionEnd = 5
+
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+
+    expect(textarea.value).toBe('hello\tworld')
+    expect(textarea.selectionStart).toBe(6)
+  })
 })
