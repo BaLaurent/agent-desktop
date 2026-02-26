@@ -23,6 +23,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'chatLayout',
   'panelButtonAlwaysVisible',
   'panelButtonRadius',
+  'heatmap_enabled',
+  'heatmap_mode',
+  'heatmap_min',
+  'heatmap_max',
   // Whisper / voice
   'whisper_binaryPath',
   'whisper_modelPath',

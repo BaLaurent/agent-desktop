@@ -351,6 +351,38 @@ export function SidebarTree() {
     return conversations.filter((c) => c.folder_id === folderId).length
   }
 
+  // Heatmap: compute automatic folder colors based on conversation count
+  const heatmapColors = useMemo(() => {
+    if (globalSettings.heatmap_enabled !== 'true') return null
+
+    const mode = globalSettings.heatmap_mode || 'relative'
+    const fixedMin = parseInt(globalSettings.heatmap_min || '0', 10)
+    const fixedMax = parseInt(globalSettings.heatmap_max || '50', 10)
+
+    const counts = new Map<number, number>()
+    for (const folder of folders) {
+      counts.set(folder.id, getRecursiveConversationCount(folder.id))
+    }
+
+    let minCount: number, maxCount: number
+    if (mode === 'relative') {
+      const allCounts = [...counts.values()]
+      minCount = allCounts.length > 0 ? Math.min(...allCounts) : 0
+      maxCount = allCounts.length > 0 ? Math.max(...allCounts) : 1
+      if (maxCount === minCount) maxCount = minCount + 1
+    } else {
+      minCount = fixedMin
+      maxCount = Math.max(fixedMax, fixedMin + 1)
+    }
+
+    const colors = new Map<number, string>()
+    for (const [folderId, count] of counts) {
+      const t = Math.max(0, Math.min(1, (count - minCount) / (maxCount - minCount)))
+      colors.set(folderId, hsvToHex(120 * (1 - t), 70, 80))
+    }
+    return colors
+  }, [globalSettings.heatmap_enabled, globalSettings.heatmap_mode, globalSettings.heatmap_min, globalSettings.heatmap_max, folders, conversations])
+
   const buildTree = (parentId: number | null): Folder[] => {
     return folders.filter((f) => f.parent_id === parentId)
   }
@@ -419,7 +451,8 @@ export function SidebarTree() {
     const count = getConversationCount(folder.id)
     const folderConversations = conversations.filter((c) => c.folder_id === folder.id)
     const isDragOver = dragOverFolderId === folder.id
-    const effectiveColor = (colorPickerTarget === folder.id && colorPickerLive) ? colorPickerLive : folder.color
+    const manualColor = (colorPickerTarget === folder.id && colorPickerLive) ? colorPickerLive : folder.color
+    const effectiveColor = manualColor || (heatmapColors?.get(folder.id) ?? null)
 
     return (
       <div key={folder.id}>

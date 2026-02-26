@@ -45,6 +45,8 @@ export function AppearanceSettings() {
   const currentFontSize = settings.fontSize ?? '14'
   const showTitlebar = (settings.showTitlebar ?? 'true') === 'true'
   const alwaysVisible = (settings.panelButtonAlwaysVisible ?? 'false') === 'true'
+  const heatmapEnabled = (settings.heatmap_enabled ?? 'false') === 'true'
+  const heatmapMode = settings.heatmap_mode ?? 'relative'
   useEffect(() => {
     document.documentElement.style.fontSize = currentFontSize + 'px'
   }, [currentFontSize])
@@ -221,6 +223,97 @@ export function AppearanceSettings() {
             <span className="text-xs text-muted">%</span>
           </div>
         </div>
+      </div>
+
+      {/* Folder Heatmap */}
+      <div className="rounded-lg overflow-hidden border border-deep">
+        {/* Enable/Disable */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-deep">
+          <div className="flex flex-col">
+            <span className="text-sm text-body">Folder Heatmap</span>
+            <span className="text-xs text-muted">Color folders by conversation count (green→red)</span>
+          </div>
+          <button
+            onClick={() => setSetting('heatmap_enabled', heatmapEnabled ? 'false' : 'true')}
+            role="switch"
+            aria-checked={heatmapEnabled}
+            aria-label="Toggle folder heatmap"
+            className="relative w-9 h-5 rounded-full flex-shrink-0 transition-colors"
+            style={{
+              backgroundColor: heatmapEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              opacity: heatmapEnabled ? 1 : 0.3,
+            }}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: heatmapEnabled ? 'translateX(16px)' : 'translateX(0px)' }}
+            />
+          </button>
+        </div>
+
+        {heatmapEnabled && (
+          <>
+            {/* Mode: Relative / Fixed */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-deep">
+              <span className="text-sm text-body">Mode</span>
+              <div className="flex gap-1">
+                {(['relative', 'fixed'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSetting('heatmap_mode', mode)}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors mobile:px-4 mobile:py-3 mobile:text-sm ${
+                      heatmapMode === mode
+                        ? 'bg-primary text-contrast'
+                        : 'bg-surface text-body'
+                    }`}
+                  >
+                    {mode === 'relative' ? 'Relative' : 'Fixed'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Fixed thresholds */}
+            {heatmapMode === 'fixed' && (
+              <>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-deep">
+                  <span className="text-sm text-muted pl-4">Min (green)</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={999}
+                      value={settings.heatmap_min ?? '0'}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v !== '' && Number(v) >= 0) setSetting('heatmap_min', v)
+                      }}
+                      className="w-16 bg-surface text-body border border-muted rounded px-2 py-1 text-sm text-center outline-none focus:border-primary mobile:text-base"
+                      aria-label="Heatmap minimum threshold"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-muted pl-4">Max (red)</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={settings.heatmap_max ?? '50'}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v !== '' && Number(v) >= 1) setSetting('heatmap_max', v)
+                      }}
+                      className="w-16 bg-surface text-body border border-muted rounded px-2 py-1 text-sm text-center outline-none focus:border-primary mobile:text-base"
+                      aria-label="Heatmap maximum threshold"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {/* Theme Selection */}
