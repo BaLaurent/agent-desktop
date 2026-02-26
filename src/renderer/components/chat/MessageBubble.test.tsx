@@ -233,4 +233,178 @@ describe('MessageBubble', () => {
     // 6 lines → split('\n').length + 1 = 7, Math.max(3, 7) = 7
     expect(textarea.rows).toBe(7)
   })
+
+  // ── Context menu tests ──────────────────────────────────────
+
+  /** Right-click the inner bubble div (the one with onContextMenu) */
+  const rightClickBubble = (container: HTMLElement) => {
+    const bubble = (container.firstChild as HTMLElement).firstChild as HTMLElement
+    fireEvent.contextMenu(bubble, { clientX: 100, clientY: 200 })
+  }
+
+  it('right-click opens context menu with correct items for user messages', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    rightClickBubble(container)
+
+    const menu = screen.getByRole('menu', { name: 'Message actions' })
+    expect(menu).toBeInTheDocument()
+
+    const items = screen.getAllByRole('menuitem')
+    const labels = items.map((el) => el.textContent)
+    expect(labels).toContain('Copy')
+    expect(labels).toContain('Edit')
+    expect(labels).toContain('Schedule')
+    expect(labels).not.toContain('Retry')
+  })
+
+  it('right-click opens context menu with correct items for assistant messages', () => {
+    const onRegenerate = vi.fn()
+    const { container } = render(
+      <MessageBubble
+        message={makeMessage({ role: 'assistant' })}
+        isLast={true}
+        onRegenerate={onRegenerate}
+      />,
+    )
+    rightClickBubble(container)
+
+    const menu = screen.getByRole('menu', { name: 'Message actions' })
+    expect(menu).toBeInTheDocument()
+
+    const items = screen.getAllByRole('menuitem')
+    const labels = items.map((el) => el.textContent)
+    expect(labels).toContain('Copy')
+    expect(labels).toContain('Play TTS')
+    expect(labels).toContain('Retry')
+    expect(labels).not.toContain('Edit')
+    expect(labels).not.toContain('Schedule')
+  })
+
+  it('context menu does not show Retry for non-last assistant message', () => {
+    const onRegenerate = vi.fn()
+    const { container } = render(
+      <MessageBubble
+        message={makeMessage({ role: 'assistant' })}
+        isLast={false}
+        onRegenerate={onRegenerate}
+      />,
+    )
+    rightClickBubble(container)
+
+    const items = screen.getAllByRole('menuitem')
+    const labels = items.map((el) => el.textContent)
+    expect(labels).not.toContain('Retry')
+  })
+
+  it('context menu Copy calls clipboard writeText', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content: 'copy me' })} isLast={false} />,
+    )
+    rightClickBubble(container)
+
+    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy')!
+    fireEvent.click(copyBtn)
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('copy me')
+  })
+
+  it('context menu Edit calls handleStartEdit for user messages', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    rightClickBubble(container)
+
+    const editBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Edit')!
+    fireEvent.click(editBtn)
+
+    // Editing mode should be active — textarea visible
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+
+  it('context menu Retry calls onRegenerate for assistant messages', () => {
+    const onRegenerate = vi.fn()
+    const { container } = render(
+      <MessageBubble
+        message={makeMessage({ role: 'assistant' })}
+        isLast={true}
+        onRegenerate={onRegenerate}
+      />,
+    )
+    rightClickBubble(container)
+
+    const retryBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Retry')!
+    fireEvent.click(retryBtn)
+
+    expect(onRegenerate).toHaveBeenCalled()
+  })
+
+  it('context menu closes on outside click', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} />,
+    )
+    rightClickBubble(container)
+    expect(screen.getByRole('menu', { name: 'Message actions' })).toBeInTheDocument()
+
+    // Click outside the context menu
+    fireEvent.mouseDown(document.body)
+
+    expect(screen.queryByRole('menu', { name: 'Message actions' })).not.toBeInTheDocument()
+  })
+
+  it('context menu does not open during editing', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    // Verify we are in editing mode
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+
+    // Right-click should not open context menu
+    rightClickBubble(container)
+    expect(screen.queryByRole('menu', { name: 'Message actions' })).not.toBeInTheDocument()
+  })
+
+  it('context menu shows Stop TTS when message is speaking', () => {
+    ttsStoreMock.speakingMessageId = 1
+
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant', id: 1 })} isLast={false} />,
+    )
+    rightClickBubble(container)
+
+    const items = screen.getAllByRole('menuitem')
+    const labels = items.map((el) => el.textContent)
+    expect(labels).toContain('Stop TTS')
+    expect(labels).not.toContain('Play TTS')
+  })
+
+  it('context menu closes after clicking an action', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content: 'test' })} isLast={false} />,
+    )
+    rightClickBubble(container)
+    expect(screen.getByRole('menu', { name: 'Message actions' })).toBeInTheDocument()
+
+    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy')!
+    fireEvent.click(copyBtn)
+
+    expect(screen.queryByRole('menu', { name: 'Message actions' })).not.toBeInTheDocument()
+  })
+
+  it('context menu does not show Edit without onEdit prop', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} />,
+    )
+    rightClickBubble(container)
+
+    const items = screen.getAllByRole('menuitem')
+    const labels = items.map((el) => el.textContent)
+    expect(labels).not.toContain('Edit')
+  })
 })
