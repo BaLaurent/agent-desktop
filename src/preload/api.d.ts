@@ -46,6 +46,7 @@ export interface AgentAPI {
   }
   messages: {
     send(conversationId: number, content: string, attachments?: Attachment[]): Promise<Message | null>
+    compact(conversationId: number): Promise<{ summary: string; clearedAt: string }>
     stop(conversationId?: number): Promise<void>
     regenerate(conversationId: number): Promise<void>
     edit(messageId: number, content: string): Promise<void>

@@ -57,7 +57,7 @@ export async function copyAttachmentsToSession(
 }
 
 export function buildMessageHistory(db: Database.Database, conversationId: number, limit = 100): Array<{ role: 'user' | 'assistant'; content: string }> {
-  const conv = db.prepare('SELECT cleared_at FROM conversations WHERE id = ?').get(conversationId) as { cleared_at: string | null } | undefined
+  const conv = db.prepare('SELECT cleared_at, compact_summary FROM conversations WHERE id = ?').get(conversationId) as { cleared_at: string | null; compact_summary: string | null } | undefined
 
   let query = 'SELECT role, content FROM messages WHERE conversation_id = ?'
   const params: (number | string)[] = [conversationId]
@@ -72,10 +72,17 @@ export function buildMessageHistory(db: Database.Database, conversationId: numbe
 
   const rows = db.prepare(query).all(...params) as Pick<Message, 'role' | 'content'>[]
 
-  return rows.reverse().map((row) => ({
+  const result = rows.reverse().map((row) => ({
     role: row.role,
     content: row.content,
   }))
+
+  // Prepend compact summary as context so the AI retains prior conversation knowledge
+  if (conv?.compact_summary) {
+    result.unshift({ role: 'assistant', content: `[Previous conversation summary]\n${conv.compact_summary}` })
+  }
+
+  return result
 }
 
 function getFolderOverrides(db: Database.Database, folderId: number): Record<string, string> {
@@ -510,6 +517,68 @@ async function generateConversationTitle(
   }
 }
 
+async function compactConversation(
+  db: Database.Database,
+  conversationId: number
+): Promise<{ summary: string; clearedAt: string }> {
+  const history = buildMessageHistory(db, conversationId)
+  if (history.length === 0) {
+    const clearedAt = new Date().toISOString()
+    db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = NULL, updated_at = ? WHERE id = ?')
+      .run(clearedAt, clearedAt, conversationId)
+    return { summary: '', clearedAt }
+  }
+
+  // Build conversation text for summarization
+  const conversationText = history
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .join('\n\n')
+
+  // Inject API key env vars (same pattern as generateConversationTitle)
+  const apiKeyRow = db.prepare("SELECT key, value FROM settings WHERE key IN ('ai_apiKey', 'ai_baseUrl')").all() as { key: string; value: string }[]
+  const apiMap: Record<string, string> = {}
+  for (const r of apiKeyRow) apiMap[r.key] = r.value
+  const restoreEnv = injectApiKeyEnv(apiMap['ai_apiKey'] || undefined, apiMap['ai_baseUrl'] || undefined)
+
+  try {
+    const sdk = await loadAgentSDK()
+
+    let summary = ''
+    const agentQuery = sdk.query({
+      prompt: `Summarize the following conversation into a concise context summary that preserves all key information, decisions, code changes, file paths, and important details. The summary will replace the full conversation history, so it must capture everything needed to continue the conversation seamlessly. Write the summary as a factual recap, not as a conversation. Do NOT wrap it in quotes or add a preamble.\n\n${conversationText}`,
+      options: {
+        model: HAIKU_MODEL,
+        maxTurns: 1,
+        allowDangerouslySkipPermissions: true,
+        permissionMode: 'bypassPermissions',
+        tools: [],
+      },
+    })
+
+    for await (const message of agentQuery) {
+      const msg = message as { type: string; subtype?: string; result?: string; message?: { content?: Array<{ type: string; text?: string }> } }
+      if (msg.type === 'assistant' && msg.message?.content) {
+        for (const block of msg.message.content) {
+          if (block.type === 'text' && block.text) {
+            summary = block.text.trim()
+          }
+        }
+      }
+      if (msg.type === 'result' && msg.subtype === 'success' && typeof msg.result === 'string' && msg.result.trim()) {
+        summary = msg.result.trim()
+      }
+    }
+
+    const clearedAt = new Date().toISOString()
+    db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = ?, updated_at = ? WHERE id = ?')
+      .run(clearedAt, summary || null, clearedAt, conversationId)
+
+    return { summary, clearedAt }
+  } finally {
+    restoreEnv?.()
+  }
+}
+
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle(
     'messages:send',
@@ -554,6 +623,11 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       return assistantMsg
     }
   )
+
+  ipcMain.handle('messages:compact', async (_event, conversationId: number) => {
+    validatePositiveInt(conversationId, 'conversationId')
+    return compactConversation(db, conversationId)
+  })
 
   ipcMain.handle('messages:stop', async (_event, conversationId?: number) => {
     if (conversationId != null) validatePositiveInt(conversationId, 'conversationId')

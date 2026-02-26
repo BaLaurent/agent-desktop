@@ -36,6 +36,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
   const {
     messages,
     clearedAt,
+    compactSummary,
+    isCompacting,
     isStreaming,
     streamParts,
     streamingContent,
@@ -296,8 +298,12 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
   const handleSend = async (content: string) => {
     if (!conversationId) return
     const trimmed = content.trim()
-    if (trimmed === '/clear' || trimmed === '/compact') {
+    if (trimmed === '/clear') {
       await useChatStore.getState().clearContext(conversationId)
+      return
+    }
+    if (trimmed === '/compact') {
+      await useChatStore.getState().compactContext(conversationId)
       return
     }
     sendMessage(conversationId, content, attachments.length > 0 ? attachments : undefined)
@@ -409,6 +415,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
         <MessageList
           messages={messages}
           clearedAt={clearedAt}
+          compactSummary={compactSummary}
+          isCompacting={isCompacting}
           isStreaming={isStreaming}
           streamParts={streamParts}
           streamingContent={streamingContent}

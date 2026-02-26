@@ -37,6 +37,8 @@ const api: AgentAPI = {
     stop: (conversationId?: number) => withTimeout(ipcRenderer.invoke('messages:stop', conversationId)),
     regenerate: (conversationId) => withTimeout(ipcRenderer.invoke('messages:regenerate', conversationId), _streamingTimeoutMs),
     edit: (messageId, content) => withTimeout(ipcRenderer.invoke('messages:edit', messageId, content), _streamingTimeoutMs),
+    compact: (conversationId: number) =>
+      withTimeout(ipcRenderer.invoke('messages:compact', conversationId), _streamingTimeoutMs),
     respondToApproval: (requestId, response) =>
       withTimeout(ipcRenderer.invoke('messages:respondToApproval', requestId, response)),
     onStream: (callback) => {

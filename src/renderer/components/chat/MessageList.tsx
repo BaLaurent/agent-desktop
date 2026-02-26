@@ -1,15 +1,42 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { MessageBubble } from './MessageBubble'
+import { MarkdownRenderer } from './MarkdownRenderer'
 import { StreamingIndicator } from './StreamingIndicator'
 import { useSettingsStore } from '../../stores/settingsStore'
 import type { Message, StreamPart } from '../../../shared/types'
 
-function ContextClearedDivider() {
+function ContextClearedDivider({ clearedCount }: { clearedCount: number }) {
   return (
     <div className="flex items-center gap-3 my-4" style={{ color: 'var(--color-text-muted)' }}>
       <div className="flex-1 h-px" style={{ backgroundColor: 'var(--color-border)' }} />
-      <span className="text-xs whitespace-nowrap">Context cleared</span>
+      <span className="text-xs whitespace-nowrap">
+        Context cleared{clearedCount > 0 ? ` — ${clearedCount} message${clearedCount !== 1 ? 's' : ''}` : ''}
+      </span>
       <div className="flex-1 h-px" style={{ backgroundColor: 'var(--color-border)' }} />
+    </div>
+  )
+}
+
+function CompactSummaryBubble({ summary, clearedCount, isCompacting }: { summary: string; clearedCount: number; isCompacting: boolean }) {
+  return (
+    <div className="flex justify-center mb-4">
+      <div
+        className="rounded-lg px-4 py-3 text-xs max-w-[80%] compact:max-w-[95%]"
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--color-accent) 15%, var(--color-bg))',
+          color: 'var(--color-text)',
+          border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
+        }}
+      >
+        <div className="font-medium mb-1.5" style={{ color: 'var(--color-accent)' }}>
+          /compact{clearedCount > 0 ? ` — ${clearedCount} message${clearedCount !== 1 ? 's' : ''} compacted` : ''}
+        </div>
+        {isCompacting ? (
+          <div className="animate-pulse" style={{ color: 'var(--color-text-muted)' }}>Compacting conversation...</div>
+        ) : (
+          <div className="text-sm" style={{ color: 'var(--color-text-muted)' }}><MarkdownRenderer content={summary} /></div>
+        )}
+      </div>
     </div>
   )
 }
@@ -17,6 +44,8 @@ function ContextClearedDivider() {
 interface MessageListProps {
   messages: Message[]
   clearedAt?: string | null
+  compactSummary?: string | null
+  isCompacting?: boolean
   isStreaming: boolean
   streamParts: StreamPart[]
   streamingContent: string
@@ -30,6 +59,8 @@ interface MessageListProps {
 export function MessageList({
   messages,
   clearedAt,
+  compactSummary,
+  isCompacting,
   isStreaming,
   streamParts,
   streamingContent,
@@ -98,7 +129,11 @@ export function MessageList({
               && msg.created_at > clearedAt
             return (
               <React.Fragment key={msg.id}>
-                {showDivider && <ContextClearedDivider />}
+                {showDivider && (
+                  compactSummary
+                    ? <CompactSummaryBubble summary={compactSummary} clearedCount={idx} isCompacting={false} />
+                    : <ContextClearedDivider clearedCount={idx} />
+                )}
                 <MessageBubble
                   message={msg}
                   isLast={idx === messages.length - 1}
@@ -110,7 +145,9 @@ export function MessageList({
             )
           })}
           {clearedAt && messages.length > 0 && messages[messages.length - 1].created_at <= clearedAt && (
-            <ContextClearedDivider />
+            compactSummary || isCompacting
+              ? <CompactSummaryBubble summary={compactSummary || ''} clearedCount={messages.length} isCompacting={!!isCompacting} />
+              : <ContextClearedDivider clearedCount={messages.length} />
           )}
 
           {isStreaming && (

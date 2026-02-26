@@ -187,6 +187,12 @@ function runMigrations(db: Database.Database): void {
     try { db.exec('ALTER TABLE conversations ADD COLUMN cleared_at TEXT') } catch (e) { console.warn('[migration] conversations.cleared_at:', e) }
   }
 
+  // Add compact_summary column to conversations (AI-generated context summary from /compact)
+  const convCols3 = db.pragma('table_info(conversations)') as { name: string }[]
+  if (!convCols3.some((c) => c.name === 'compact_summary')) {
+    try { db.exec('ALTER TABLE conversations ADD COLUMN compact_summary TEXT') } catch (e) { console.warn('[migration] conversations.compact_summary:', e) }
+  }
+
   // Add one_shot column to scheduled_tasks (auto-disable after single execution)
   const schedCols = db.pragma('table_info(scheduled_tasks)') as { name: string }[]
   if (!schedCols.some((c) => c.name === 'one_shot')) {
