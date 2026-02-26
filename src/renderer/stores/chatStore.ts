@@ -413,6 +413,20 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
       break
     }
 
+    case 'system_message': {
+      if (chunk.content) {
+        const parts = [...(store.streamBuffers[bufferKey] || [])]
+        parts.push({
+          type: 'system_message',
+          content: chunk.content,
+          hookName: chunk.hookName,
+          hookEvent: chunk.hookEvent,
+        })
+        commitParts(parts)
+      }
+      break
+    }
+
     case 'done': {
       const doneSettings = useSettingsStore.getState().settings
       console.log('[notif:done] master toggle notificationSounds =', doneSettings.notificationSounds, '| stopReason =', chunk.stopReason)

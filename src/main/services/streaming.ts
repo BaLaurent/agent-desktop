@@ -154,6 +154,15 @@ interface SystemMessage {
   type: 'system'
   subtype?: string
   mcp_servers?: Array<{ name: string; status: string; error?: string }>
+  // Hook fields (hook_started / hook_progress / hook_response)
+  hook_id?: string
+  hook_name?: string
+  hook_event?: string
+  output?: string
+  stdout?: string
+  stderr?: string
+  exit_code?: number
+  outcome?: string
 }
 
 type SDKMessage = StreamEventMessage | ResultMessage | SystemMessage | { type: string }
@@ -485,6 +494,23 @@ export async function streamMessage(
             if (s.status !== 'connected') {
               console.error(`[streaming] MCP "${s.name}" status=${s.status} error=${JSON.stringify(s.error || null)} details=${JSON.stringify(s)}`)
             }
+          }
+        } else if (sysMsg.subtype === 'hook_response') {
+          // Extract systemMessage from hook output JSON
+          let systemMessage: string | undefined
+          const raw = sysMsg.output || sysMsg.stdout || ''
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw) as { systemMessage?: string }
+              systemMessage = parsed.systemMessage
+            } catch { /* output is not JSON — ignore */ }
+          }
+          if (systemMessage) {
+            sendOrBuffer('system_message', systemMessage, {
+              ...convExtra,
+              ...(sysMsg.hook_name ? { hookName: sysMsg.hook_name } : {}),
+              ...(sysMsg.hook_event ? { hookEvent: sysMsg.hook_event } : {}),
+            })
           }
         }
       }

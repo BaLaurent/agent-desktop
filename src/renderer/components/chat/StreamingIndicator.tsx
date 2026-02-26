@@ -43,6 +43,26 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
               if (part.type === 'mcp_status') {
                 return <McpStatusBlock key={`mcp_${idx}`} servers={part.servers} />
               }
+              if (part.type === 'system_message') {
+                return (
+                  <div
+                    key={`sys_${idx}`}
+                    className="my-2 rounded px-3 py-2 text-xs border"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-accent) 10%, transparent)',
+                      borderColor: 'color-mix(in srgb, var(--color-accent) 30%, transparent)',
+                      color: 'var(--color-text-muted)',
+                    }}
+                  >
+                    {part.hookEvent && (
+                      <span className="font-medium mr-1" style={{ color: 'var(--color-accent)' }}>
+                        {part.hookEvent}
+                      </span>
+                    )}
+                    <span>{part.content}</span>
+                  </div>
+                )
+              }
               return <ToolUseBlock key={part.id || `tool_${idx}`} tool={part} />
             })}
           </div>

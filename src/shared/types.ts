@@ -293,7 +293,7 @@ export type UpdateStatus =
 // ─── IPC / Runtime Types ──────────────────────────────────────
 
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_input' | 'tool_result' | 'tool_approval' | 'ask_user' | 'mcp_status' | 'error' | 'done'
+  type: 'text' | 'tool_start' | 'tool_input' | 'tool_result' | 'tool_approval' | 'ask_user' | 'mcp_status' | 'system_message' | 'error' | 'done'
   content?: string
   toolName?: string
   toolId?: string
@@ -305,6 +305,8 @@ export interface StreamChunk {
   conversationId?: number
   stopReason?: string
   resultSubtype?: string
+  hookName?: string
+  hookEvent?: string
 }
 
 export type StreamPart =
@@ -313,6 +315,7 @@ export type StreamPart =
   | { type: 'tool_approval'; requestId: string; toolName: string; toolInput: Record<string, unknown> }
   | { type: 'ask_user'; requestId: string; questions: AskUserQuestion[] }
   | { type: 'mcp_status'; servers: McpConnectionStatus[] }
+  | { type: 'system_message'; content: string; hookName?: string; hookEvent?: string }
 
 export interface Attachment {
   name: string
