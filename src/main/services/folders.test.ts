@@ -17,6 +17,21 @@ describe('Folders Service', () => {
     db.close()
   })
 
+  it('default folder is auto-created on startup with is_default=1', async () => {
+    const list = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list.find((f: any) => f.is_default === 1)
+    expect(defaultFolder).toBeDefined()
+    expect(defaultFolder.name).toBe('Unsorted')
+    expect(defaultFolder.position).toBe(-1)
+  })
+
+  it('getDefault returns the default folder', async () => {
+    const defaultFolder = await ipc.invoke('folders:getDefault') as any
+    expect(defaultFolder).toBeDefined()
+    expect(defaultFolder.is_default).toBe(1)
+    expect(defaultFolder.name).toBe('Unsorted')
+  })
+
   it('create returns folder with name and id', async () => {
     const folder = await ipc.invoke('folders:create', 'My Folder') as any
     expect(folder).toBeDefined()
@@ -36,13 +51,16 @@ describe('Folders Service', () => {
     await ipc.invoke('folders:create', 'C')
 
     const list = await ipc.invoke('folders:list') as any[]
-    expect(list.length).toBe(3)
-    expect(list[0].name).toBe('A')
-    expect(list[0].position).toBe(0)
-    expect(list[1].name).toBe('B')
-    expect(list[1].position).toBe(1)
-    expect(list[2].name).toBe('C')
-    expect(list[2].position).toBe(2)
+    // Default folder (position -1) comes first, then user folders
+    expect(list.length).toBe(4)
+    expect(list[0].name).toBe('Unsorted')
+    expect(list[0].position).toBe(-1)
+    expect(list[1].name).toBe('A')
+    expect(list[1].position).toBe(0)
+    expect(list[2].name).toBe('B')
+    expect(list[2].position).toBe(1)
+    expect(list[3].name).toBe('C')
+    expect(list[3].position).toBe(2)
   })
 
   it('update name changes name', async () => {
@@ -53,14 +71,15 @@ describe('Folders Service', () => {
     expect(updated.name).toBe('New Name')
   })
 
-  it('delete reparents conversations (folder_id → null)', async () => {
+  it('delete reparents conversations to default folder', async () => {
     const folder = await ipc.invoke('folders:create', 'Doomed') as any
     db.prepare('INSERT INTO conversations (title, folder_id) VALUES (?, ?)').run('Orphan', folder.id)
 
     await ipc.invoke('folders:delete', folder.id)
 
     const conv = db.prepare('SELECT folder_id FROM conversations WHERE title = ?').get('Orphan') as any
-    expect(conv.folder_id).toBeNull()
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+    expect(conv.folder_id).toBe(defaultFolder.id)
   })
 
   it('delete reparents child folders (parent_id → null)', async () => {
@@ -75,20 +94,24 @@ describe('Folders Service', () => {
   })
 
   it('reorder updates positions transactionally', async () => {
+    const list0 = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list0.find((f: any) => f.is_default === 1)
     const a = await ipc.invoke('folders:create', 'A') as any
     const b = await ipc.invoke('folders:create', 'B') as any
     const c = await ipc.invoke('folders:create', 'C') as any
 
-    // Reverse the order
-    await ipc.invoke('folders:reorder', [c.id, b.id, a.id])
+    // Reverse user folders, keep default folder at front
+    await ipc.invoke('folders:reorder', [defaultFolder.id, c.id, b.id, a.id])
 
     const list = await ipc.invoke('folders:list') as any[]
-    expect(list[0].name).toBe('C')
+    expect(list[0].name).toBe('Unsorted')
     expect(list[0].position).toBe(0)
-    expect(list[1].name).toBe('B')
+    expect(list[1].name).toBe('C')
     expect(list[1].position).toBe(1)
-    expect(list[2].name).toBe('A')
+    expect(list[2].name).toBe('B')
     expect(list[2].position).toBe(2)
+    expect(list[3].name).toBe('A')
+    expect(list[3].position).toBe(3)
   })
 
   it('create assigns incremental positions', async () => {
@@ -161,6 +184,18 @@ describe('Folders Service', () => {
     })
   })
 
+  it('delete refuses to delete the default folder', async () => {
+    const list = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list.find((f: any) => f.is_default === 1)
+    await expect(ipc.invoke('folders:delete', defaultFolder.id)).rejects.toThrow()
+  })
+
+  it('delete with mode=delete refuses to delete the default folder', async () => {
+    const list = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list.find((f: any) => f.is_default === 1)
+    await expect(ipc.invoke('folders:delete', defaultFolder.id, 'delete')).rejects.toThrow()
+  })
+
   describe('delete with mode', () => {
     it('mode=delete removes conversations in folder', async () => {
       const folder = await ipc.invoke('folders:create', 'Purge') as any
@@ -197,7 +232,9 @@ describe('Folders Service', () => {
       await ipc.invoke('folders:delete', parent.id, 'delete')
 
       const folders = await ipc.invoke('folders:list') as any[]
-      expect(folders).toHaveLength(0)
+      // Only the default folder remains
+      expect(folders).toHaveLength(1)
+      expect(folders[0].is_default).toBe(1)
       const convs = db.prepare('SELECT * FROM conversations').all()
       expect(convs).toHaveLength(0)
     })
@@ -214,14 +251,15 @@ describe('Folders Service', () => {
       expect(convs[0].title).toBe('Outside')
     })
 
-    it('default mode still reparents (backward compat)', async () => {
+    it('default mode reparents to default folder', async () => {
       const folder = await ipc.invoke('folders:create', 'Old') as any
       db.prepare('INSERT INTO conversations (title, folder_id) VALUES (?, ?)').run('Kept', folder.id)
 
       await ipc.invoke('folders:delete', folder.id)
 
       const conv = db.prepare('SELECT folder_id FROM conversations WHERE title = ?').get('Kept') as any
-      expect(conv.folder_id).toBeNull()
+      const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+      expect(conv.folder_id).toBe(defaultFolder.id)
     })
   })
 })

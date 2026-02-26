@@ -22,7 +22,7 @@ const api: AgentAPI = {
   conversations: {
     list: () => withTimeout(ipcRenderer.invoke('conversations:list')),
     get: (id) => withTimeout(ipcRenderer.invoke('conversations:get', id)),
-    create: (title?) => withTimeout(ipcRenderer.invoke('conversations:create', title)),
+    create: (title?, folderId?) => withTimeout(ipcRenderer.invoke('conversations:create', title, folderId)),
     update: (id, data) => withTimeout(ipcRenderer.invoke('conversations:update', id, data)),
     delete: (id) => withTimeout(ipcRenderer.invoke('conversations:delete', id)),
     deleteMany: (ids: number[]) => withTimeout(ipcRenderer.invoke('conversations:deleteMany', ids)),
@@ -74,6 +74,7 @@ const api: AgentAPI = {
     update: (id, data) => withTimeout(ipcRenderer.invoke('folders:update', id, data)),
     delete: (id, mode?) => withTimeout(ipcRenderer.invoke('folders:delete', id, mode)),
     reorder: (ids) => withTimeout(ipcRenderer.invoke('folders:reorder', ids)),
+    getDefault: () => withTimeout(ipcRenderer.invoke('folders:getDefault')),
   },
   mcp: {
     listServers: () => withTimeout(ipcRenderer.invoke('mcp:listServers')),

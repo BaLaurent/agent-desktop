@@ -5,7 +5,7 @@ import type { Conversation, Folder } from '../../shared/types'
 const makeConversation = (overrides: Partial<Conversation> = {}): Conversation => ({
   id: 1,
   title: 'Test Conv',
-  folder_id: null,
+  folder_id: 1,
   position: 0,
   model: 'claude-sonnet-4-6-20250514',
   system_prompt: null,
@@ -103,7 +103,7 @@ describe('conversationsStore', () => {
   })
 
   it('moveToFolder optimistically updates folder_id', async () => {
-    const conv = makeConversation({ id: 1, folder_id: null })
+    const conv = makeConversation({ id: 1, folder_id: 1 })
     useConversationsStore.setState({ conversations: [conv] })
 
     await useConversationsStore.getState().moveToFolder(1, 5)
@@ -210,7 +210,7 @@ describe('conversationsStore', () => {
     })
 
     it('moveSelectedToFolder optimistically updates folder_id for all selected', async () => {
-      const convs = [makeConversation({ id: 1, folder_id: null }), makeConversation({ id: 2, folder_id: null }), makeConversation({ id: 3, folder_id: null })]
+      const convs = [makeConversation({ id: 1, folder_id: 1 }), makeConversation({ id: 2, folder_id: 1 }), makeConversation({ id: 3, folder_id: 1 })]
       useConversationsStore.setState({ conversations: convs, selectedIds: new Set([1, 3]) })
 
       await useConversationsStore.getState().moveSelectedToFolder(5)
@@ -218,7 +218,7 @@ describe('conversationsStore', () => {
       expect(mockAgent.conversations.moveMany).toHaveBeenCalledWith(expect.arrayContaining([1, 3]), 5)
       const state = useConversationsStore.getState()
       expect(state.conversations.find((c) => c.id === 1)!.folder_id).toBe(5)
-      expect(state.conversations.find((c) => c.id === 2)!.folder_id).toBeNull()
+      expect(state.conversations.find((c) => c.id === 2)!.folder_id).toBe(1)
       expect(state.conversations.find((c) => c.id === 3)!.folder_id).toBe(5)
       expect(state.selectedIds.size).toBe(0)
     })
@@ -238,28 +238,36 @@ describe('conversationsStore', () => {
       name: 'Test Folder',
       parent_id: null,
       position: 0,
+      is_default: 0,
+      ai_overrides: null,
+      default_cwd: null,
+      color: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       ...overrides,
     })
 
-    it('default mode reparents conversations to root', async () => {
+    it('default mode removes folder and reloads conversations', async () => {
       const folder = makeFolder({ id: 10 })
       const conv = makeConversation({ id: 1, folder_id: 10 })
       useConversationsStore.setState({ folders: [folder], conversations: [conv] })
+      // After delete, loadConversations is called — mock the list response
+      const reparented = makeConversation({ id: 1, folder_id: 99 })
+      mockAgent.conversations.list.mockResolvedValueOnce([reparented])
 
       await useConversationsStore.getState().deleteFolder(10)
 
       expect(mockAgent.folders.delete).toHaveBeenCalledWith(10)
+      expect(mockAgent.conversations.list).toHaveBeenCalled()
       const state = useConversationsStore.getState()
       expect(state.folders).toHaveLength(0)
-      expect(state.conversations[0].folder_id).toBeNull()
+      expect(state.conversations[0].folder_id).toBe(99)
     })
 
     it('delete mode removes conversations in folder', async () => {
       const folder = makeFolder({ id: 10 })
       const convInside = makeConversation({ id: 1, folder_id: 10 })
-      const convOutside = makeConversation({ id: 2, folder_id: null })
+      const convOutside = makeConversation({ id: 2, folder_id: 1 })
       useConversationsStore.setState({ folders: [folder], conversations: [convInside, convOutside] })
 
       await useConversationsStore.getState().deleteFolder(10, 'delete')
@@ -286,7 +294,7 @@ describe('conversationsStore', () => {
       const child = makeFolder({ id: 11, parent_id: 10 })
       const grandchild = makeFolder({ id: 12, parent_id: 11 })
       const convDeep = makeConversation({ id: 1, folder_id: 12 })
-      const convRoot = makeConversation({ id: 2, folder_id: null })
+      const convRoot = makeConversation({ id: 2, folder_id: 1 })
       useConversationsStore.setState({
         folders: [parent, child, grandchild],
         conversations: [convDeep, convRoot],

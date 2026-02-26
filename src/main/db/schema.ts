@@ -204,4 +204,22 @@ function runMigrations(db: Database.Database): void {
   if (!schedCols.some((c) => c.name === 'one_shot')) {
     try { db.exec('ALTER TABLE scheduled_tasks ADD COLUMN one_shot INTEGER DEFAULT 0') } catch (e) { console.warn('[migration] scheduled_tasks.one_shot:', e) }
   }
+
+  // Add is_default column to folders (marks the auto-created default folder)
+  const folderCols4 = db.pragma('table_info(folders)') as { name: string }[]
+  if (!folderCols4.some((c) => c.name === 'is_default')) {
+    try { db.exec('ALTER TABLE folders ADD COLUMN is_default INTEGER DEFAULT 0') } catch (e) { console.warn('[migration] folders.is_default:', e) }
+  }
+
+  // Ensure exactly one default folder exists
+  const hasDefault = db.prepare('SELECT id FROM folders WHERE is_default = 1').get()
+  if (!hasDefault) {
+    db.prepare(
+      `INSERT INTO folders (name, is_default, position, updated_at) VALUES ('Unsorted', 1, -1, datetime('now'))`
+    ).run()
+  }
+
+  // Migrate all NULL folder_id conversations to the default folder
+  const defaultRow = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as { id: number }
+  db.prepare('UPDATE conversations SET folder_id = ? WHERE folder_id IS NULL').run(defaultRow.id)
 }

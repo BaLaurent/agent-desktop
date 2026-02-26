@@ -26,6 +26,7 @@ function makeFolder(overrides: Partial<Folder> & { id: number; name: string }): 
   return {
     parent_id: null,
     position: 0,
+    is_default: 0,
     ai_overrides: null,
     default_cwd: null,
     color: null,
@@ -38,7 +39,7 @@ function makeFolder(overrides: Partial<Folder> & { id: number; name: string }): 
 function makeConversation(overrides: Partial<Conversation> & { id: number }): Conversation {
   return {
     title: `Conv ${overrides.id}`,
-    folder_id: null,
+    folder_id: 1,
     position: 0,
     model: 'claude-sonnet-4-6-20250514',
     system_prompt: null,

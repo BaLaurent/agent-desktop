@@ -143,7 +143,7 @@ function generateShim(token: string): string {
     conversations: {
       list: function() { return invoke('conversations:list', []); },
       get: function(id) { return invoke('conversations:get', [id]); },
-      create: function(title) { return invoke('conversations:create', [title]); },
+      create: function(title, folderId) { return invoke('conversations:create', [title, folderId]); },
       update: function(id, data) { return invoke('conversations:update', [id, data]); },
       delete: function(id) { return invoke('conversations:delete', [id]); },
       export: function(id, format) { return invoke('conversations:export', [id, format]); },
@@ -181,6 +181,7 @@ function generateShim(token: string): string {
       update: function(id, data) { return invoke('folders:update', [id, data]); },
       delete: function(id, mode) { return invoke('folders:delete', [id, mode]); },
       reorder: function(ids) { return invoke('folders:reorder', [ids]); },
+      getDefault: function() { return invoke('folders:getDefault', []); },
     },
     mcp: {
       listServers: function() { return invoke('mcp:listServers', []); },

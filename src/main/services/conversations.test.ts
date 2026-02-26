@@ -60,6 +60,18 @@ describe('Conversations Service', () => {
     expect(result).toBeNull()
   })
 
+  it('create assigns default folder when no folderId provided', async () => {
+    const conv = await ipc.invoke('conversations:create', 'Auto Folder') as any
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+    expect(conv.folder_id).toBe(defaultFolder.id)
+  })
+
+  it('create assigns specified folderId when provided', async () => {
+    const folder = await ipc.invoke('folders:create', 'Custom') as any
+    const conv = await ipc.invoke('conversations:create', 'In Custom', folder.id) as any
+    expect(conv.folder_id).toBe(folder.id)
+  })
+
   it('update title changes title', async () => {
     const conv = await ipc.invoke('conversations:create', 'Old Title') as any
     await ipc.invoke('conversations:update', conv.id, { title: 'New Title' })
@@ -141,6 +153,16 @@ describe('Conversations Service', () => {
 
     const full = await ipc.invoke('conversations:get', imported.id) as any
     expect(full.messages).toHaveLength(2)
+  })
+
+  it('import assigns default folder to imported conversation', async () => {
+    const data = JSON.stringify({
+      conversation: { title: 'Imported' },
+      messages: [{ role: 'user', content: 'hello', created_at: '2025-01-01T00:00:00Z' }],
+    })
+    const conv = await ipc.invoke('conversations:import', data) as any
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+    expect(conv.folder_id).toBe(defaultFolder.id)
   })
 
   it('search by title finds matching conversations', async () => {

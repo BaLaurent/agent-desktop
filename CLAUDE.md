@@ -31,6 +31,7 @@
 - **Settings cascade**: Conversation > Folder > Global; `null`/`{}` = inherited
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
 - **Folder color**: nullable TEXT `#rrggbb` validated server-side; `null` = no tint; applied via `color-mix` like theme tinting
+- **Default folder**: `is_default = 1` on `folders`; auto-created at startup as "Unsorted" with `position = -1`; non-deletable, renamable; all new/imported conversations assigned to it; no `folder_id = NULL` in system
 - **Heatmap**: `heatmap_enabled`, `heatmap_mode` (`'relative'`|`'fixed'`), `heatmap_min`, `heatmap_max` stored as strings; color via `hsvToHex(120 * (1-t), 70, 80)` applied same way; manual color takes precedence
 - **Bulk IPC ops**: `deleteMany`/`moveMany` wrap per-row statements in `db.transaction()` — no `WHERE id IN (...)` (sql.js parameter binding limitation)
 - **Multi-select `visibleOrder`**: store receives flat ID array from component — store cannot compute it (doesn't know folder expansion state)

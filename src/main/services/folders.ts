@@ -69,6 +69,13 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
   ipcMain.handle('folders:delete', (_e, id: number, mode?: string) => {
     validatePositiveInt(id, 'folderId')
 
+    // Protect the default folder from deletion
+    const folder = db.prepare('SELECT is_default FROM folders WHERE id = ?').get(id) as { is_default: number } | undefined
+    if (folder?.is_default === 1) throw new Error('Cannot delete the default folder')
+
+    // Get default folder id for reparenting
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as { id: number }
+
     if (mode === 'delete') {
       // Collect this folder + all descendant folder IDs (BFS)
       const allIds: number[] = [id]
@@ -96,8 +103,8 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       })
       deleteAll()
     } else {
-      // Default: reparent conversations and child folders to root
-      db.prepare('UPDATE conversations SET folder_id = NULL WHERE folder_id = ?').run(id)
+      // Reparent conversations to default folder instead of NULL
+      db.prepare('UPDATE conversations SET folder_id = ? WHERE folder_id = ?').run(defaultFolder.id, id)
       db.prepare('UPDATE folders SET parent_id = NULL WHERE parent_id = ?').run(id)
       db.prepare('DELETE FROM folders WHERE id = ?').run(id)
     }
@@ -113,5 +120,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       }
     })
     reorder()
+  })
+
+  ipcMain.handle('folders:getDefault', () => {
+    return db.prepare('SELECT * FROM folders WHERE is_default = 1').get()
   })
 }

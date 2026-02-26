@@ -18,7 +18,7 @@ interface ConversationsState {
 
   loadConversations: () => Promise<void>
   loadFolders: () => Promise<void>
-  createConversation: (title?: string) => Promise<Conversation>
+  createConversation: (title?: string, folderId?: number) => Promise<Conversation>
   updateConversation: (id: number, data: Partial<Conversation>) => Promise<void>
   deleteConversation: (id: number) => Promise<void>
   setActiveConversation: (id: number | null) => void
@@ -143,8 +143,8 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
     set({ folders })
   },
 
-  createConversation: async (title?: string) => {
-    const conversation = await window.agent.conversations.create(title)
+  createConversation: async (title?: string, folderId?: number) => {
+    const conversation = await window.agent.conversations.create(title, folderId)
     set((s) => ({ conversations: [conversation, ...s.conversations] }))
     set({ activeConversationId: conversation.id })
     if (WEB_MODE) sessionStorage.setItem(SESSION_KEY, String(conversation.id))
@@ -234,15 +234,14 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
         set({ folders: prevFolders, conversations: prevConversations, activeConversationId })
       }
     } else {
-      // Default: reparent
+      // Default: reparent to default folder
       set((s) => ({
         folders: s.folders.filter((f) => f.id !== id),
-        conversations: s.conversations.map((c) =>
-          c.folder_id === id ? { ...c, folder_id: null } : c
-        ),
       }))
       try {
         await window.agent.folders.delete(id)
+        // Reload conversations — main has reparented them to default folder
+        await get().loadConversations()
       } catch {
         set({ folders: prevFolders, conversations: prevConversations })
       }

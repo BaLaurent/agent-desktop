@@ -35,7 +35,7 @@ export interface AgentAPI {
   conversations: {
     list(): Promise<Conversation[]>
     get(id: number): Promise<ConversationWithMessages>
-    create(title?: string): Promise<Conversation>
+    create(title?: string, folderId?: number): Promise<Conversation>
     update(id: number, data: Partial<Conversation>): Promise<void>
     delete(id: number): Promise<void>
     deleteMany(ids: number[]): Promise<void>
@@ -77,6 +77,7 @@ export interface AgentAPI {
     update(id: number, data: Partial<Folder>): Promise<void>
     delete(id: number, mode?: 'keep' | 'delete'): Promise<void>
     reorder(ids: number[]): Promise<void>
+    getDefault(): Promise<Folder>
   }
   mcp: {
     listServers(): Promise<McpServer[]>
