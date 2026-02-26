@@ -3,6 +3,7 @@ import type { Conversation, Folder } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
 import { useSchedulerStore } from '../../stores/schedulerStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
+import { ContextMenu, ContextMenuItem, ContextMenuDivider } from '../shared/ContextMenu'
 
 function invertHex(hex: string): string {
   const r = 255 - parseInt(hex.slice(1, 3), 16)
@@ -31,7 +32,6 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const [showFolderSubmenu, setShowFolderSubmenu] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -41,21 +41,10 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
     }
   }, [isRenaming])
 
-  useEffect(() => {
-    if (!showMenu) return
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false)
-        setShowFolderSubmenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('touchstart', handleClick as EventListener)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('touchstart', handleClick as EventListener)
-    }
-  }, [showMenu])
+  const closeMenu = useCallback(() => {
+    setShowMenu(false)
+    setShowFolderSubmenu(false)
+  }, [])
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -257,19 +246,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
       </div>
 
       {showMenu && isSelected && selectedIds.size > 1 ? (
-        <div
-          ref={menuRef}
-          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"
-          style={{
-            left: menuPos.x,
-            top: menuPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          role="menu"
-          aria-label="Bulk conversation actions"
-        >
+        <ContextMenu position={menuPos} onClose={closeMenu} className="min-w-[160px]" aria-label="Bulk conversation actions">
           <div
             className="relative"
             {...(!isMobile ? {
@@ -292,7 +269,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
                 style={{ backgroundColor: 'var(--color-surface)' }}
               >
                 <button
-                  onClick={() => { setShowMenu(false); setShowFolderSubmenu(false); moveSelectedToFolder(null) }}
+                  onClick={() => { closeMenu(); moveSelectedToFolder(null) }}
                   className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
                   style={{ backgroundColor: 'transparent' }}
                 >
@@ -301,7 +278,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
                 {folders.map((f: Folder) => (
                   <button
                     key={f.id}
-                    onClick={() => { setShowMenu(false); setShowFolderSubmenu(false); moveSelectedToFolder(f.id) }}
+                    onClick={() => { closeMenu(); moveSelectedToFolder(f.id) }}
                     className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
                     style={{ backgroundColor: 'transparent' }}
                   >
@@ -311,47 +288,27 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
               </div>
             )}
           </div>
-          <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
-          <button
+          <ContextMenuDivider />
+          <ContextMenuItem
+            danger
             onClick={() => {
               setShowMenu(false)
               if (confirm(`Delete ${selectedIds.size} conversations?`)) {
                 deleteSelected()
               }
             }}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
-            role="menuitem"
           >
             Delete {selectedIds.size} conversations
-          </button>
-        </div>
+          </ContextMenuItem>
+        </ContextMenu>
       ) : showMenu && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"
-          style={{
-            left: menuPos.x,
-            top: menuPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          role="menu"
-          aria-label="Conversation actions"
-        >
-          <button
-            onClick={() => {
-              setShowMenu(false)
-              setIsRenaming(true)
-            }}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-            role="menuitem"
+        <ContextMenu position={menuPos} onClose={closeMenu} className="min-w-[160px]" aria-label="Conversation actions">
+          <ContextMenuItem
+            onClick={() => { setShowMenu(false); setIsRenaming(true) }}
             aria-label="Rename conversation"
           >
             Rename
-          </button>
+          </ContextMenuItem>
           <div
             className="relative"
             {...(!isMobile ? {
@@ -371,9 +328,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
             {showFolderSubmenu && (
               <div
                 className="absolute left-full top-0 mobile:static mobile:pl-3 rounded shadow-lg py-1 text-sm min-w-[140px] border border-[var(--color-bg)] mobile:border-0"
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                }}
+                style={{ backgroundColor: 'var(--color-surface)' }}
               >
                 <button
                   onClick={() => handleMoveToFolder(null)}
@@ -395,44 +350,20 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
               </div>
             )}
           </div>
-          <button
-            onClick={() => handleExport('markdown')}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-            role="menuitem"
-            aria-label="Export conversation as Markdown"
-          >
+          <ContextMenuItem onClick={() => handleExport('markdown')} aria-label="Export conversation as Markdown">
             Export as Markdown
-          </button>
-          <button
-            onClick={() => handleExport('json')}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-            role="menuitem"
-            aria-label="Export conversation as JSON"
-          >
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => handleExport('json')} aria-label="Export conversation as JSON">
             Export as JSON
-          </button>
-          <button
-            onClick={handleGenerateTitle}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-            role="menuitem"
-            aria-label="Generate title with AI"
-          >
+          </ContextMenuItem>
+          <ContextMenuItem onClick={handleGenerateTitle} aria-label="Generate title with AI">
             Generate Title
-          </button>
-          <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
-          <button
-            onClick={handleDelete}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
-            role="menuitem"
-            aria-label="Delete conversation"
-          >
+          </ContextMenuItem>
+          <ContextMenuDivider />
+          <ContextMenuItem danger onClick={handleDelete} aria-label="Delete conversation">
             Delete
-          </button>
-        </div>
+          </ContextMenuItem>
+        </ContextMenu>
       )}
     </>
   )

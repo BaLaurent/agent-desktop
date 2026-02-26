@@ -14,6 +14,7 @@ import type { FileNode } from '../../../shared/types'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useConversationsStore } from '../../stores/conversationsStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
+import { ContextMenu, ContextMenuItem, ContextMenuDivider } from '../shared/ContextMenu'
 
 function getFileExtension(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
@@ -117,39 +118,7 @@ interface ContextMenuProps {
   onNewConversationFromFiles?: () => void
 }
 
-function MenuItem({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-1.5 text-sm hover:opacity-80 transition-opacity ${danger ? 'text-error' : 'text-body'}`}
-    >
-      {label}
-    </button>
-  )
-}
-
-function MenuSeparator() {
-  return <div className="my-1 mx-2 border-t border-base" />
-}
-
 function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreateFolder, multiSelectedCount, onNewConversationFromFiles }: ContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose()
-    }
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKey)
-    }
-  }, [onClose])
-
   // Clamp position to stay within viewport
   const adjustedX = Math.min(x, window.innerWidth - 200)
   const adjustedY = Math.min(y, window.innerHeight - 280)
@@ -186,46 +155,35 @@ function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreate
   }
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 py-1 rounded-md shadow-lg min-w-[180px] bg-surface border border-base"
-      style={{
-        left: adjustedX,
-        top: adjustedY,
-      }}
-      role="menu"
-      aria-label="File context menu"
-    >
+    <ContextMenu position={{ x: adjustedX, y: adjustedY }} onClose={onClose} className="min-w-[180px]" aria-label="File context menu">
       {!node.isDirectory && (
-        <MenuItem label="Open with Default App" onClick={handleOpen} />
+        <ContextMenuItem onClick={handleOpen}>Open with Default App</ContextMenuItem>
       )}
-      <MenuItem
-        label={node.isDirectory ? 'Open in File Manager' : 'Reveal in File Manager'}
-        onClick={handleReveal}
-      />
+      <ContextMenuItem onClick={handleReveal}>
+        {node.isDirectory ? 'Open in File Manager' : 'Reveal in File Manager'}
+      </ContextMenuItem>
       {node.isDirectory && onCreateFile && onCreateFolder && (
         <>
-          <MenuSeparator />
-          <MenuItem label="New File Here" onClick={() => { onCreateFile(node.path); onClose() }} />
-          <MenuItem label="New Folder Here" onClick={() => { onCreateFolder(node.path); onClose() }} />
+          <ContextMenuDivider />
+          <ContextMenuItem onClick={() => { onCreateFile(node.path); onClose() }}>New File Here</ContextMenuItem>
+          <ContextMenuItem onClick={() => { onCreateFolder(node.path); onClose() }}>New Folder Here</ContextMenuItem>
         </>
       )}
-      <MenuSeparator />
-      <MenuItem label="Copy Path" onClick={handleCopyPath} />
-      <MenuItem label="Rename" onClick={() => { onRename(); onClose() }} />
-      <MenuItem label="Duplicate" onClick={handleDuplicate} />
+      <ContextMenuDivider />
+      <ContextMenuItem onClick={handleCopyPath}>Copy Path</ContextMenuItem>
+      <ContextMenuItem onClick={() => { onRename(); onClose() }}>Rename</ContextMenuItem>
+      <ContextMenuItem onClick={handleDuplicate}>Duplicate</ContextMenuItem>
       {multiSelectedCount >= 1 && onNewConversationFromFiles && (
         <>
-          <MenuSeparator />
-          <MenuItem
-            label={`New conversation with ${multiSelectedCount} item${multiSelectedCount !== 1 ? 's' : ''}`}
-            onClick={() => { onNewConversationFromFiles(); onClose() }}
-          />
+          <ContextMenuDivider />
+          <ContextMenuItem onClick={() => { onNewConversationFromFiles(); onClose() }}>
+            {`New conversation with ${multiSelectedCount} item${multiSelectedCount !== 1 ? 's' : ''}`}
+          </ContextMenuItem>
         </>
       )}
-      <MenuSeparator />
-      <MenuItem label="Move to Trash" onClick={handleTrash} danger />
-    </div>
+      <ContextMenuDivider />
+      <ContextMenuItem danger onClick={handleTrash}>Move to Trash</ContextMenuItem>
+    </ContextMenu>
   )
 }
 
