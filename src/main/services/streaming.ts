@@ -46,7 +46,7 @@ export function registerStreamWindow(win: BrowserWindow): void {
   win.on('closed', () => streamWindows.delete(win))
 }
 
-function sendChunk(type: string, content?: string, extra?: Record<string, string | number>): void {
+export function sendChunk(type: string, content?: string, extra?: Record<string, string | number>): void {
   const payload = { type, content, ...extra }
 
   // Broadcast to all registered windows

@@ -4,7 +4,8 @@ import { mkdirSync } from 'fs'
 import { promises as fsp } from 'fs'
 import { join, basename, extname, resolve, relative } from 'path'
 import { app } from 'electron'
-import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv, notifyConversationUpdated } from './streaming'
+import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv, notifyConversationUpdated, sendChunk } from './streaming'
+import { runUserPromptSubmitHooks } from './hookRunner'
 import { loadAgentSDK } from './anthropic'
 import { getMainWindow } from '../index'
 import { broadcast } from '../utils/broadcast'
@@ -434,6 +435,27 @@ async function streamAndSave(
   const history = buildMessageHistory(db, conversationId)
   const aiSettings = getAISettings(db, conversationId)
   const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
+
+  // Run UserPromptSubmit hooks manually — the SDK subprocess doesn't yield
+  // hook_response for this event through the async iterator
+  let hookSystemContents: string[] = []
+  const lastUserMsg = history[history.length - 1]
+  if (lastUserMsg?.role === 'user') {
+    const hookMessages = await runUserPromptSubmitHooks(
+      lastUserMsg.content,
+      aiSettings.cwd || process.cwd(),
+      aiSettings.permissionMode || 'bypassPermissions'
+    )
+    const convExtra = { conversationId }
+    for (const msg of hookMessages) {
+      sendChunk('system_message', msg.content, {
+        hookEvent: msg.hookEvent,
+        ...convExtra,
+      })
+      hookSystemContents.push(msg.content)
+    }
+  }
+
   try {
     const { content: responseContent, toolCalls } = await streamMessage(
       history, systemPrompt, aiSettings, conversationId
@@ -441,7 +463,11 @@ async function streamAndSave(
     if (responseContent) {
       const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
       if (!exists) return null
-      const assistantMsg = saveMessage(db, conversationId, 'assistant', responseContent, [], toolCalls)
+      // Prepend hook system messages so they persist in the saved message
+      const finalContent = hookSystemContents.length > 0
+        ? hookSystemContents.join('\n\n') + '\n\n---\n\n' + responseContent
+        : responseContent
+      const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], toolCalls)
       updateConversationTimestamp(db, conversationId)
       notifyConversationUpdated(conversationId)
       // Fire-and-forget: TTS for AI response
