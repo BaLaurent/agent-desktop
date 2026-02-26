@@ -52,7 +52,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
 
   const { isAuthenticated } = useAuthStore()
   const globalSettings = useSettingsStore((s) => s.settings)
-  const { conversations, folders, updateConversation } = useConversationsStore()
+  const { conversations, folders, updateConversation, forkConversation } = useConversationsStore()
   const { loadTree, clear: clearFiles } = useFileExplorerStore()
   const mcpServers = useMcpStore((s) => s.servers)
   const loadMcpServers = useMcpStore((s) => s.loadServers)
@@ -309,6 +309,11 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     regenerateLastResponse(conversationId)
   }
 
+  const handleFork = useCallback(async (messageId: number) => {
+    if (!conversationId) return
+    await forkConversation(conversationId, messageId)
+  }, [conversationId, forkConversation])
+
   // Empty state
   if (!conversationId) {
     return (
@@ -410,6 +415,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           isLoading={isLoading}
           onEdit={editMessage}
           onRegenerate={handleRegenerate}
+          onFork={handleFork}
           onStopGeneration={stopGeneration}
         />
 

@@ -12,6 +12,7 @@ interface MessageBubbleProps {
   isLast: boolean
   onEdit?: (messageId: number, content: string) => void
   onRegenerate?: () => void
+  onFork?: (messageId: number) => void
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -28,7 +29,7 @@ function formatRelativeTime(dateStr: string): string {
   return `${diffDay}d ago`
 }
 
-export function MessageBubble({ message, isLast, onEdit, onRegenerate }: MessageBubbleProps) {
+export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [showActions, setShowActions] = useState(false)
@@ -304,6 +305,16 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
               role="menuitem"
             >
               Retry
+            </button>
+          )}
+          {onFork && (
+            <button
+              onClick={() => { setShowContextMenu(false); onFork(message.id) }}
+              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent' }}
+              role="menuitem"
+            >
+              Fork from here
             </button>
           )}
         </div>

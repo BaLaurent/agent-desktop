@@ -407,4 +407,32 @@ describe('MessageBubble', () => {
     const labels = items.map((el) => el.textContent)
     expect(labels).not.toContain('Edit')
   })
+
+  // ── Fork context menu tests ───────────────────────────────────
+
+  it('shows Fork in context menu and calls onFork with message id', () => {
+    const onFork = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', id: 42 })} isLast={false} onFork={onFork} />,
+    )
+    rightClickBubble(container)
+
+    const forkBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Fork from here')!
+    expect(forkBtn).toBeDefined()
+    fireEvent.click(forkBtn)
+    expect(onFork).toHaveBeenCalledWith(42)
+  })
+
+  it('shows Fork in context menu for assistant messages too', () => {
+    const onFork = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant', id: 7 })} isLast={false} onFork={onFork} />,
+    )
+    rightClickBubble(container)
+
+    const forkBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Fork from here')!
+    expect(forkBtn).toBeDefined()
+    fireEvent.click(forkBtn)
+    expect(onFork).toHaveBeenCalledWith(7)
+  })
 })

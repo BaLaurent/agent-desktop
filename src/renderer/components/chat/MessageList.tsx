@@ -23,6 +23,7 @@ interface MessageListProps {
   isLoading: boolean
   onEdit: (messageId: number, content: string) => void
   onRegenerate: () => void
+  onFork: (messageId: number) => void
   onStopGeneration: () => void
 }
 
@@ -35,6 +36,7 @@ export function MessageList({
   isLoading,
   onEdit,
   onRegenerate,
+  onFork,
   onStopGeneration,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -102,6 +104,7 @@ export function MessageList({
                   isLast={idx === messages.length - 1}
                   onEdit={onEdit}
                   onRegenerate={onRegenerate}
+                  onFork={onFork}
                 />
               </React.Fragment>
             )
