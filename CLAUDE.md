@@ -7,377 +7,97 @@
 - `npm run dist:win` — package NSIS installer + portable exe (output: `release/`, requires Wine on Linux)
 - `npm run publish:linux` — build + publish Linux to GitHub Releases with `--publish always` (requires `GH_TOKEN`)
 - `npm run publish:win` — build + publish Windows to GitHub Releases with `--publish always` (requires `GH_TOKEN` + Wine on Linux)
+- `npm test` — Vitest (main: node, renderer: jsdom); `@testing-library/react` pinned to v15 (v16 requires React 19)
 
-## Architecture
-- Electron + React + Zustand + Tailwind + SQLite (sql.js / WASM)
-- Build tool: electron-vite (outputs to `out/`, not `dist-electron/`)
-- IPC: each service in `src/main/services/` exports `registerHandlers(ipcMain, db)`
-- Preload: `contextBridge.exposeInMainWorld('agent', api)` — typed via `src/preload/api.d.ts`
-- Renderer types: `src/renderer/env.d.ts` references preload types for `window.agent`
+## Architecture Decisions
+- Electron + React + Zustand + Tailwind + sql.js (WASM SQLite)
+- **electron-vite** outputs to `out/`, not `dist-electron/`
+- **asar: false** — SDK `import.meta.url` resolves inside `app.asar`; system `node` can't read asar archives
+- **sql.js (WASM)** — no native ABI swap needed; same binary in tests and prod
+- **Fonts bundled** — box-drawing chars in ASCII diagrams need guaranteed monospace
+- **No minWidth/minHeight** — Wayland compositors force windows smaller than declared minimums; Electron overflows at `minWidth` pixels
+- **Per-conversation AbortController** (`Map<number, ...>`) — concurrent streams require per-conversation abort
+- **MCP disable is negative list** — new servers auto-active unless explicitly disabled
+- **Hybrid shortcuts** — X11: Electron `globalShortcut`, Wayland: XDG Desktop Portal
+- **Hyprland uses FIFO not D-Bus** — `dbus-next` signal delivery broken in Electron's event loop
+- **Session detection** — `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` (both can be set under XWayland)
 
-## Key Conventions
-- CSS: `@import` before `@tailwind` directives; themes via CSS custom properties
-- Auth: OAuth credentials from `claude login` CLI, NOT api_key
-- DB: sql.js (WASM SQLite) in RAM with debounced flush to `~/.config/agent-desktop/agent.db`
-- Vite 5.x required (electron-vite peer dep)
-- **asar: false** in electron-builder.yml — required because Agent SDK resolves `cli.js` via `import.meta.url` which lands inside `app.asar`; system `node` cannot read asar archives
-- **Fonts**: `@fontsource/jetbrains-mono` bundled (imported in `main.tsx`) — ensures monospace code rendering works regardless of system fonts; critical for box-drawing chars in ASCII diagrams
-- **Window sizing**: BrowserWindow config has NO `minWidth`/`minHeight` — on Wayland (Hyprland), compositors can force windows smaller than declared minimums, but Electron keeps web content at `minWidth` pixels, causing visible horizontal overflow. Root element uses `w-full overflow-hidden` + html/body get explicit `height: 100%`/`overflow: hidden`
-
-## Theming System
-- CSS custom properties (`--color-*`) in theme `.css` files at `~/.agent-desktop/themes/`; Tailwind maps to them in `tailwind.config.ts`
-- **Naming gotcha**: `base` (not `bg`), `body` (not `text`), `contrast` (not `text-contrast`) — avoids Tailwind collisions like `bg-bg` or `text-text`
-- **Tinting gotcha**: `color-mix(in srgb, var(--color-*) N%, transparent)` — Tailwind opacity modifiers don't work with raw CSS var values
-- No hardcoded hex in renderer; `style={{ backgroundColor }}` only for dynamic runtime values (theme swatches)
-- Built-in themes (`default-dark.css`, `default-light.css`) seeded by `ensureThemeDir()`; theme editor in Settings > Appearance
-
-## File Explorer & Viewers
-- Two backend functions in `src/main/services/files.ts` — understand which to use:
-  - `files:listDir` — flat single-level, no recursion, no skip list, only hides `.` prefix. Used by file explorer tree
-  - `files:listTree` — recursive DFS (MAX_DEPTH=10, MAX_FILES=500, configurable exclude list). Used only by `@mention` autocomplete
-- `files_excludePatterns` setting (comma-separated dir names) cascades via AI overrides; defaults in `constants.ts`
-- Viewers: Monaco (code), sandboxed iframe (HTML), react-markdown (MD), MermaidBlock (.mmd), DOMPurify-sanitized SVG, image preview (base64 data URL)
-- **Mermaid sanitization gotcha**: Mermaid v11 uses `foreignObject` for text labels and `use`/`xlink:href` for arrow markers — DOMPurify must allow these (`ADD_TAGS: ['foreignobject', 'use']`, `html: true` profile) or diagram text disappears. `securityLevel: 'strict'` set explicitly. Auto-fit zoom scales large diagrams to container.
-- Images read as binary → base64 with `language: 'image'`; SVGs rendered inline (not raw code)
-- No file size limits on `readFile`; `MAX_PASTE_SIZE = 5MB` only for clipboard paste
-- Auto-refresh on stream finish; `artifacts` table left inert (no migration needed)
-- Theme apply: when CWD is `~/.agent-desktop/themes/`, `.css` files show Apply/Active buttons
-- Context menu: Open Default App, Reveal, Copy Path, Rename (inline), Duplicate, Move to Trash, New Conversation from Files
-- **Multi-file selection**: Ctrl+click (toggle) and Shift+click (range) — OS file manager pattern; `multiSelectedPaths: Set<string>` in store, independent of `selectedFilePath` (viewer)
-  - Right-click auto-adds node to multi-selection; context menu shows "New conversation with N items"
-  - `files:prepareSession` IPC: copies or symlinks selected files into new conversation's session folder (dedup with `_1`, `_2` suffixes); optional `renames?: Record<string, string>` param overrides destination filenames (validated: no `/`, `\`, `\0`, no empty)
-  - `NewConversationFromFilesModal`: confirmation dialog with copy/symlink method selector + click-to-edit filenames (inline rename with validation: empty, duplicates, path separators); `onConfirm(method, renames)` passes only changed entries
-  - `getVisibleNodePaths()` pure DFS helper computes range for Shift+click (only expanded nodes)
-  - Normal click clears multi-selection; `loadTree`/`clear`/`refresh` reset it
-- `@mention` uses VS Code-style fuzzy matching (`src/renderer/utils/fuzzyMatch.ts`)
-- **Expand button**: "Expand" button opens `ExpandedViewerModal` — unified full-screen modal replacing the former `CodeEditorModal`/`PreviewModal` split; handles source editing (Monaco) and preview (HTML/MD/image/SVG/Mermaid) in one component; visible for all file types
-- **Markdown anchor links**: headings get slugified `id` attributes; `#` links scroll within container instead of calling `openExternal`
-  - **Gotcha**: browser URL-encodes accented chars in href (`é` → `%C3%A9`) — must `decodeURIComponent` before slugifying
-  - **Gotcha**: `slugify` uses Unicode `\p{L}\p{N}` (not `\w`) to preserve accented characters
-
-## Jupyter Kernel Execution
-- `NotebookPreview` supports live cell execution via local Jupyter kernel
-- **Architecture**: Python bridge (`resources/jupyter/bridge.py`) spawned as child process; JSON Lines protocol over stdin/stdout — same pattern as `schedulerBridge.ts`
-- **Dependencies**: requires `jupyter_client` AND `ipykernel` — ipykernel registers the actual `python3` kernel spec
-  - **Gotcha**: `jupyter_client` alone is NOT enough — `NoSuchKernel python3` without ipykernel
-- **Backend**: `src/main/services/jupyter.ts` — `Map<string, KernelProcess>` keyed by notebook `filePath`; one kernel per notebook
-- **IPC**: registered without `db` param (like themes/commands/updater); dedicated `jupyter:output` channel for streaming (separate from AI streaming)
-- **Streaming**: `webContents.send('jupyter:output', chunk)` — renderer subscribes via `onOutput()` listener
-- **Cleanup**: `shutdownAllKernels()` called in `before-quit` handler; per-kernel 3s graceful + SIGKILL
-- **Bundling**: `bridge.py` in `extraResources` (electron-builder.yml); resolved via `app.isPackaged ? process.resourcesPath : app.getAppPath()/resources`
-- **Frontend**: `filePath` prop is optional — no toolbar/editing when absent (backward compat for inline preview)
-  - Live outputs replace static .ipynb outputs per-cell
-  - **Gotcha**: useEffect cleanup with `[filePath, kernelStatus]` deps causes shutdown on every status change — must use `useRef` for kernelStatus and depend only on `[filePath]`
-- **Detection**: `detectJupyter()` checks `import jupyter_client; import ipykernel; print("ok")` — returns `{ found, pythonPath, error? }` with specific missing-package message
-
-## Notebook Editing (Colab/Jupyter style)
-- `NotebookPreview` supports inline cell editing when `filePath` is provided; read-only without it
-- **Mutable state**: `EditableCell` with stable `_id` (incremental counter) replaces immutable `useMemo(JSON.parse)`
-  - All kernel maps (`cellOutputs`, `cellExecCounts`, `reqToCellRef`) keyed by `_id` — outputs follow cells through add/delete/move
-  - `notebookMetaRef` preserves notebook-level metadata (kernelspec, nbformat) for serialization
-- **Code cells**: click `<pre>` → single floating Monaco editor; Ctrl+Enter run, Ctrl+S save, Escape commit
-- **Markdown/raw cells**: double-click → `<textarea>`; Escape or blur commits
-- **Cell operations**: `AddCellBar` between cells (+ Code / + Markdown), `CellToolbar` on hover (delete, move up/down)
-  - New cells auto-open in edit mode
-- **Serialization**: `serializeNotebook()` — source split to `["line1\n", "line2"]` (nbformat 4 convention); `JSON.stringify(..., null, 1)`
-  - Live kernel outputs replace static outputs on save (Jupyter behavior)
-- **Dirty tracking**: debounced (300ms) `useEffect` pushes serialized JSON to `fileExplorerStore.setEditorContent()`
-  - `skipInitialSyncRef` prevents false dirty on initial render
-  - **Gotcha (infinite loop)**: `lastSerializedRef` + `lastContentRef` double guard — when `content` prop changes after save, compare against `lastSerializedRef` to skip re-init from own write
-- **Exported**: `serializeNotebook` and `EditableCell` type exported for direct testing
-
-## CWD & Working Directory
-- Each conversation has `cwd` column (nullable, defaults to `~/.agent-desktop/sessions-folder/{id}/`)
-- **Gotcha**: `getAISettings()` must be called BEFORE `getSystemPrompt()` — CWD is needed for prompt injection
-- CWD injected into system prompt as directive so agent writes files there
-- Folders have `default_cwd` column — applied to new conversations created inside the folder
-- `FolderSettingsPopover` combines AI overrides + default CWD in one popover ("Folder Settings" context menu)
-
-## AI Settings & Cascade
-- All AI settings stored in `settings` table; `AISettings` interface in `streaming.ts`
-- **Cascade**: `ai_overrides TEXT` (JSON) on both `folders` and `conversations` — priority: Conversation > Folder > Global
-- `null` / `{}` = inherited. Only overridden keys present in JSON
-- **System prompt cascade**: conversation `system_prompt` column > conv `ai_overrides` > folder `ai_overrides` > global setting
+## Conventions & Cascade
+- **CSS**: `@import` before `@tailwind` directives
+- **Auth**: OAuth from `claude login`, NOT api_key
+- **Themes**: CSS custom properties only — no hardcoded hex in renderer
+- **Theme naming**: `base`/`body`/`contrast` (not `bg`/`text`/`text-contrast`) — avoids Tailwind collisions like `bg-bg`
+- **Tinting**: `color-mix(in srgb, ...)` — Tailwind opacity modifiers don't work with raw CSS var values
+- **Settings cascade**: Conversation > Folder > Global; `null`/`{}` = inherited
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
-- **Permission Mode**: `ai_permissionMode` setting; `allowDangerouslySkipPermissions` only set when `bypassPermissions`
-- **Allowed Tools**: `ai_tools` = `'preset:claude_code'` (all) or JSON array; see `SDK_TOOLS` in `src/main/services/tools.ts`
-- **Setting Sources** (was "Skills"): `ai_skills` = `'off'`|`'user'`|`'project'`|`'local'`; controls `settingSources` for SDK (settings.json, CLAUDE.md, commands, hooks, skills)
-  - `'user'` → `['user']`, `'project'` → `['user','project']`, `'local'` → `['user','project','local']`
-  - **Skills toggle** (`ai_skillsEnabled`): independent of setting sources — controls whether `'Skill'` is added to `allowedTools`
-  - **Per-skill disable** (`ai_disabledSkills`): JSON `string[]` of skill names; denied in `canUseTool` BEFORE bypass mode check
-  - `'user'` discovers `~/.claude/skills/`, `'project'`/`'local'` also discovers `.claude/skills/` in CWD
-- **maxTurns**: 0 = unlimited (SDK receives `undefined`); no upper cap in UI
-- Overrideable keys: `ai_model`, `ai_maxTurns`, `ai_maxThinkingTokens`, `ai_maxBudgetUsd`, `ai_permissionMode`, `ai_tools`, `ai_defaultSystemPrompt`, `ai_mcpDisabled`, `ai_skillsEnabled`, `ai_disabledSkills`, `files_excludePatterns`, `tts_responseMode`, `tts_summaryPrompt`
-- **System prompt editor**: `SystemPromptEditorModal` — full-screen Monaco editor modal, shared by global AI settings and folder/conversation override forms ("Expand" button on textarea fields)
-- See `src/shared/constants.ts` for `SETTING_DEFS`, `MODEL_OPTIONS`, `PERMISSION_OPTIONS`
+- **`allowedTools` wildcards** (`mcp__<name>__*`) REQUIRED — MCP tools unusable without them, even with bypass
+- **`bypassPermissions`** is the only mode that sets `allowDangerouslySkipPermissions`
+- **Tests**: `createTestDb()` is async — all `beforeEach` must `await`; tests colocated as `*.test.ts`
+- **Tailwind variant**: prefer `compact:` over `mobile:` for new code
+- **Async I/O only**: all main-thread file I/O uses `fs.promises.*` — no sync methods
 
-## MCP Servers
-- Transport types: `stdio` (default), `http`, `sse` — stored in `type` column on `mcp_servers` table
-- `getAISettings()` builds transport-specific SDK configs; `streaming.ts` generates `allowedTools` wildcards (`mcp__<name>__*`)
-- **Gotcha**: `allowedTools` wildcards are REQUIRED — without them, MCP tools are unusable even with `bypassPermissions`
-- **Name validation**: server names must not contain `__` (conflicts with SDK tool naming `mcp__name__tool`)
-- **Args input**: dynamic list per arg; `flatMap(s => s.trim().split(/\s+/))` on save auto-splits `--flag value` into tokens
-- Test Connection: 10s timeout, 4KB output cap; IPC timeout 15s (> backend 10s to avoid masking)
-- Status: derived from `enabled` field only — no runtime connection tracking (SDK manages connections)
-- Per-conversation MCP: `ai_mcpDisabled` key in `ai_overrides` — JSON array of disabled server names (negative list)
-- Default (absent key) = all enabled servers active; new servers auto-active unless explicitly disabled
-- **Scheduler Bridge MCP** (`schedulerBridge.ts`): internal MCP server injected per-conversation as `agent_scheduler`
-  - Unix domain socket at `$XDG_RUNTIME_DIR/agent-desktop-sched-{pid}.sock` with UUID auth token
-  - Newline-delimited JSON protocol; `resources/mcp/scheduler-server.mjs` bridges stdio MCP ↔ socket
-  - Methods: `scheduler.create` (with `one_shot` support), `scheduler.list`, `scheduler.cancel`
-  - **Gotcha**: scheduler MCP removed from `aiSettings.mcpServers` during unattended task execution to prevent recursive task creation
-  - System prompt directive injected when bridge is active — tells AI to use built-in scheduler tools instead of cron/systemd
+## Ordering Constraints
+1. `enrichEnvironment()` before `app.whenReady()` — sanitizes AppImage env
+2. `getAISettings()` BEFORE `getSystemPrompt()` — CWD needed for prompt injection
+3. `initDatabase()` is async — must `await` in `app.whenReady()`
+4. `ensureThemeDir()` seeds built-in themes at startup
+5. `unbind` before `bind` in hyprctl — bindings accumulate; stale ones survive compositor restarts
+6. TTS `stop()` before starting new streams
+7. Server shutdown: WS clients → `wss.close()` → `httpServer.close()` (chained, not parallel)
 
-## Streaming & Tool Use
-- **Stub-then-enrich pattern**: `streaming.ts` uses `Map<string, ToolCall>` — `content_block_start` creates stub, `input_json_delta` accumulates, `content_block_stop` finalizes, `result` enriches with output
-- `StreamPart` union: `text` | `tool` (running/done) | `tool_approval` | `ask_user` | `mcp_status`
-- **Stream isolation**: `streamBuffers: Record<number, StreamPart[]>` — dict keyed by conversationId; N conversations stream simultaneously
-- **"Streaming" state**: a conversation is streaming iff its ID is a key in `streamBuffers` (no separate flag)
-- View/buffer separation: `streamParts`/`streamingContent` are views synced from `streamBuffers[activeConversationId]`
-- **Guard**: `isLoading && !isStreaming` in `MessageList` prevents loading skeleton from hiding `StreamingIndicator`
-- Chunks without `conversationId` fall back to `activeConversationId` (backward compat)
-- Conversation history: `buildPromptWithHistory()` wraps prior messages in `<conversation_history>` XML tags; current message placed outside
-- **Persistence**: `tool_calls TEXT` column on messages; `streamMessage()` returns `{ content, toolCalls, aborted }`
-- **Cross-window refresh**: `notifyConversationUpdated()` broadcasts `messages:conversationUpdated` to all stream windows after `streamAndSave()` saves assistant message; chatStore listener reloads messages if viewing that conversation and not streaming it (guard: `!(conversationId in streamBuffers)`)
+## Window & Layout Gotchas
+- **No-minWidth fix**: root element `w-full overflow-hidden` + html/body `height: 100%`/`overflow: hidden`
+- **Overlay height**: `h-screen` not `h-full` — html/body/#root lack `height: 100%`, so `h-full` → auto → broken scroll
+- **`ready-to-show`**: never fires for transparent BrowserWindows on Linux/Wayland — use `did-finish-load`
+- **`hideOverlay()`**: must `destroy()` not `hide()` — `hide()` creates zombie windows blocking shortcut reactivation
+- **Mobile mode**: binary flag (`__AGENT_WEB_MODE__`), not screen size — desktop browser via web server intentionally gets mobile layout
 
-## Tool Approval & AskUserQuestion
-- `canUseTool` callback is **always set**, regardless of permission mode
-- **AskUserQuestion**: always intercepted interactively (sends `ask_user` chunk, awaits user answer)
-- **Bypass mode**: `allowDangerouslySkipPermissions = true` alongside `canUseTool`; non-AskUserQuestion tools auto-approved
-- `askUserToolIds: Set<string>` suppresses AskUserQuestion from tool visualization pipeline (no tool_start/result chunks)
-- Deferred Promise pattern: callback creates Promise in `pendingRequests` Map, sends chunk, awaits response via `respondToApproval()`
-- **Edge case**: `abortStream()` and `finally` block both call `denyAllPending()` to resolve all pending with deny
+## CSS & Rendering Gotchas
+- **Block vs inline code**: detection MUST happen in `pre` handler, not `code` — fences without language have no `className` on `code`
+- **Mermaid v11 + DOMPurify**: must `ADD_TAGS: ['foreignobject', 'use']` with `html: true` — Mermaid uses `foreignObject` for text, `use`/`xlink:href` for arrows
+- **SVG vs Mermaid sanitization**: SVGs FORBID `foreignObject`/`use`; Mermaid REQUIRES them — different DOMPurify configs
+- **Anchor links**: `decodeURIComponent` before slugifying — browsers URL-encode accented chars in href
+- **Slugify charset**: Unicode `\p{L}\p{N}` not `\w` — preserves accented characters
 
-## Knowledge Base
-- **Source of truth**: `~/.agent-desktop/knowledges/` directory — sub-folders are "collections"
-- Per-conversation selection via `ai_knowledgeFolders` key in `ai_overrides` (JSON `KnowledgeSelection[]`); cascades like `ai_mcpDisabled`
-- System prompt injection: `getSystemPrompt()` reads collections, injects with `--- Knowledge [{access}]: {collection}/{file} ---` markers
-- **500KB cumulative size guard** — files beyond limit are skipped
-- `readwrite` collections: add write-access directive + paths passed as additional writable paths to CWD hooks
-- `isPathOutsideAllowed()` generalizes single-CWD check to multi-root (CWD + writable KB paths)
-- DB tables `knowledge_files`, `conversation_knowledge` left inert (no destructive migration)
+## Jupyter & Notebook Gotchas
+- **ipykernel required**: `jupyter_client` alone gives `NoSuchKernel python3` — ipykernel registers the kernel spec
+- **useEffect deps**: `[filePath]` only — including `kernelStatus` causes shutdown on every status change; use `useRef` instead
+- **Dirty tracking infinite loop**: needs `lastSerializedRef` + `lastContentRef` double guard — content prop changes after save must compare against own last write
 
-## File Attachments
-- Attach via paperclip, drag-and-drop, or Ctrl+V paste (images/files from clipboard)
-- **Copy-to-session**: files copied to `{cwd}/attachments/` with dedup naming; markdown links appended to message content
-- **File path API**: `webUtils.getPathForFile(file)` via preload — replaces unsafe `(file as any).path`
-- Paste: 5MB limit, saved to `os.tmpdir()/agent-paste/` with unique filename
-- **Web mode file uploads**: `src/renderer/utils/fileToAttachment.ts` — utility converting browser File → Attachment. Desktop uses `getPathForFile()`, web mode reads file into memory and uploads via `savePastedFile` IPC. Used by `FileUploadButton` and `FileDropZone`
+## AI, MCP & Streaming Gotchas
+- **Scheduler MCP**: removed from `aiSettings.mcpServers` during unattended execution — prevents recursive task creation
+- **MCP names**: must not contain `__` — conflicts with SDK tool naming `mcp__name__tool`
+- **CWD hooks**: return `'deny'` not `'ask'` — bypass mode auto-approves `'ask'` decisions
+- **Auto-title**: no `outputFormat: json_schema` — causes SDK internal tool_use cycle exhausting `maxTurns: 1`
+- **Stream isolation**: `streamBuffers` dict keyed by conversationId — a conversation is streaming iff its ID is a key (no separate flag)
 
-## Slash Commands
-- Type `/` in chat input to open autocomplete dropdown with fuzzy filtering
-- **`/clear`**: sets `cleared_at` timestamp on conversation — messages before it stay visible in UI but are excluded from AI prompt history via `buildMessageHistory()` filter. `ContextClearedDivider` renders at the boundary in `MessageList`
-- Backend: `src/main/services/commands.ts` scans directories in priority order (later overrides earlier):
-  1. **Builtin**: `compact`, `clear`, `help`
-  2. **User**: `~/.claude/commands/*.md` (frontmatter `description:`)
-  3. **Project**: `{cwd}/.claude/commands/*.md`
-  4. **Skills**: `~/.claude/skills/*/SKILL.md` and `{cwd}/.claude/skills/*/SKILL.md` (only when `ai_skills` ≠ `'off'`)
-- Uses `Map<string, SlashCommand>` for dedup — same-name commands replaced by higher-priority source
-- Frontmatter parsing: reads first 2KB, supports plain, quoted, and YAML folded block (`>`) descriptions
-- `SlashCommandDropdown` mirrors `FileMentionDropdown` pattern (position, fuzzy match, keyboard nav, click-outside)
-- **Gotcha**: `commands:list` IPC does NOT need `db` — registered like `themes`/`system` (no db param)
+## Quick Chat & TTS Gotchas
+- **Shortcut re-toggle**: voice sends stop-recording, text hides; only creates new window if hidden/destroyed
+- **Overlay stop-recording listener**: overlay must also listen (not just voice component) — voice unmounts its listener after transcription; without fallback overlay gets stuck
+- **TTS `speak()`**: call `stopInternal()` not `stop()` — `stop()` clears `currentMessageId` and sends spurious `speaking:false` before new playback starts
+- **Volume restore**: called from multiple paths — idempotent via `savedVolume === null` guard
 
-## Chat UI
-- **Layout gotcha**: `FileDropZone` wrapper must have `flex-1 flex flex-col overflow-hidden`; `MessageList` uses `overflow-y-auto` inner div
-- **ChatStatusLine**: below input — model dropdown (writes `ai_model` override), permission label, MCP toggle, KB dropdown
-- **Sidebar**: unified tree in `FolderTree.tsx`; DnD conversations onto folders; folder delete offers "Delete all" vs "Keep conversations"
-- **Code blocks**: auto-collapsed >10 lines, expanded <=10; `defaultCollapsed` prop overrides
-- **Markdown**: `react-markdown` + `remark-gfm` (NO `rehype-highlight`); `extractText()` required because children can be element arrays, not strings — without it, code blocks render `[object Object]`
-  - **Gotcha**: block vs inline code detection MUST happen in the `pre` handler, not `code` — code fences without a language (```` ``` ````) have no `className`, so the `code` handler can't distinguish them from inline code. The `pre` handler extracts language from the hast node (`node.children[0].properties.className`)
-- **General Settings**: `sendOnEnter`, `autoScroll`, `minimizeToTray`, `notificationSounds` — behavior in setting name
+## Wayland & D-Bus Gotchas
+- **`bus.name`**: null until D-Bus Hello handshake — must `await bus.once('connect')` first
+- **`getProxyObject()`**: fails on portal Request paths — Hyprland doesn't expose for introspection
+- **`preferred_trigger`**: do NOT include in `BindShortcuts` — Hyprland warns on unknown data types
+- **FIFO flags**: `O_RDWR` only, no `O_NONBLOCK` — `O_NONBLOCK` causes `EAGAIN`; `O_RDWR` prevents blocking and EOF
+- **FIFO double-fire**: Hyprland `echo > pipe` delivers two lines per keypress — debounce per shortcut-id (150ms)
+- **Re-registration**: keeps FIFO alive, only updates hyprctl binds — no teardown/rebuild needed
 
-## Quick Chat
-- Global overlay (Alt+Space / Alt+Shift+Space) for quick agent interactions from anywhere on the desktop
-- Frameless, transparent, always-on-top BrowserWindow; loads same renderer with `?mode=overlay&voice={bool}` query params
-- Dedicated conversation persisted via `quickChat_conversationId` in settings table; auto-created on first use
-- Overlay components in `src/renderer/components/overlay/` — `OverlayChat` (container), `OverlayInput`, `OverlayResponse`, `OverlayVoice`
-- Settings in `QuickChatSettings.tsx`: response notification toggle, response bubble toggle, purge history
-- **Gotcha**: shortcut re-toggle while visible → voice mode sends `overlay:stopRecording`, text mode hides; only creates new window if hidden/destroyed
-- **Gotcha**: `hideOverlay()` calls `destroy()` not `hide()` — `headlessActive` only resets on `closed` event; `hide()` created zombie windows that blocked subsequent shortcut activations
-- **Gotcha**: `OverlayChat` must also listen for `overlay:stopRecording` (when `voiceSent=true`) — after transcription, `OverlayVoice` unmounts and its listener is cleaned up; without the fallback listener the overlay gets stuck
-- **Gotcha**: `ready-to-show` never fires for transparent BrowserWindows on Linux/Wayland — must use `webContents.did-finish-load` instead
-- **Gotcha**: overlay must use `h-screen` not `h-full` — `html`/`body`/`#root` lack `height: 100%`, so `h-full` resolves to `auto` and breaks `overflow-y-auto` scrolling
+## Packaging & Updates Gotchas
+- **AppImage LD_LIBRARY_PATH**: strip `/tmp/.mount_*` paths — child processes load Electron's bundled `.so` otherwise
+- **`artifactName`**: required in `electron-builder.yml` linux — `productName` spaces cause filename mismatch between builder/updater/GitHub
+- **Publishing**: `--publish always` required — generates `latest-linux.yml`; manual AppImage uploads lack update metadata
+- **deb detection**: `!process.env.APPIMAGE` → redirect to GitHub releases (deb can't auto-update)
 
-## Text-to-Speech (TTS)
-- `src/main/services/tts.ts` — speaks AI responses aloud via configurable providers
-- **Providers**: `piper` (HTTP, needs `tts_piperUrl`), `edgetts` (CLI binary, needs `tts_edgettsBinary`), `spd-say` (system speech-dispatcher)
-- **Audio players**: mpv > ffplay > paplay > aplay (auto-detected, or explicit via `tts_playerPath` setting); spd-say plays directly
-- **Markdown stripping**: removes code blocks, links, headings, bold/italic, emojis before TTS
-- **Response TTS modes** (`tts_responseMode`): `off` | `full` | `summary` (Haiku summarizes) | `auto` (full if ≤ word limit, else summary)
-  - `tts_autoWordLimit` (default 200) — threshold for auto mode
-  - `tts_summaryPrompt` — template with `{response}` placeholder, sent to Haiku
-- **Per-stream ducking**: `duckOtherStreams()` lowers existing PulseAudio sink inputs so TTS plays over them; `restoreOtherStreams()` restores
-- `speakResponse()` called fire-and-forget after AI response in `streamAndSave()`; `stop()` called before new streams
-- **Per-message replay**: `speakMessage(text, db, conversationId, messageId)` reuses `speakResponse` with dynamic `import('./messages')` (circular dep avoidance); tracks `currentMessageId` for UI state
-  - `ttsStore.ts` (Zustand): `speakingMessageId` state + module-level `onStateChange` listener
-  - Play/Stop button on assistant messages in `MessageBubble.tsx` (visible on hover or while speaking)
-  - **Gotcha**: `speak()` must call `stopInternal()` (not `stop()`) to avoid clearing `currentMessageId` and sending spurious `speaking:false` before new playback starts
-- IPC: `tts:speak`, `tts:stop`, `tts:validate`, `tts:detectPlayers`, `tts:speakMessage`
-- Keyboard shortcut: `stop_tts` (`Ctrl+Shift+T`) — **global shortcut** (works outside app focus); registered at OS level like `quick_chat`/`quick_voice`/`show_app`
-- TTS settings cascadeable via `ai_overrides`: `tts_responseMode`, `tts_summaryPrompt`
+## Web Server & Mobile Gotchas
+- **Binary args**: Uint8Array serialized as `{ __type: 'binary', data }` (base64) in shim — decoded server-side
+- **TTS plays on PC**: not remote device — expected behavior, not a bug
+- **`useMobileMode`**: flag-based (`__AGENT_WEB_MODE__`), not viewport — intentional for all remote access
 
-## Audio Ducking
-- `src/main/utils/volume.ts` — two ducking strategies:
-  - **System volume ducking** (`duckVolume`/`restoreVolume`): used by Quick Voice recording; backend detection `wpctl` > `pactl` > `amixer`
-  - **Per-stream ducking** (`duckOtherStreams`/`restoreOtherStreams`): used by TTS; requires `pactl`; lowers individual sink inputs
-- **Subtractive model**: setting `voice_volumeDuck` = 30 means "reduce by 30 points" (80% → 50%), clamped at 0
-- **Double-duck guard**: `savedVolume !== null` (system) / `savedStreams !== null` (per-stream)
-- Duck on `showOverlay('voice')` (fire-and-forget), restore on overlay `closed` event
-- Silent on error (log + skip, never throw) — same pattern as `hyprctl()` in `waylandShortcuts.ts`
-- **Gotcha**: FIFO double-fire (Hyprland `echo > pipe` can deliver two lines per keypress) — debounced per shortcut-id (150ms) in `createShortcutPipe()`
-- **Gotcha**: `restoreVolume()` called both at `overlay:stopRecording` (toggle) AND `closed` event — idempotent via `savedVolume === null` guard
-- Setting: `voice_volumeDuck` in settings table; slider in Settings > Quick Chat > Voice Volume
-
-## Global Shortcuts (Wayland/X11)
-- Hybrid routing in `globalShortcuts.ts`: `getSessionType()` → X11 uses Electron `globalShortcut.register()`, Wayland uses XDG Desktop Portal
-- Session detection priority: `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` (both can be set under XWayland)
-- Wayland: `dbus-next` (pure JS) → `CreateSession` → `BindShortcuts` → `Activated` signal via raw `AddMatch` + bus message handler
-- **Gotcha**: `bus.name` is null until D-Bus Hello handshake completes — must `await bus.once('connect')` before accessing
-- **Gotcha**: `getProxyObject()` fails on portal Request paths — Hyprland doesn't expose `org.freedesktop.portal.Request` for introspection
-- **Gotcha**: do NOT include `preferred_trigger` in `BindShortcuts` — Hyprland portal ignores/warns on unknown data types
-- **Hyprland shortcut dispatch**: uses FIFO (named pipe) at `$XDG_RUNTIME_DIR/agent-desktop-shortcuts.pipe` + `hyprctl keyword bind MODS,key,exec,echo ID > pipe`. D-Bus `Activated` signals from the portal never work in Electron's event loop (`dbus-next` signal delivery is broken). Non-Hyprland compositors (GNOME/KDE) still use the portal D-Bus path.
-- **Gotcha**: FIFO must be opened with `O_RDWR` only (no `O_NONBLOCK`) — `O_NONBLOCK` causes `EAGAIN` errors with `createReadStream`; `O_RDWR` alone prevents blocking on `open()` and prevents EOF when writers disconnect
-- **Gotcha**: always `unbind` before `bind` in hyprctl — `keyword bind` accumulates at runtime; app restarts without compositor restarts leave stale bindings
-- **Gotcha**: re-registration keeps FIFO alive and only updates hyprctl binds — `rebindWaylandShortcuts()` avoids teardown/rebuild
-- Keybindings read from `keyboard_shortcuts` table (actions `quick_chat`, `quick_voice`, `show_app`, `stop_tts`); re-registered via `quickChat:reregisterShortcuts` IPC
-- Supported compositors: KDE Plasma 5.27+, Hyprland, GNOME 47+; fallback: log warning, tray menu still works
-
-## Keyboard Shortcuts & Deep Links
-- Dynamic shortcuts stored in `keyboard_shortcuts` table; parsed via `shortcutMatcher.ts`
-- **Modifier handling**: `Ctrl` and `Super` (metaKey) are independent modifiers — NOT conflated via `CommandOrControl`
-  - `parseAccelerator()`: `CommandOrControl`/`Ctrl`/`Control` → `ctrl`; `Super`/`Meta`/`Command`/`Cmd` → `meta`; `Option` → `alt`
-  - `matchesEvent()`: checks `ctrlKey` and `metaKey` separately (no `||`)
-  - `keyEventToAccelerator()`: records `Ctrl` and `Super` as separate parts
-  - `formatKeybinding()`: converts legacy `CommandOrControl` → `Ctrl` for display
-  - **Backward compat**: existing DB entries with `CommandOrControl` still parse correctly (maps to `ctrl`)
-- Global shortcuts (`quick_chat`, `quick_voice`, `show_app`, `stop_tts`) in same table; `ShortcutSettings.tsx` splits App vs Global sections with Wayland banner
-- Deep link: `agent://conversation/{id}`; tray "New Conversation" sends `tray:newConversation` IPC
-
-## Auto-Title Generation
-- Uses Haiku via Agent SDK with `tools: []` and `maxTurns: 1` (fire-and-forget after first response)
-- Works even on `error_max_turns` — assistant messages yielded before error
-- **Gotcha**: `outputFormat: json_schema` was removed — causes SDK internal tool_use cycle that exhausts `maxTurns: 1`
-
-## Voice Input (Whisper CPP)
-- Local speech-to-text: user installs whisper.cpp binary, Agent spawns it (30s timeout)
-- WAV encoder: MediaRecorder webm → AudioContext → 16kHz mono PCM WAV (`wavEncoder.ts`)
-- Advanced params: sparse JSON persistence (only non-default values stored); `buildAdvancedArgs()` emits CLI flags
-- **Auto-send**: `whisper_autoSend` setting — transcribed text sent immediately; `externalText` set to `undefined` to prevent double injection
-- `MessageInput` accepts `externalText` prop for text injection with smart separator
-- IPC timeout: 45s (> 30s backend timeout); keyboard shortcut: `Ctrl+Shift+V`
-- `seedShortcuts` uses `INSERT OR IGNORE` (existing users get new shortcuts without reset)
-
-## Security
-- **SVG sanitization**: DOMPurify — `USE_PROFILES: { svg: true }`, forbids `script`, `foreignObject`, `use`
-- **HTML sandbox**: `sandbox=""` (maximum restriction); JS permission banner with trust levels (once/folder/all)
-- **URL whitelist**: `system:openExternal` only allows `http:`/`https:` protocols
-- **Path traversal**: `validatePathSafe()` blocks `/proc`, `/sys`, `/dev`, `/boot`, `/sbin`, `/etc`
-- **MCP command injection**: `DANGEROUS_CHARS` regex validates command field against shell metacharacters
-- **IPC validation**: `validateString`, `validatePositiveInt`, `validatePathSafe` on all handler entry points; note: `event.sender` is not used in any handler (WebSocket invokes pass `null` event) so safe for web server dispatch
-- **CWD restriction hooks** (`cwdHooks.ts`): PreToolUse hook denies writes outside CWD
-  - **Gotcha**: must use `'deny'` not `'ask'` — bypass mode auto-approves `'ask'` decisions
-  - Tilde expansion: `~/path` → `$HOME/path` before path resolution
-  - Bash: best-effort regex extraction of write targets (redirections, tee, cp, mv, mkdir, touch, ln, rsync)
-  - Setting: `hooks_cwdRestriction` (default `'true'`), cascades via overrides
-- **Async I/O**: all `readFileSync`/`statSync` on main thread converted to `fs.promises.*`
-- **Per-conversation abort**: `Map<number, AbortController>` replaces single global scalar
-- **DB indexes**: `idx_messages_created_at`, `idx_folders_parent`; CWD cache FIFO limit: 1000
-
-## AppImage & Auth
-- `enrichEnvironment()` in `src/main/utils/env.ts` — called at startup (before `app.whenReady()`)
-- **AppImage gotcha**: `sanitizeAppImageEnv()` removes `/tmp/.mount_*` paths from `LD_LIBRARY_PATH` so child processes don't load Electron's bundled `.so` files
-- Auth pre-checks `~/.claude/.credentials.json` existence before SDK call (fast fail); diagnostics panel on failure
-- **Root cause** of asar issue: SDK resolves `cli.js` via `import.meta.url` → lands inside `app.asar` → system `node` can't read asar. Fix: `asar: false`
-
-## Auto-Update (electron-updater)
-- Uses `electron-updater` with GitHub Releases as update source; `publish` config in `electron-builder.yml`
-- `initAutoUpdater(getWindow, onUpdateReady)` — wires events, first check after 10s, then every 4h
-- `autoDownload = false` (user must opt-in via UI), `autoInstallOnAppQuit = true`
-- IPC: `updates:check`, `updates:download`, `updates:install`, `updates:getStatus` — no db needed (registered like themes/commands)
-- Real-time status via `updates:status` event to renderer (`UpdateStatus` discriminated union: idle/checking/available/downloading/downloaded/error)
-- **deb detection**: `process.platform === 'linux' && !process.env.APPIMAGE` → `shell.openExternal` to GitHub releases (deb doesn't support delta updates)
-- **Guard**: `app.isPackaged` check — updater not initialized in dev mode
-- Native `Notification` on update-available and update-downloaded
-- Tray wired via `setTrayUpdateCallbacks(checkForUpdates, installUpdate)` from `index.ts` to avoid circular imports
-- `autoUpdater.logger = null` — suppresses verbose console logging (stack traces on check failure)
-- **Gotcha**: 404 for `latest-linux.yml` is expected when no release metadata exists; error handler logs `[updater]` prefix and treats it as `not-available`
-- **Gotcha (artifact naming)**: `artifactName: "${name}-${version}-${arch}.${ext}"` on `linux:` in `electron-builder.yml` — without it, `productName` (with space) causes filename mismatch between builder, updater, and GitHub uploads (space → hyphen vs dot)
-- **Publishing**: releases must use `electron-builder --publish always` (`npm run publish:linux`) to auto-generate and upload `latest-linux.yml`; manual AppImage uploads won't include update metadata
-- AboutSection subscribes to `onStatus()` for real-time UI (progress bar, state-specific buttons)
-
-## Tray
-- `createTray(getWindow, ensureWindow)` — stores closures at module scope for dynamic menu rebuilds
-- `setTrayUpdateCallbacks(onCheck, onInstall)` — wires update actions; `rebuildTrayMenu(updateReady)` swaps "Check for Updates" ↔ "Restart to Update"
-- **Gotcha**: `isAlive(win)` guard needed — fixes null mainWindow race condition at startup
-- **Platform icons**: macOS uses template image (auto dark/light); Linux/Windows use explicit `trayDark.png`/`trayLight.png` based on `nativeTheme.shouldUseDarkColors`
-- Theme listener: `nativeTheme.on('updated')` swaps icon on Linux/Windows (macOS excluded — template image handles it)
-- Quit calls `app.quit()` after destroying window
-
-## Database Purge
-- **Purge Conversations**: deletes conversations + folders; preserves settings, auth, MCP, themes, shortcuts
-- **Reset All**: deletes everything except `settings` and `auth` tables
-- Both use `db.transaction()` for atomicity
-
-## Shared Infrastructure
-- `src/shared/constants.ts` — models, permissions, setting defs, exclude patterns (single source of truth)
-- `src/main/utils/` — `paths.ts` (expandTilde), `mime.ts` (consolidated MIME), `validate.ts`, `json.ts` (safeJsonParse), `errors.ts` (sanitizeError)
-- ARIA labels/roles across 40+ components
-
-## Testing
-- `npm test` — Vitest: `vitest.config.main.ts` (node) + `vitest.config.renderer.ts` (jsdom)
-- `@testing-library/react` pinned to v15 (v16 requires React 19)
-- Tests colocated: `*.test.ts` next to source
-- **Database**: sql.js (WASM SQLite) — no native modules, no ABI swap needed
-- **Gotcha**: `initDatabase()` is async at startup (`await` in `app.whenReady()`) — flush debounce 500ms, flush synchrone on `before-quit`
-- **Gotcha**: `createTestDb()` in `db-helper.ts` is async — all `beforeEach` blocks must be `async` and `await createTestDb()`
-
-## Web Server (Remote Access)
-- `src/main/services/webServer.ts` — HTTP + WebSocket server for LAN access from phone/tablet
-- **Architecture**: Node.js `http.createServer` + `ws` WebSocket; serves `out/renderer/` with injected JS shim that replaces `window.agent` (preload) with WebSocket-based calls
-- **Protocol**: WS messages `auth` → `auth_result`, `invoke` → `result`, server pushes `event` for broadcasts
-- **Auth**: `crypto.randomBytes(32)` token; QR code in Settings > Web Server contains `http://<lan-ip>:<port>?token=<token>`
-- **Broadcast bridge**: `src/main/utils/broadcast.ts` — decoupled `broadcast(channel, ...args)` called after every `webContents.send()`; `setBroadcastHandler()` wired by webServer
-- **IPC dispatch**: `ipcDispatch` Map in `ipc.ts` — mirrors every `ipcMain.handle()` call; WebSocket invoke routes through it with `null` event (no handler uses `event.sender`)
-- **Shim**: inline JS string (~250 lines) generated by server; replaces `window.agent` with WS-backed methods; `window.__AGENT_WEB_MODE__ = true` flag; auto-reconnect (2s delay)
-- **Gotcha**: Uint8Array args (whisper, paste) → base64 `{ __type: 'binary', data }` convention in shim + server decode
-- **Gotcha**: `system.openExternal` → `window.open()`, `selectFolder`/`selectFile` → `null`, `window.*` → no-op in shim
-- **Gotcha**: TTS plays on PC, not remote device — expected behavior
-- **Dev mode**: proxies HTTP to `ELECTRON_RENDERER_URL` with shim injection
-- Settings: `server_enabled`, `server_port` (default 3484), `server_autoStart`; toggle in Settings > Web Server
-- IPC: `server:start`, `server:stop`, `server:getStatus`; preload `window.agent.server.*`
-- **Firewall detection**: `getServerStatus()` returns `firewallWarning` string — async `detectFirewallBlock()` checks nftables, iptables, ufw for DROP policies missing the port; 60s cache (`firewallCache`) avoids repeated subprocess calls; displayed in settings UI
-- **Shutdown order**: `stopServer()` is async — closes all WS clients, then awaits `wss.close()`, then awaits `httpServer.close()` (chained, not parallel)
-- **maxPayload**: `WebSocketServer` configured with `maxPayload: 10MB` to prevent oversized messages
-- **Shim namespaces & security**: `server` namespace stubbed as no-ops in shim (web clients cannot start/stop the server); server-side blocklist in `handleWsMessage()` blocks `server:*` channels and `openscad:exportStl` from WebSocket invocation (defense-in-depth)
-- **LAN IP**: skips virtual interfaces (docker, tailscale, veth, etc.); falls back to any non-internal IPv4
-- Dependencies: `ws` (WebSocket server), `qrcode` (QR code SVG in renderer)
-
-## Mobile Ergonomics (Web Server)
-- `useMobileMode()` hook (`src/renderer/hooks/useMobileMode.ts`): returns `true` when `window.__AGENT_WEB_MODE__` is set (injected by web server shim); used across 30+ renderer components
-- **Pattern**: `const mobile = useMobileMode()` → conditional Tailwind classes; no media queries — mode is binary (Electron vs web)
-- **Tailwind variant migration**: `mobile:` variant replaced with `compact:` custom variant (via `tailwind.config.ts`); both scale content proportionally on small viewports and force two-row input layout on narrow screens — prefer `compact:` for new code
-- **Touch targets**: 44px minimum (`w-11 h-11` or `py-3` + text) on all interactive elements in mobile mode
-- **Input font**: `text-base` (16px) on `<textarea>`/`<input>` to prevent iOS auto-zoom on focus
-- **Viewport height**: `100dvh` instead of `100vh` — accounts for mobile browser URL bar (App root, modals, settings)
-- **Click-outside**: `useClickOutside` hook and all manual click-outside listeners register both `mousedown` AND `touchstart`
-- **ChatView input**: two-row layout on mobile — toolbar row (file upload, @mention, voice) + full-width input row with send button
-- **ChatStatusLine**: compact single-line on mobile (`text-[10px]`, `overflow-x-auto`); dropdown menus capped to `max-w-[calc(100vw-2rem)]`
-- **Header**: `pl-14` to clear hamburger overlay in mobile mode; title uses `truncate` (not `flex-shrink-0`) to prevent horizontal overflow
-- **Sidebar overlay**: width `min(280px, calc(100vw - 60px))` — leaves tap target to close; absolute positioned over content
-- **Safe areas**: `mobile-safe-bottom`/`mobile-safe-top` CSS classes use `env(safe-area-inset-*)` for notched devices; applied to input area and top bar
-- **Modals/popovers**: `max-w-[calc(100vw-1rem)]` on mobile to prevent offscreen overflow (TaskFormModal, FolderSettingsPopover, AIOverridesPopover)
-- **Gotcha**: `useMobileMode` checks only `__AGENT_WEB_MODE__`, not screen size — desktop browser via web server gets mobile layout (intentional: touch-friendly for all remote access)
-- **Session persistence**: `conversationsStore.ts` — in web mode, `activeConversationId` persisted to sessionStorage; restored on page load to prevent context loss on browser kill/reload (Android)
-- **File picker recovery**: `FileUploadButton.tsx` — saves `agent_pendingUpload` flag to sessionStorage before opening picker; on page reload, auto-reopens picker after 500ms to complete interrupted upload
-
-## Mobile Swipe Gestures
-- `src/renderer/hooks/useEdgeSwipe.ts` — two hooks for touch navigation on mobile (web server mode)
-- **`useEdgeSwipe(onLeft, onRight, opts?)`**: detects swipes starting from screen edges (24px zone); used in `MainLayout` to open sidebar (swipe from left) and file explorer (swipe from right)
-- **`useSwipeDismiss(direction, onSwipe, opts?)`**: detects swipe anywhere on screen to dismiss overlays; swipe left closes sidebar, swipe right closes file explorer panel
-- Both hooks use `touchstart`/`touchend` (passive), threshold + maxVerticalDrift guards; callbacks stored in refs (no re-registration on prop changes)
-- **File explorer on mobile**: overlay panel (`fixed top-0 right-0 z-40`, `min(100vw, 360px)` width) replaces the resizable side panel used on desktop; `ChatView` header shows a folder icon button to toggle it via `useUiStore.togglePanel`
-
-## IPC Timeout
-- All `ipcRenderer.invoke()` wrapped with `withTimeout()` (default 30s); `ms <= 0` disables timeout
-- Streaming calls (`messages:send`, `messages:regenerate`, `messages:edit`) use `_streamingTimeoutMs` (default 300s)
-- **Configurable**: `streamingTimeoutSeconds` setting (Settings > General); 0 = no timeout; synced to preload via `setStreamingTimeout()`
+## Security Rules
+- **CWD hooks**: `'deny'` not `'ask'` — bypass auto-approves `'ask'`
+- **SVG sanitization**: forbid `script`, `foreignObject`, `use` — BUT Mermaid needs `foreignObject`/`use` (separate config)
+- **`openExternal`**: only `http:`/`https:` protocols allowed
+- **Main-thread I/O**: `fs.promises.*` only — no `readFileSync`/`statSync`
