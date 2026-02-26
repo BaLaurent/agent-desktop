@@ -665,6 +665,57 @@ describe('tts service', () => {
       expect(mockGetSetting).toHaveBeenCalledWith(db, 'tts_provider')
     })
 
+    it('summary: uses custom ttsSummaryModel when provided', async () => {
+      settingsMap({ tts_provider: 'off' })
+
+      const mockQuery = vi.fn()
+      const summaryMessages = (async function* () {
+        yield { type: 'result', subtype: 'success', result: 'Model summary' }
+      })()
+      mockQuery.mockReturnValue(summaryMessages)
+      mockLoadSDK.mockResolvedValue({ query: mockQuery } as any)
+      mockInjectApiKey.mockReturnValue(vi.fn())
+
+      await speakResponse('content here', db, 1, {
+        ttsResponseMode: 'summary',
+        ttsSummaryModel: 'claude-sonnet-4-6-20250514',
+      })
+
+      // Verify the SDK was called with the custom model
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            model: 'claude-sonnet-4-6-20250514',
+          }),
+        })
+      )
+    })
+
+    it('summary: falls back to HAIKU_MODEL when ttsSummaryModel not provided', async () => {
+      settingsMap({ tts_provider: 'off' })
+
+      const mockQuery = vi.fn()
+      const summaryMessages = (async function* () {
+        yield { type: 'result', subtype: 'success', result: 'Default model summary' }
+      })()
+      mockQuery.mockReturnValue(summaryMessages)
+      mockLoadSDK.mockResolvedValue({ query: mockQuery } as any)
+      mockInjectApiKey.mockReturnValue(vi.fn())
+
+      await speakResponse('content here', db, 1, {
+        ttsResponseMode: 'summary',
+      })
+
+      // Verify the SDK was called with HAIKU_MODEL (default)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            model: 'claude-haiku-4-5-20251001',
+          }),
+        })
+      )
+    })
+
     it('summary: uses custom ttsSummaryPrompt', async () => {
       settingsMap({ tts_provider: 'off' })
 

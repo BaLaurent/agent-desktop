@@ -378,6 +378,17 @@ describe('Messages Service', () => {
     expect(settings.skills).toBe('local')
   })
 
+  it('getAISettings returns ttsSummaryModel from settings', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('tts_summaryModel', 'claude-sonnet-4-6-20250514')").run()
+    const settings = getAISettings(db, convId)
+    expect(settings.ttsSummaryModel).toBe('claude-sonnet-4-6-20250514')
+  })
+
+  it('getAISettings returns undefined ttsSummaryModel when not set', () => {
+    const settings = getAISettings(db, convId)
+    expect(settings.ttsSummaryModel).toBeUndefined()
+  })
+
   it('saveMessage inserts and returns message with id', () => {
     const msg = saveMessage(db, convId, 'user', 'Hello world')
     expect(msg.id).toBeGreaterThan(0)

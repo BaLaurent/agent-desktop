@@ -30,6 +30,7 @@
 - **Tinting**: `color-mix(in srgb, ...)` — Tailwind opacity modifiers don't work with raw CSS var values
 - **Settings cascade**: Conversation > Folder > Global; `null`/`{}` = inherited
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
+- **NOT cascaded** (global only): `tts_summaryModel` — model selection for TTS summary generation; UI provides Haiku/Sonnet/Opus presets + Custom free text; backend defaults to Haiku if unset
 - **Folder color**: nullable TEXT `#rrggbb` validated server-side; `null` = no tint; applied via `color-mix` like theme tinting
 - **Default folder**: `is_default = 1` on `folders`; auto-created at startup as "Unsorted" with `position = -1`; non-deletable, renamable; all new/imported conversations assigned to it; no `folder_id = NULL` in system
 - **Heatmap**: `heatmap_enabled`, `heatmap_mode` (`'relative'`|`'fixed'`), `heatmap_min`, `heatmap_max` stored as strings; color via `hsvToHex(120 * (1-t), 70, 80)` applied same way; manual color takes precedence
@@ -89,6 +90,7 @@
 - **Overlay stop-recording listener**: overlay must also listen (not just voice component) — voice unmounts its listener after transcription; without fallback overlay gets stuck
 - **TTS `speak()`**: call `stopInternal()` not `stop()` — `stop()` clears `currentMessageId` and sends spurious `speaking:false` before new playback starts
 - **Volume restore**: called from multiple paths — idempotent via `savedVolume === null` guard
+- **TTS summary model**: `tts_summaryModel` is global-only (TTSSettings.tsx); backend uses `aiSettings.ttsSummaryModel || HAIKU_MODEL` fallback if unset
 
 ## Wayland & D-Bus Gotchas
 - **`bus.name`**: null until D-Bus Hello handshake — must `await bus.once('connect')` first

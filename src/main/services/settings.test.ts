@@ -78,6 +78,12 @@ describe('Settings Service', () => {
     expect(settings.heatmap_max).toBe('100')
   })
 
+  it('accepts tts_summaryModel setting key', async () => {
+    await ipc.invoke('settings:set', 'tts_summaryModel', 'claude-sonnet-4-6-20250514')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.tts_summaryModel).toBe('claude-sonnet-4-6-20250514')
+  })
+
   it('get after set reflects new value', async () => {
     const before = await ipc.invoke('settings:get') as Record<string, string>
     expect(before.ai_maxTurns).toBe('50')
