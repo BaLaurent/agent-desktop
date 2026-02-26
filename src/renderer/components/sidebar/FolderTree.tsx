@@ -71,14 +71,11 @@ export function SidebarTree() {
   const [menuFolderId, setMenuFolderId] = useState<number | null>(null)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null)
-  const [dragOverUnfiled, setDragOverUnfiled] = useState(false)
   const [overrideFolderId, setOverrideFolderId] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
-  const [unfiledMenuPos, setUnfiledMenuPos] = useState<{ x: number; y: number } | null>(null)
-  const [colorPickerTarget, setColorPickerTarget] = useState<number | 'unfiled' | null>(null)
+  const [colorPickerTarget, setColorPickerTarget] = useState<number | null>(null)
   const [colorPickerLive, setColorPickerLive] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const unfiledMenuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pickerHsv, setPickerHsv] = useState({ h: 210, s: 100, v: 100 })
@@ -171,7 +168,6 @@ export function SidebarTree() {
   }, [])
 
   const globalSettings = useSettingsStore((s) => s.settings)
-  const setSetting = useSettingsStore((s) => s.setSetting)
   const mcpServers = useMcpStore((s) => s.servers)
   const loadMcpServers = useMcpStore((s) => s.loadServers)
 
@@ -205,21 +201,6 @@ export function SidebarTree() {
     }
   }, [menuFolderId])
 
-  useEffect(() => {
-    if (!unfiledMenuPos) return
-    const handleClick = (e: MouseEvent) => {
-      if (unfiledMenuRef.current && !unfiledMenuRef.current.contains(e.target as Node)) {
-        setUnfiledMenuPos(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('touchstart', handleClick as EventListener)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('touchstart', handleClick as EventListener)
-    }
-  }, [unfiledMenuPos])
-
   // Sync custom color picker live preview
   useEffect(() => {
     if (colorPickerTarget === null) return
@@ -238,18 +219,14 @@ export function SidebarTree() {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         const { h, s, v } = hsvRef.current
         const color = hsvToHex(h, s, v)
-        if (colorPickerTarget === 'unfiled') {
-          setSetting('sidebar_unfiledColor', color)
-        } else {
-          updateFolder(colorPickerTarget as number, { color })
-        }
+        updateFolder(colorPickerTarget, { color })
         setColorPickerTarget(null)
         setColorPickerLive(null)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [colorPickerTarget, setSetting, updateFolder])
+  }, [colorPickerTarget, updateFolder])
 
   // Compute flat visible order of conversation IDs for shift+click range selection
   const visibleOrder = useMemo(() => {
@@ -267,13 +244,8 @@ export function SidebarTree() {
         collectFolder(folder.id)
       }
     }
-    const unfiled = conversations.filter((c) => !c.folder_id)
-    const unfiledExpanded = isSearchMode || (globalSettings.sidebar_unfiledExpanded ?? 'true') === 'true'
-    if (unfiledExpanded) {
-      for (const c of unfiled) order.push(c.id)
-    }
     return order
-  }, [conversations, folders, expandedIds, searchQuery, globalSettings.sidebar_unfiledExpanded])
+  }, [conversations, folders, expandedIds, searchQuery])
 
   // Escape clears selection
   useEffect(() => {
@@ -390,7 +362,6 @@ export function SidebarTree() {
   const handleDrop = (e: React.DragEvent, folderId: number | null) => {
     e.preventDefault()
     setDragOverFolderId(null)
-    setDragOverUnfiled(false)
     const raw = e.dataTransfer.getData('text/plain')
 
     // Try parsing as JSON array (multi-select drag)
@@ -431,17 +402,6 @@ export function SidebarTree() {
   const handleFolderDragLeave = (e: React.DragEvent) => {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDragOverFolderId(null)
-    }
-  }
-
-  const handleUnfiledDragEnter = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOverUnfiled(true)
-  }
-
-  const handleUnfiledDragLeave = (e: React.DragEvent) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragOverUnfiled(false)
     }
   }
 
@@ -587,147 +547,10 @@ export function SidebarTree() {
   }
 
   const rootFolders = buildTree(null)
-  const unfiled = conversations.filter((c) => !c.folder_id)
-  const hasFolders = rootFolders.length > 0
 
   return (
     <div className="flex-1 overflow-y-auto pb-2" role="tree" aria-label="Conversations tree">
       {rootFolders.map((folder) => renderFolder(folder, 0))}
-
-      {unfiled.length > 0 && (() => {
-        const unfiledExpanded = isSearching || (globalSettings.sidebar_unfiledExpanded ?? 'true') === 'true'
-        const unfiledColorStored = globalSettings.sidebar_unfiledColor || null
-        const unfiledColor = (colorPickerTarget === 'unfiled' && colorPickerLive) ? colorPickerLive : unfiledColorStored
-        return (
-          <>
-            <div
-              className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${dragOverUnfiled ? ' sidebar-drop-active' : ''}${!dragOverUnfiled && !unfiledColor ? ' hover:bg-[var(--color-bg)]' : ''}`}
-              style={{
-                color: 'var(--color-text)',
-                ...(unfiledColor ? {
-                  borderLeft: `3px solid ${unfiledColor}`,
-                  backgroundColor: `color-mix(in srgb, ${unfiledColor} 15%, transparent)`,
-                } : {}),
-              }}
-              onClick={() => setSetting('sidebar_unfiledExpanded', unfiledExpanded ? 'false' : 'true')}
-              onContextMenu={!isMobile ? (e) => {
-                e.preventDefault()
-                setUnfiledMenuPos({ x: e.clientX, y: e.clientY })
-              } : undefined}
-              {...(!isMobile ? {
-                onDrop: (e: React.DragEvent) => handleDrop(e, null),
-                onDragOver: handleDragOver,
-                onDragEnter: handleUnfiledDragEnter,
-                onDragLeave: handleUnfiledDragLeave,
-              } : {})}
-              role="treeitem"
-              aria-expanded={unfiledExpanded}
-              aria-label="Unfiled conversations"
-            >
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                {unfiledExpanded ? '\u25BE' : '\u25B8'}
-              </span>
-              <span className="flex-1 truncate">Unfiled</span>
-              <span
-                className="text-xs px-1.5 rounded-full"
-                style={{
-                  backgroundColor: 'var(--color-bg)',
-                  color: 'var(--color-text-muted)',
-                }}
-              >
-                {unfiled.length}
-              </span>
-            </div>
-            {unfiledExpanded && unfiled.map((conv) => (
-              <ConversationItem
-                key={conv.id}
-                conversation={conv}
-                isActive={conv.id === activeConversationId}
-                isSelected={selectedIds.has(conv.id)}
-                visibleOrder={visibleOrder}
-                folderColor={unfiledColor}
-              />
-            ))}
-          </>
-        )
-      })()}
-
-      {unfiledMenuPos && (
-        <div
-          ref={unfiledMenuRef}
-          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"
-          style={{
-            left: unfiledMenuPos.x,
-            top: unfiledMenuPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <div
-            className="cursor-grab active:cursor-grabbing px-3 py-1 select-none"
-            onMouseDown={(e) => handleMenuDragStart(e, unfiledMenuPos!, setUnfiledMenuPos)}
-          >
-            <div className="w-8 h-0.5 mx-auto rounded-full" style={{ backgroundColor: 'var(--color-text-muted)', opacity: 0.4 }} />
-          </div>
-          <div className="px-3 py-1.5">
-            <div className="text-xs mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Color</div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {FOLDER_COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => {
-                    setSetting('sidebar_unfiledColor', c)
-                    setUnfiledMenuPos(null)
-                  }}
-                  className="w-5 h-5 rounded-full flex-shrink-0 transition-transform hover:scale-110"
-                  style={{
-                    backgroundColor: c,
-                    outline: globalSettings.sidebar_unfiledColor === c ? '2px solid var(--color-text)' : 'none',
-                    outlineOffset: '1px',
-                  }}
-                  aria-label={`Set unfiled color to ${c}`}
-                />
-              ))}
-              <button
-                onClick={() => {
-                  const currentColor = globalSettings.sidebar_unfiledColor || '#3b82f6'
-                  setPickerHsv(hexToHsv(currentColor))
-                  setColorPickerPos({ x: unfiledMenuPos!.x, y: unfiledMenuPos!.y })
-                  setColorPickerTarget('unfiled')
-                  setUnfiledMenuPos(null)
-                }}
-                className="w-5 h-5 rounded-full flex-shrink-0 transition-transform hover:scale-110 flex items-center justify-center text-xs"
-                style={{
-                  border: '1px dashed var(--color-text-muted)',
-                  color: 'var(--color-text-muted)',
-                }}
-                title="Custom color"
-                aria-label="Pick custom unfiled color"
-              >
-                +
-              </button>
-              {globalSettings.sidebar_unfiledColor && (
-                <button
-                  onClick={() => {
-                    setSetting('sidebar_unfiledColor', '')
-                    setUnfiledMenuPos(null)
-                  }}
-                  className="w-5 h-5 rounded-full flex-shrink-0 transition-transform hover:scale-125 flex items-center justify-center text-xs font-bold"
-                  style={{
-                    color: 'var(--color-text)',
-                    border: '1px solid var(--color-text-muted)',
-                  }}
-                  title="Remove color"
-                  aria-label="Remove unfiled color"
-                >
-                  &times;
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {overrideFolderId !== null && (() => {
         const targetFolder = folders.find((f) => f.id === overrideFolderId)
@@ -856,13 +679,15 @@ export function SidebarTree() {
             </div>
           </div>
           <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
-          <button
-            onClick={() => handleDelete(menuFolderId!)}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
-          >
-            Delete folder
-          </button>
+          {folders.find(f => f.id === menuFolderId)?.is_default !== 1 && (
+            <button
+              onClick={() => handleDelete(menuFolderId!)}
+              className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
+            >
+              Delete folder
+            </button>
+          )}
         </div>
       )}
 
