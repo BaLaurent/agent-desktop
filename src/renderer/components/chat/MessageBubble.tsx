@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCallsSection } from './ToolCallsSection'
 import { TaskFormModal } from '../scheduler/TaskFormModal'
@@ -70,6 +70,28 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
     await window.agent.scheduler.create(data)
   }, [])
 
+  const [showContextMenu, setShowContextMenu] = useState(false)
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (isEditing) return
+    e.preventDefault()
+    setContextMenuPos({ x: e.clientX, y: e.clientY })
+    setShowContextMenu(true)
+  }, [isEditing])
+
+  useEffect(() => {
+    if (!showContextMenu) return
+    const handleClick = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setShowContextMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showContextMenu])
+
   return (
     <div
       className={`flex min-w-0 ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}
@@ -87,6 +109,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
           backgroundColor: isUser ? 'var(--color-deep)' : 'var(--color-surface)',
           color: 'var(--color-text)',
         }}
+        onContextMenu={handleContextMenu}
       >
         {/* Role label */}
         <div
@@ -216,6 +239,74 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
           onSave={handleScheduleSave}
           onClose={() => setShowTaskForm(false)}
         />
+      )}
+
+      {showContextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[140px]"
+          style={{
+            left: contextMenuPos.x,
+            top: contextMenuPos.y,
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          role="menu"
+          aria-label="Message actions"
+        >
+          <button
+            onClick={() => { setShowContextMenu(false); handleCopy() }}
+            className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
+            style={{ backgroundColor: 'transparent' }}
+            role="menuitem"
+          >
+            Copy
+          </button>
+          {showTtsButton && (
+            <button
+              onClick={() => {
+                setShowContextMenu(false)
+                isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent' }}
+              role="menuitem"
+            >
+              {isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
+            </button>
+          )}
+          {isUser && onEdit && (
+            <button
+              onClick={() => { setShowContextMenu(false); handleStartEdit() }}
+              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent' }}
+              role="menuitem"
+            >
+              Edit
+            </button>
+          )}
+          {isUser && (
+            <button
+              onClick={() => { setShowContextMenu(false); setShowTaskForm(true) }}
+              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent' }}
+              role="menuitem"
+            >
+              Schedule
+            </button>
+          )}
+          {!isUser && isLast && onRegenerate && (
+            <button
+              onClick={() => { setShowContextMenu(false); onRegenerate() }}
+              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent' }}
+              role="menuitem"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
