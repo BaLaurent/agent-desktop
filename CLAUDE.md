@@ -30,6 +30,9 @@
 - **Tinting**: `color-mix(in srgb, ...)` — Tailwind opacity modifiers don't work with raw CSS var values
 - **Settings cascade**: Conversation > Folder > Global; `null`/`{}` = inherited
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
+- **Folder color**: nullable TEXT `#rrggbb` validated server-side; `null` = no tint; applied via `color-mix` like theme tinting
+- **Bulk IPC ops**: `deleteMany`/`moveMany` wrap per-row statements in `db.transaction()` — no `WHERE id IN (...)` (sql.js parameter binding limitation)
+- **Multi-select `visibleOrder`**: store receives flat ID array from component — store cannot compute it (doesn't know folder expansion state)
 - **`/compact`**: uses Haiku to summarize conversation; summary stored in `compact_summary` column on conversations table
 - **`/clear`**: just sets `cleared_at` with no AI call
 - **`allowedTools` wildcards** (`mcp__<name>__*`) REQUIRED — MCP tools unusable without them, even with bypass
@@ -60,6 +63,8 @@
 - **SVG vs Mermaid sanitization**: SVGs FORBID `foreignObject`/`use`; Mermaid REQUIRES them — different DOMPurify configs
 - **Anchor links**: `decodeURIComponent` before slugifying — browsers URL-encode accented chars in href
 - **Slugify charset**: Unicode `\p{L}\p{N}` not `\w` — preserves accented characters
+- **HSV color picker**: custom canvas-style (not `input[type=color]`) — native picker is OS-dependent and unstyled; HSV math is inline in FolderTree
+- **Draggable floating panels**: `mousedown`→document `mousemove`/`mouseup` (not HTML drag API) — drag API fires `dragend` on leave, breaking repositioning
 
 ## Jupyter & Notebook Gotchas
 - **ipykernel required**: `jupyter_client` alone gives `NoSuchKernel python3` — ipykernel registers the kernel spec

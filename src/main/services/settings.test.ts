@@ -53,6 +53,12 @@ describe('Settings Service', () => {
     expect(settings.voice_volumeDuck).toBe('30')
   })
 
+  it('accepts sidebar_unfiledColor setting key', async () => {
+    await ipc.invoke('settings:set', 'sidebar_unfiledColor', '#ff5500')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.sidebar_unfiledColor).toBe('#ff5500')
+  })
+
   it('get after set reflects new value', async () => {
     const before = await ipc.invoke('settings:get') as Record<string, string>
     expect(before.ai_maxTurns).toBe('50')

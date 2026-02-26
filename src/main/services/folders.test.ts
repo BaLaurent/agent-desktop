@@ -114,6 +114,53 @@ describe('Folders Service', () => {
     expect(updated.default_cwd).toBeNull()
   })
 
+  describe('update color', () => {
+    it('sets a valid hex color', async () => {
+      const folder = await ipc.invoke('folders:create', 'Colored') as any
+      await ipc.invoke('folders:update', folder.id, { color: '#ff00aa' })
+      const list = await ipc.invoke('folders:list') as any[]
+      const updated = list.find((f: any) => f.id === folder.id)
+      expect(updated.color).toBe('#ff00aa')
+    })
+
+    it('accepts uppercase hex color', async () => {
+      const folder = await ipc.invoke('folders:create', 'Upper') as any
+      await ipc.invoke('folders:update', folder.id, { color: '#AABBCC' })
+      const list = await ipc.invoke('folders:list') as any[]
+      const updated = list.find((f: any) => f.id === folder.id)
+      expect(updated.color).toBe('#AABBCC')
+    })
+
+    it('clears color with null', async () => {
+      const folder = await ipc.invoke('folders:create', 'ClearColor') as any
+      await ipc.invoke('folders:update', folder.id, { color: '#112233' })
+      await ipc.invoke('folders:update', folder.id, { color: null })
+      const list = await ipc.invoke('folders:list') as any[]
+      const updated = list.find((f: any) => f.id === folder.id)
+      expect(updated.color).toBeNull()
+    })
+
+    it('rejects invalid hex color (missing #)', async () => {
+      const folder = await ipc.invoke('folders:create', 'Bad1') as any
+      await expect(ipc.invoke('folders:update', folder.id, { color: 'ff00aa' })).rejects.toThrow('color must be a valid hex color')
+    })
+
+    it('rejects short hex color (#rgb)', async () => {
+      const folder = await ipc.invoke('folders:create', 'Bad2') as any
+      await expect(ipc.invoke('folders:update', folder.id, { color: '#f0a' })).rejects.toThrow('color must be a valid hex color')
+    })
+
+    it('rejects hex color with alpha (#rrggbbaa)', async () => {
+      const folder = await ipc.invoke('folders:create', 'Bad3') as any
+      await expect(ipc.invoke('folders:update', folder.id, { color: '#ff00aaff' })).rejects.toThrow('color must be a valid hex color')
+    })
+
+    it('rejects non-hex characters', async () => {
+      const folder = await ipc.invoke('folders:create', 'Bad4') as any
+      await expect(ipc.invoke('folders:update', folder.id, { color: '#gghhii' })).rejects.toThrow('color must be a valid hex color')
+    })
+  })
+
   describe('delete with mode', () => {
     it('mode=delete removes conversations in folder', async () => {
       const folder = await ipc.invoke('folders:create', 'Purge') as any
