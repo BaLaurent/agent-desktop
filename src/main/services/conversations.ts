@@ -178,4 +178,65 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       )
       .all(pattern, pattern)
   })
+
+  ipcMain.handle(
+    'conversations:fork',
+    (_e, sourceConversationId: number, messageId: number) => {
+      validatePositiveInt(sourceConversationId, 'sourceConversationId')
+      validatePositiveInt(messageId, 'messageId')
+
+      const source = db
+        .prepare('SELECT * FROM conversations WHERE id = ?')
+        .get(sourceConversationId) as Record<string, unknown> | undefined
+      if (!source) throw new Error('Conversation not found')
+
+      const targetMessage = db
+        .prepare('SELECT * FROM messages WHERE id = ? AND conversation_id = ?')
+        .get(messageId, sourceConversationId) as Record<string, unknown> | undefined
+      if (!targetMessage) throw new Error('Message not found')
+
+      const forkConv = db.transaction(() => {
+        const result = db
+          .prepare(
+            `INSERT INTO conversations (title, folder_id, model, system_prompt, kb_enabled, cwd, ai_overrides, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+          )
+          .run(
+            `Fork: ${source.title}`,
+            source.folder_id,
+            source.model,
+            source.system_prompt,
+            source.kb_enabled,
+            source.cwd,
+            source.ai_overrides
+          )
+        const newId = result.lastInsertRowid
+
+        const clearedAt = source.cleared_at as string | null
+        if (clearedAt) {
+          db.prepare(
+            `INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at, updated_at)
+             SELECT ?, role, content, attachments, tool_calls, created_at, updated_at
+             FROM messages
+             WHERE conversation_id = ? AND created_at <= ? AND created_at > ?
+             ORDER BY created_at ASC`
+          ).run(newId, sourceConversationId, targetMessage.created_at, clearedAt)
+        } else {
+          db.prepare(
+            `INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at, updated_at)
+             SELECT ?, role, content, attachments, tool_calls, created_at, updated_at
+             FROM messages
+             WHERE conversation_id = ? AND created_at <= ?
+             ORDER BY created_at ASC`
+          ).run(newId, sourceConversationId, targetMessage.created_at)
+        }
+
+        return newId
+      })()
+
+      return db
+        .prepare('SELECT * FROM conversations WHERE id = ?')
+        .get(forkConv)
+    }
+  )
 }

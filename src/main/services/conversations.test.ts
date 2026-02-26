@@ -1,6 +1,7 @@
 import { createTestDb } from '../__tests__/db-helper'
 import { createMockIpcMain } from '../__tests__/ipc-helper'
 import { registerHandlers } from './conversations'
+import { registerHandlers as registerFolderHandlers } from './folders'
 import type Database from 'better-sqlite3'
 
 describe('Conversations Service', () => {
@@ -11,6 +12,7 @@ describe('Conversations Service', () => {
     db = await createTestDb()
     ipc = createMockIpcMain()
     registerHandlers(ipc as any, db)
+    registerFolderHandlers(ipc as any, db)
   })
 
   afterEach(() => {
@@ -164,5 +166,98 @@ describe('Conversations Service', () => {
     await ipc.invoke('conversations:create', 'Nothing Special')
     const results = await ipc.invoke('conversations:search', 'zzz_nonexistent_zzz') as any[]
     expect(results).toHaveLength(0)
+  })
+
+  describe('fork', () => {
+    it('creates a new conversation with "Fork: " prefix title', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Original Chat') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'hello', '2025-01-01T00:00:01Z')
+      const msg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1').get(conv.id) as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, msg.id) as any
+      expect(fork.title).toBe('Fork: Original Chat')
+      expect(fork.id).not.toBe(conv.id)
+    })
+
+    it('copies messages up to and including the target message', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Test') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'msg1', '2025-01-01T00:00:01Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'assistant', 'msg2', '2025-01-01T00:00:02Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'msg3', '2025-01-01T00:00:03Z')
+      const targetMsg = db.prepare("SELECT * FROM messages WHERE content = 'msg2'").get() as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, targetMsg.id) as any
+      const forkFull = await ipc.invoke('conversations:get', fork.id) as any
+      expect(forkFull.messages).toHaveLength(2)
+      expect(forkFull.messages[0].content).toBe('msg1')
+      expect(forkFull.messages[1].content).toBe('msg2')
+    })
+
+    it('respects cleared_at boundary', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Cleared') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'before-clear', '2025-01-01T00:00:01Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'assistant', 'also-before', '2025-01-01T00:00:02Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'after-clear', '2025-01-01T00:00:04Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'assistant', 'response', '2025-01-01T00:00:05Z')
+      await ipc.invoke('conversations:update', conv.id, { cleared_at: '2025-01-01T00:00:03Z' })
+      const targetMsg = db.prepare("SELECT * FROM messages WHERE content = 'response'").get() as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, targetMsg.id) as any
+      const forkFull = await ipc.invoke('conversations:get', fork.id) as any
+      expect(forkFull.messages).toHaveLength(2)
+      expect(forkFull.messages[0].content).toBe('after-clear')
+      expect(forkFull.messages[1].content).toBe('response')
+    })
+
+    it('clones folder_id, cwd, model, system_prompt, ai_overrides, kb_enabled', async () => {
+      const folder = await ipc.invoke('folders:create', 'TestFolder') as any
+      const conv = await ipc.invoke('conversations:create', 'Settings Test') as any
+      await ipc.invoke('conversations:update', conv.id, {
+        folder_id: folder.id,
+        cwd: '/tmp/work',
+        model: 'claude-opus-4-6-20250725',
+        system_prompt: 'Be helpful',
+        ai_overrides: '{"temperature":"0.5"}',
+        kb_enabled: 1,
+      })
+      db.prepare('INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(conv.id, 'user', 'hello', '2025-01-01T00:00:01Z')
+      const msg = db.prepare('SELECT * FROM messages WHERE conversation_id = ?').get(conv.id) as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, msg.id) as any
+      expect(fork.folder_id).toBe(folder.id)
+      expect(fork.cwd).toBe('/tmp/work')
+      expect(fork.model).toBe('claude-opus-4-6-20250725')
+      expect(fork.system_prompt).toBe('Be helpful')
+      expect(fork.ai_overrides).toBe('{"temperature":"0.5"}')
+      expect(fork.kb_enabled).toBe(1)
+      expect(fork.cleared_at).toBeNull()
+    })
+
+    it('copies attachments and tool_calls JSON', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Attachments') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(conv.id, 'user', 'with files', '[{"path":"/tmp/a.png"}]', null, '2025-01-01T00:00:01Z')
+      db.prepare('INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(conv.id, 'assistant', 'used tools', '[]', '[{"name":"bash","input":"ls"}]', '2025-01-01T00:00:02Z')
+      const targetMsg = db.prepare("SELECT * FROM messages WHERE content = 'used tools'").get() as any
+
+      const fork = await ipc.invoke('conversations:fork', conv.id, targetMsg.id) as any
+      const forkFull = await ipc.invoke('conversations:get', fork.id) as any
+      expect(forkFull.messages[0].attachments).toBe('[{"path":"/tmp/a.png"}]')
+      expect(forkFull.messages[1].tool_calls).toBe('[{"name":"bash","input":"ls"}]')
+    })
+
+    it('throws on invalid conversationId', async () => {
+      await expect(ipc.invoke('conversations:fork', -1, 1)).rejects.toThrow()
+    })
+
+    it('throws on nonexistent conversation', async () => {
+      await expect(ipc.invoke('conversations:fork', 99999, 1)).rejects.toThrow('Conversation not found')
+    })
+
+    it('throws on nonexistent message', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Empty') as any
+      await expect(ipc.invoke('conversations:fork', conv.id, 99999)).rejects.toThrow('Message not found')
+    })
   })
 })
