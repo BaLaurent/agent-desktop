@@ -29,6 +29,7 @@ const api: AgentAPI = {
     import: (data) => withTimeout(ipcRenderer.invoke('conversations:import', data)),
     search: (query) => withTimeout(ipcRenderer.invoke('conversations:search', query)),
     generateTitle: (id) => withTimeout(ipcRenderer.invoke('conversations:generateTitle', id)),
+    fork: (conversationId: number, messageId: number) => withTimeout(ipcRenderer.invoke('conversations:fork', conversationId, messageId)),
   },
   messages: {
     send: (conversationId, content, attachments?) =>

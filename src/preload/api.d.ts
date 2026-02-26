@@ -42,6 +42,7 @@ export interface AgentAPI {
     import(data: string): Promise<Conversation>
     search(query: string): Promise<Conversation[]>
     generateTitle(id: number): Promise<void>
+    fork(conversationId: number, messageId: number): Promise<Conversation>
   }
   messages: {
     send(conversationId: number, content: string, attachments?: Attachment[]): Promise<Message | null>
