@@ -64,14 +64,15 @@ describe('Folders Service', () => {
     expect(updated.name).toBe('New Name')
   })
 
-  it('delete reparents conversations (folder_id → null)', async () => {
+  it('delete reparents conversations to default folder', async () => {
     const folder = await ipc.invoke('folders:create', 'Doomed') as any
     db.prepare('INSERT INTO conversations (title, folder_id) VALUES (?, ?)').run('Orphan', folder.id)
 
     await ipc.invoke('folders:delete', folder.id)
 
     const conv = db.prepare('SELECT folder_id FROM conversations WHERE title = ?').get('Orphan') as any
-    expect(conv.folder_id).toBeNull()
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+    expect(conv.folder_id).toBe(defaultFolder.id)
   })
 
   it('delete reparents child folders (parent_id → null)', async () => {
@@ -176,6 +177,18 @@ describe('Folders Service', () => {
     })
   })
 
+  it('delete refuses to delete the default folder', async () => {
+    const list = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list.find((f: any) => f.is_default === 1)
+    await expect(ipc.invoke('folders:delete', defaultFolder.id)).rejects.toThrow()
+  })
+
+  it('delete with mode=delete refuses to delete the default folder', async () => {
+    const list = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list.find((f: any) => f.is_default === 1)
+    await expect(ipc.invoke('folders:delete', defaultFolder.id, 'delete')).rejects.toThrow()
+  })
+
   describe('delete with mode', () => {
     it('mode=delete removes conversations in folder', async () => {
       const folder = await ipc.invoke('folders:create', 'Purge') as any
@@ -231,14 +244,15 @@ describe('Folders Service', () => {
       expect(convs[0].title).toBe('Outside')
     })
 
-    it('default mode still reparents (backward compat)', async () => {
+    it('default mode reparents to default folder', async () => {
       const folder = await ipc.invoke('folders:create', 'Old') as any
       db.prepare('INSERT INTO conversations (title, folder_id) VALUES (?, ?)').run('Kept', folder.id)
 
       await ipc.invoke('folders:delete', folder.id)
 
       const conv = db.prepare('SELECT folder_id FROM conversations WHERE title = ?').get('Kept') as any
-      expect(conv.folder_id).toBeNull()
+      const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+      expect(conv.folder_id).toBe(defaultFolder.id)
     })
   })
 })
