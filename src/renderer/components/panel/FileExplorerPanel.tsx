@@ -1004,14 +1004,10 @@ export function FileExplorerPanel() {
 
     const { conversations, activeConversationId } = useConversationsStore.getState()
     const activeConv = conversations.find(c => c.id === activeConversationId)
-    const folderId = activeConv?.folder_id ?? null
+    const folderId = activeConv?.folder_id ?? undefined
 
-    const { createConversation, moveToFolder, updateConversation } = useConversationsStore.getState()
-    const newConv = await createConversation()
-
-    if (folderId !== null) {
-      await moveToFolder(newConv.id, folderId)
-    }
+    const { createConversation, updateConversation } = useConversationsStore.getState()
+    const newConv = await createConversation(undefined, folderId)
 
     const renamesArg = Object.keys(renames).length > 0 ? renames : undefined
     const result = await window.agent.files.prepareSession(newConv.id, paths, method, renamesArg)

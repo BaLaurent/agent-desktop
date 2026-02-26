@@ -309,8 +309,7 @@ export function SidebarTree() {
 
   const handleNewConversationInFolder = async (folderId: number, e: React.MouseEvent) => {
     e.stopPropagation()
-    const conv = await createConversation()
-    await moveToFolder(conv.id, folderId)
+    const conv = await createConversation(undefined, folderId)
     // Apply folder's default CWD to new conversation
     const folder = folders.find((f) => f.id === folderId)
     if (folder?.default_cwd) {
