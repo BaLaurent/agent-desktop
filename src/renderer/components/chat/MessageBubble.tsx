@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCallsSection } from './ToolCallsSection'
 import { TaskFormModal } from '../scheduler/TaskFormModal'
+import { ContextMenu, ContextMenuItem } from '../shared/ContextMenu'
 import { useTtsStore } from '../../stores/ttsStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
@@ -73,7 +74,6 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
 
   const [showContextMenu, setShowContextMenu] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
-  const contextMenuRef = useRef<HTMLDivElement>(null)
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     if (isEditing) return
@@ -81,17 +81,6 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
     setContextMenuPos({ x: e.clientX, y: e.clientY })
     setShowContextMenu(true)
   }, [isEditing])
-
-  useEffect(() => {
-    if (!showContextMenu) return
-    const handleClick = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setShowContextMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [showContextMenu])
 
   return (
     <div
@@ -243,81 +232,39 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
       )}
 
       {showContextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[140px]"
-          style={{
-            left: contextMenuPos.x,
-            top: contextMenuPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          role="menu"
-          aria-label="Message actions"
-        >
-          <button
-            onClick={() => { setShowContextMenu(false); handleCopy() }}
-            className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-            role="menuitem"
-          >
+        <ContextMenu position={contextMenuPos} onClose={() => setShowContextMenu(false)} className="min-w-[140px]" aria-label="Message actions">
+          <ContextMenuItem onClick={() => { setShowContextMenu(false); handleCopy() }}>
             Copy
-          </button>
+          </ContextMenuItem>
           {showTtsButton && (
-            <button
-              onClick={() => {
-                setShowContextMenu(false)
-                isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)
-              }}
-              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
-              style={{ backgroundColor: 'transparent' }}
-              role="menuitem"
-            >
+            <ContextMenuItem onClick={() => {
+              setShowContextMenu(false)
+              isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)
+            }}>
               {isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
-            </button>
+            </ContextMenuItem>
           )}
           {isUser && onEdit && (
-            <button
-              onClick={() => { setShowContextMenu(false); handleStartEdit() }}
-              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
-              style={{ backgroundColor: 'transparent' }}
-              role="menuitem"
-            >
+            <ContextMenuItem onClick={() => { setShowContextMenu(false); handleStartEdit() }}>
               Edit
-            </button>
+            </ContextMenuItem>
           )}
           {isUser && (
-            <button
-              onClick={() => { setShowContextMenu(false); setShowTaskForm(true) }}
-              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
-              style={{ backgroundColor: 'transparent' }}
-              role="menuitem"
-            >
+            <ContextMenuItem onClick={() => { setShowContextMenu(false); setShowTaskForm(true) }}>
               Schedule
-            </button>
+            </ContextMenuItem>
           )}
           {!isUser && isLast && onRegenerate && (
-            <button
-              onClick={() => { setShowContextMenu(false); onRegenerate() }}
-              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
-              style={{ backgroundColor: 'transparent' }}
-              role="menuitem"
-            >
+            <ContextMenuItem onClick={() => { setShowContextMenu(false); onRegenerate() }}>
               Retry
-            </button>
+            </ContextMenuItem>
           )}
           {onFork && (
-            <button
-              onClick={() => { setShowContextMenu(false); onFork(message.id) }}
-              className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-bg)]"
-              style={{ backgroundColor: 'transparent' }}
-              role="menuitem"
-            >
+            <ContextMenuItem onClick={() => { setShowContextMenu(false); onFork(message.id) }}>
               Fork from here
-            </button>
+            </ContextMenuItem>
           )}
-        </div>
+        </ContextMenu>
       )}
     </div>
   )

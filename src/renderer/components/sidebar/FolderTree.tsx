@@ -8,6 +8,7 @@ import { EmptyState } from './EmptyState'
 import { FolderSettingsPopover } from '../settings/FolderSettingsPopover'
 import type { McpServerName } from '../settings/FolderSettingsPopover'
 import { useMcpStore } from '../../stores/mcpStore'
+import { ContextMenu, ContextMenuItem, ContextMenuDivider } from '../shared/ContextMenu'
 
 const FOLDER_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -77,35 +78,12 @@ export function SidebarTree() {
   const [unfiledMenuPos, setUnfiledMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [colorPickerTarget, setColorPickerTarget] = useState<number | 'unfiled' | null>(null)
   const [colorPickerLive, setColorPickerLive] = useState<string | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const unfiledMenuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pickerHsv, setPickerHsv] = useState({ h: 210, s: 100, v: 100 })
   const [colorPickerPos, setColorPickerPos] = useState({ x: 200, y: 200 })
-  const pickerRef = useRef<HTMLDivElement>(null)
   const hsvRef = useRef({ h: 210, s: 100, v: 100 })
   const hexInputRef = useRef<HTMLInputElement>(null)
-  const menuDragRef = useRef({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 })
-
-  const handleMenuDragStart = useCallback((e: React.MouseEvent, currentPos: { x: number; y: number }, setPos: (p: { x: number; y: number }) => void) => {
-    e.preventDefault()
-    menuDragRef.current = { active: true, startX: e.clientX, startY: e.clientY, origX: currentPos.x, origY: currentPos.y }
-    const onMove = (ev: MouseEvent) => {
-      if (!menuDragRef.current.active) return
-      setPos({
-        x: menuDragRef.current.origX + ev.clientX - menuDragRef.current.startX,
-        y: menuDragRef.current.origY + ev.clientY - menuDragRef.current.startY,
-      })
-    }
-    const onUp = () => {
-      menuDragRef.current.active = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [])
 
   const handleSVMouseDown = useCallback((e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -190,36 +168,6 @@ export function SidebarTree() {
     }
   }, [renamingId])
 
-  useEffect(() => {
-    if (menuFolderId === null) return
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuFolderId(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('touchstart', handleClick as EventListener)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('touchstart', handleClick as EventListener)
-    }
-  }, [menuFolderId])
-
-  useEffect(() => {
-    if (!unfiledMenuPos) return
-    const handleClick = (e: MouseEvent) => {
-      if (unfiledMenuRef.current && !unfiledMenuRef.current.contains(e.target as Node)) {
-        setUnfiledMenuPos(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('touchstart', handleClick as EventListener)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('touchstart', handleClick as EventListener)
-    }
-  }, [unfiledMenuPos])
-
   // Sync custom color picker live preview
   useEffect(() => {
     if (colorPickerTarget === null) return
@@ -231,24 +179,16 @@ export function SidebarTree() {
     }
   }, [pickerHsv, colorPickerTarget])
 
-  // Close custom color picker on click-outside, persist final color
-  useEffect(() => {
-    if (colorPickerTarget === null) return
-    const handleClick = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        const { h, s, v } = hsvRef.current
-        const color = hsvToHex(h, s, v)
-        if (colorPickerTarget === 'unfiled') {
-          setSetting('sidebar_unfiledColor', color)
-        } else {
-          updateFolder(colorPickerTarget as number, { color })
-        }
-        setColorPickerTarget(null)
-        setColorPickerLive(null)
-      }
+  const closeColorPicker = useCallback(() => {
+    const { h, s, v } = hsvRef.current
+    const color = hsvToHex(h, s, v)
+    if (colorPickerTarget === 'unfiled') {
+      setSetting('sidebar_unfiledColor', color)
+    } else {
+      updateFolder(colorPickerTarget as number, { color })
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    setColorPickerTarget(null)
+    setColorPickerLive(null)
   }, [colorPickerTarget, setSetting, updateFolder])
 
   // Compute flat visible order of conversation IDs for shift+click range selection
@@ -653,23 +593,7 @@ export function SidebarTree() {
       })()}
 
       {unfiledMenuPos && (
-        <div
-          ref={unfiledMenuRef}
-          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"
-          style={{
-            left: unfiledMenuPos.x,
-            top: unfiledMenuPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <div
-            className="cursor-grab active:cursor-grabbing px-3 py-1 select-none"
-            onMouseDown={(e) => handleMenuDragStart(e, unfiledMenuPos!, setUnfiledMenuPos)}
-          >
-            <div className="w-8 h-0.5 mx-auto rounded-full" style={{ backgroundColor: 'var(--color-text-muted)', opacity: 0.4 }} />
-          </div>
+        <ContextMenu position={unfiledMenuPos} onClose={() => setUnfiledMenuPos(null)} className="min-w-[160px]">
           <div className="px-3 py-1.5">
             <div className="text-xs mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Color</div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -726,7 +650,7 @@ export function SidebarTree() {
               )}
             </div>
           </div>
-        </div>
+        </ContextMenu>
       )}
 
       {overrideFolderId !== null && (() => {
@@ -747,55 +671,27 @@ export function SidebarTree() {
       })()}
 
       {menuFolderId !== null && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"
-          style={{
-            left: menuPos.x,
-            top: menuPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <div
-            className="cursor-grab active:cursor-grabbing px-3 py-1 select-none"
-            onMouseDown={(e) => handleMenuDragStart(e, menuPos, setMenuPos)}
-          >
-            <div className="w-8 h-0.5 mx-auto rounded-full" style={{ backgroundColor: 'var(--color-text-muted)', opacity: 0.4 }} />
-          </div>
-          <button
-            onClick={() => {
-              const folder = folders.find((f) => f.id === menuFolderId)
-              if (folder) {
-                setRenameValue(folder.name)
-                setRenamingId(menuFolderId)
-              }
-              setMenuFolderId(null)
-            }}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-          >
+        <ContextMenu position={menuPos} onClose={() => setMenuFolderId(null)} className="min-w-[160px]">
+          <ContextMenuItem onClick={() => {
+            const folder = folders.find((f) => f.id === menuFolderId)
+            if (folder) {
+              setRenameValue(folder.name)
+              setRenamingId(menuFolderId)
+            }
+            setMenuFolderId(null)
+          }}>
             Rename
-          </button>
-          <button
-            onClick={() => handleCreateSubfolder(menuFolderId!)}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-          >
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => handleCreateSubfolder(menuFolderId!)}>
             Create subfolder
-          </button>
-          <button
-            onClick={() => {
-              setOverrideFolderId(menuFolderId)
-              setMenuFolderId(null)
-            }}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent' }}
-          >
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => {
+            setOverrideFolderId(menuFolderId)
+            setMenuFolderId(null)
+          }}>
             Folder Settings
-          </button>
-          <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
+          </ContextMenuItem>
+          <ContextMenuDivider />
           <div className="px-3 py-1.5 mobile:py-2.5">
             <div className="text-xs mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Color</div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -855,15 +751,11 @@ export function SidebarTree() {
               )}
             </div>
           </div>
-          <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
-          <button
-            onClick={() => handleDelete(menuFolderId!)}
-            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
-            style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
-          >
+          <ContextMenuDivider />
+          <ContextMenuItem danger onClick={() => handleDelete(menuFolderId!)}>
             Delete folder
-          </button>
-        </div>
+          </ContextMenuItem>
+        </ContextMenu>
       )}
 
       {deleteTarget && (() => {
@@ -945,24 +837,7 @@ export function SidebarTree() {
 
       {/* Custom HSV color picker — draggable, styled like context menus */}
       {colorPickerTarget !== null && (
-        <div
-          ref={pickerRef}
-          className="fixed z-50 rounded shadow-lg text-sm"
-          style={{
-            left: colorPickerPos.x,
-            top: colorPickerPos.y,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-bg)',
-            color: 'var(--color-text)',
-            width: 220,
-          }}
-        >
-          <div
-            className="cursor-grab active:cursor-grabbing px-3 py-1 select-none"
-            onMouseDown={(e) => handleMenuDragStart(e, colorPickerPos, setColorPickerPos)}
-          >
-            <div className="w-8 h-0.5 mx-auto rounded-full" style={{ backgroundColor: 'var(--color-text-muted)', opacity: 0.4 }} />
-          </div>
+        <ContextMenu position={colorPickerPos} onClose={closeColorPicker} style={{ width: 220 }}>
           <div className="px-2.5 pb-2.5">
             {/* Saturation-Value square */}
             <div
@@ -1030,7 +905,7 @@ export function SidebarTree() {
               />
             </div>
           </div>
-        </div>
+        </ContextMenu>
       )}
     </div>
   )
