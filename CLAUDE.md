@@ -41,6 +41,7 @@
 - **Tests**: `createTestDb()` is async — all `beforeEach` must `await`; tests colocated as `*.test.ts`
 - **Tailwind variant**: prefer `compact:` over `mobile:` for new code
 - **Async I/O only**: all main-thread file I/O uses `fs.promises.*` — no sync methods
+- **ContextMenu**: shared `ContextMenu`/`ContextMenuItem`/`ContextMenuDivider` in `src/renderer/components/shared/` — all context menus use this; draggable by default
 
 ## Ordering Constraints
 1. `enrichEnvironment()` before `app.whenReady()` — sanitizes AppImage env
