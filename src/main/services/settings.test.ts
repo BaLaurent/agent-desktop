@@ -3,6 +3,7 @@ import { createMockIpcMain } from '../__tests__/ipc-helper'
 import { registerHandlers } from './settings'
 import type Database from 'better-sqlite3'
 
+// regression-only: basic CRUD get/set tests — minimal coverage value
 describe('Settings Service', () => {
   let db: Database.Database
   let ipc: ReturnType<typeof createMockIpcMain>

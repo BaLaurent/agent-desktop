@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setBroadcastHandler, broadcast } from './broadcast'
 
+// regression-only: trivial set/call handler tests — minimal coverage value
 describe('broadcast', () => {
   beforeEach(() => {
     setBroadcastHandler(null as any)

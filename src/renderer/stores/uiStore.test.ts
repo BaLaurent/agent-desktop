@@ -4,6 +4,7 @@ beforeEach(() => {
   useUiStore.setState({ sidebarVisible: true, panelVisible: false, activeView: 'welcome' })
 })
 
+// regression-only: trivial boolean toggle tests — minimal coverage value
 describe('uiStore', () => {
   it('has correct initial state', () => {
     const state = useUiStore.getState()

@@ -12,5 +12,12 @@ export default defineConfig({
     setupFiles: ['src/renderer/__tests__/setup.ts'],
     css: false,
     passWithNoTests: true,
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        lines: 70,
+        branches: 60,
+      },
+    },
   },
 })

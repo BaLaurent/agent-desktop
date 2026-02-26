@@ -10,5 +10,12 @@ export default defineConfig({
       '@shared': resolve(__dirname, 'src/shared'),
     },
     passWithNoTests: true,
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        lines: 70,
+        branches: 60,
+      },
+    },
   },
 })

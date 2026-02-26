@@ -1,4 +1,3 @@
-import { describe, it, expect, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { createRef } from 'react'
 import { useClickOutside } from './useClickOutside'
@@ -65,6 +64,62 @@ describe('useClickOutside', () => {
     document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     document.dispatchEvent(new TouchEvent('touchstart', { bubbles: true }))
     expect(onClose).not.toHaveBeenCalled()
+
+    document.body.removeChild(div)
+  })
+
+  it('does not throw when ref.current is null', () => {
+    const ref = createRef<HTMLDivElement>()
+    // ref.current is null by default — never assigned
+
+    const onClose = vi.fn()
+    renderHook(() => useClickOutside(ref, onClose))
+
+    // Should not throw and should not call onClose (guard: ref.current && ...)
+    expect(() => {
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    }).not.toThrow()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('does not call onClose when clicking a nested child element', () => {
+    const ref = createRef<HTMLDivElement>()
+    const parent = document.createElement('div')
+    const child = document.createElement('span')
+    parent.appendChild(child)
+    document.body.appendChild(parent)
+    ;(ref as any).current = parent
+
+    const onClose = vi.fn()
+    renderHook(() => useClickOutside(ref, onClose))
+
+    // Click on nested child — .contains() should return true
+    child.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(onClose).not.toHaveBeenCalled()
+
+    document.body.removeChild(parent)
+  })
+
+  it('uses the latest onClose callback after rerender', () => {
+    const ref = createRef<HTMLDivElement>()
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+    ;(ref as any).current = div
+
+    const oldClose = vi.fn()
+    const newClose = vi.fn()
+
+    const { rerender } = renderHook(
+      ({ cb }) => useClickOutside(ref, cb),
+      { initialProps: { cb: oldClose } },
+    )
+
+    // Rerender with a new callback
+    rerender({ cb: newClose })
+
+    document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(oldClose).not.toHaveBeenCalled()
+    expect(newClose).toHaveBeenCalledTimes(1)
 
     document.body.removeChild(div)
   })

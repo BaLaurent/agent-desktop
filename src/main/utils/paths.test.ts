@@ -7,6 +7,7 @@ vi.mock('os', async () => {
 
 import { expandTilde } from './paths'
 
+// regression-only: simple string replacement tests — minimal coverage value
 describe('expandTilde', () => {
   it('expands bare ~ to home directory', () => {
     expect(expandTilde('~')).toBe('/home/testuser')
