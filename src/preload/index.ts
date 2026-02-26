@@ -22,7 +22,7 @@ const api: AgentAPI = {
   conversations: {
     list: () => withTimeout(ipcRenderer.invoke('conversations:list')),
     get: (id) => withTimeout(ipcRenderer.invoke('conversations:get', id)),
-    create: (title?) => withTimeout(ipcRenderer.invoke('conversations:create', title)),
+    create: (title?, folderId?) => withTimeout(ipcRenderer.invoke('conversations:create', title, folderId)),
     update: (id, data) => withTimeout(ipcRenderer.invoke('conversations:update', id, data)),
     delete: (id) => withTimeout(ipcRenderer.invoke('conversations:delete', id)),
     deleteMany: (ids: number[]) => withTimeout(ipcRenderer.invoke('conversations:deleteMany', ids)),

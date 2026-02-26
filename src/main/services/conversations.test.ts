@@ -60,6 +60,18 @@ describe('Conversations Service', () => {
     expect(result).toBeNull()
   })
 
+  it('create assigns default folder when no folderId provided', async () => {
+    const conv = await ipc.invoke('conversations:create', 'Auto Folder') as any
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+    expect(conv.folder_id).toBe(defaultFolder.id)
+  })
+
+  it('create assigns specified folderId when provided', async () => {
+    const folder = await ipc.invoke('folders:create', 'Custom') as any
+    const conv = await ipc.invoke('conversations:create', 'In Custom', folder.id) as any
+    expect(conv.folder_id).toBe(folder.id)
+  })
+
   it('update title changes title', async () => {
     const conv = await ipc.invoke('conversations:create', 'Old Title') as any
     await ipc.invoke('conversations:update', conv.id, { title: 'New Title' })
