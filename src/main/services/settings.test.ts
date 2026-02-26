@@ -59,6 +59,30 @@ describe('Settings Service', () => {
     expect(settings.sidebar_unfiledColor).toBe('#ff5500')
   })
 
+  it('accepts heatmap_enabled setting key', async () => {
+    await ipc.invoke('settings:set', 'heatmap_enabled', 'true')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.heatmap_enabled).toBe('true')
+  })
+
+  it('accepts heatmap_mode setting key', async () => {
+    await ipc.invoke('settings:set', 'heatmap_mode', 'fixed')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.heatmap_mode).toBe('fixed')
+  })
+
+  it('accepts heatmap_min setting key', async () => {
+    await ipc.invoke('settings:set', 'heatmap_min', '5')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.heatmap_min).toBe('5')
+  })
+
+  it('accepts heatmap_max setting key', async () => {
+    await ipc.invoke('settings:set', 'heatmap_max', '100')
+    const settings = await ipc.invoke('settings:get') as Record<string, string>
+    expect(settings.heatmap_max).toBe('100')
+  })
+
   it('get after set reflects new value', async () => {
     const before = await ipc.invoke('settings:get') as Record<string, string>
     expect(before.ai_maxTurns).toBe('50')
