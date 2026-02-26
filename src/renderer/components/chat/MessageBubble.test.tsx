@@ -163,4 +163,74 @@ describe('MessageBubble', () => {
 
     expect(ttsStoreMock.stopPlayback).toHaveBeenCalled()
   })
+
+  // ── Edit mode tests ─────────────────────────────────────────
+
+  const enterEditMode = (container: HTMLElement) => {
+    fireEvent.mouseEnter(container.firstChild as Element)
+    fireEvent.click(screen.getByTitle('Edit'))
+  }
+
+  it('bubble has w-full class when editing', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    // The bubble div is the second-level child (first child of the flex wrapper)
+    const bubble = (container.firstChild as HTMLElement).firstChild as HTMLElement
+    expect(bubble.className).toContain('w-full')
+  })
+
+  it('bubble does not have w-full class when not editing', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+
+    const bubble = (container.firstChild as HTMLElement).firstChild as HTMLElement
+    expect(bubble.className).not.toContain('w-full')
+  })
+
+  it('textarea rows defaults to 3 for short single-line content', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content: 'short' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    // 'short' has 1 line → split('\n').length + 1 = 2, Math.max(3, 2) = 3
+    expect(textarea.rows).toBe(3)
+  })
+
+  it('textarea rows grows with multiline content', () => {
+    const multiline = 'line1\nline2\nline3\nline4\nline5'
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content: multiline })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    // 5 lines → split('\n').length + 1 = 6, Math.max(3, 6) = 6
+    expect(textarea.rows).toBe(6)
+  })
+
+  it('textarea rows updates dynamically when content is edited', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content: 'short' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    expect(textarea.rows).toBe(3)
+
+    // Simulate typing multiline content
+    fireEvent.change(textarea, { target: { value: 'a\nb\nc\nd\ne\nf' } })
+    // 6 lines → split('\n').length + 1 = 7, Math.max(3, 7) = 7
+    expect(textarea.rows).toBe(7)
+  })
 })
