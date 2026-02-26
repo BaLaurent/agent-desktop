@@ -79,6 +79,8 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
     >
       <div
         className={`rounded-lg px-4 py-3 relative max-w-[80%] compact:max-w-[95%] ${
+          isEditing ? 'w-full' : ''
+        } ${
           isUser ? 'rounded-br-sm' : 'rounded-bl-sm'
         }`}
         style={{
@@ -106,7 +108,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate }: Message
                 color: 'var(--color-text)',
                 border: '1px solid var(--color-text-muted)',
               }}
-              rows={4}
+              rows={Math.max(3, editContent.split('\n').length + 1)}
               autoFocus
             />
             <div className="flex gap-2 mt-2 mobile:flex-wrap">
