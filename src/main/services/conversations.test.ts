@@ -155,6 +155,16 @@ describe('Conversations Service', () => {
     expect(full.messages).toHaveLength(2)
   })
 
+  it('import assigns default folder to imported conversation', async () => {
+    const data = JSON.stringify({
+      conversation: { title: 'Imported' },
+      messages: [{ role: 'user', content: 'hello', created_at: '2025-01-01T00:00:00Z' }],
+    })
+    const conv = await ipc.invoke('conversations:import', data) as any
+    const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as any
+    expect(conv.folder_id).toBe(defaultFolder.id)
+  })
+
   it('search by title finds matching conversations', async () => {
     await ipc.invoke('conversations:create', 'Alpha Project')
     await ipc.invoke('conversations:create', 'Beta Project')

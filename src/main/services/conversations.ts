@@ -147,9 +147,11 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     const systemPrompt = (typeof conversation?.system_prompt === 'string') ? conversation.system_prompt : null
     const kbEnabled = conversation?.kb_enabled === 1 ? 1 : 0
 
+    const defaultFolderId = (db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as { id: number }).id
+
     const insertConv = db.prepare(
-      `INSERT INTO conversations (title, model, system_prompt, kb_enabled, updated_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`
+      `INSERT INTO conversations (title, folder_id, model, system_prompt, kb_enabled, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
     )
     const insertMsg = db.prepare(
       `INSERT INTO messages (conversation_id, role, content, attachments, created_at)
@@ -158,7 +160,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     // Wrap in transaction for atomicity
     const importConv = db.transaction(() => {
-      const result = insertConv.run(title, model, systemPrompt, kbEnabled)
+      const result = insertConv.run(title, defaultFolderId, model, systemPrompt, kbEnabled)
       const newId = result.lastInsertRowid
 
       if (Array.isArray(messages)) {
