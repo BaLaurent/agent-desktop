@@ -47,6 +47,7 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'hooks_cwdRestriction',
   // Sidebar
   'sidebar_unfiledExpanded',
+  'sidebar_unfiledColor',
   // Streaming timeout
   'streamingTimeoutSeconds',
   // API Key auth (global only, not cascadable)

@@ -8,6 +8,14 @@ interface ConversationsState {
   searchQuery: string
   isLoading: boolean
 
+  // Selection
+  selectedIds: Set<number>
+  lastClickedId: number | null
+  handleSelect: (id: number, ctrlKey: boolean, shiftKey: boolean, visibleOrder: number[]) => void
+  clearSelection: () => void
+  deleteSelected: () => Promise<void>
+  moveSelectedToFolder: (folderId: number | null) => Promise<void>
+
   loadConversations: () => Promise<void>
   loadFolders: () => Promise<void>
   createConversation: (title?: string) => Promise<Conversation>
@@ -42,6 +50,87 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
   activeConversationId: readSavedConversationId(),
   searchQuery: '',
   isLoading: false,
+
+  // Selection
+  selectedIds: new Set(),
+  lastClickedId: null,
+
+  handleSelect: (id, ctrlKey, shiftKey, visibleOrder) => {
+    const { selectedIds, lastClickedId } = get()
+
+    if (ctrlKey) {
+      // Toggle individual item
+      const next = new Set(selectedIds)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      set({ selectedIds: next, lastClickedId: id })
+    } else if (shiftKey && lastClickedId !== null) {
+      // Range selection
+      const anchorIdx = visibleOrder.indexOf(lastClickedId)
+      const targetIdx = visibleOrder.indexOf(id)
+      if (anchorIdx !== -1 && targetIdx !== -1) {
+        const start = Math.min(anchorIdx, targetIdx)
+        const end = Math.max(anchorIdx, targetIdx)
+        const next = new Set(selectedIds)
+        for (let i = start; i <= end; i++) next.add(visibleOrder[i])
+        set({ selectedIds: next })
+      }
+    } else {
+      // Normal click — clear selection, activate
+      set({ selectedIds: new Set(), lastClickedId: id })
+      get().setActiveConversation(id)
+    }
+  },
+
+  clearSelection: () => {
+    set({ selectedIds: new Set(), lastClickedId: null })
+  },
+
+  deleteSelected: async () => {
+    const { selectedIds, conversations, activeConversationId } = get()
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+
+    // Optimistic update
+    const remaining = conversations.filter((c) => !selectedIds.has(c.id))
+    set({
+      conversations: remaining,
+      selectedIds: new Set(),
+      lastClickedId: null,
+      activeConversationId: activeConversationId !== null && selectedIds.has(activeConversationId)
+        ? null
+        : activeConversationId,
+    })
+
+    try {
+      await window.agent.conversations.deleteMany(ids)
+    } catch {
+      // Rollback
+      set({ conversations, activeConversationId })
+    }
+  },
+
+  moveSelectedToFolder: async (folderId) => {
+    const { selectedIds, conversations } = get()
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+
+    // Optimistic update
+    const prev = conversations
+    set({
+      conversations: conversations.map((c) =>
+        selectedIds.has(c.id) ? { ...c, folder_id: folderId } : c
+      ),
+      selectedIds: new Set(),
+      lastClickedId: null,
+    })
+
+    try {
+      await window.agent.conversations.moveMany(ids, folderId)
+    } catch {
+      set({ conversations: prev })
+    }
+  },
 
   loadConversations: async () => {
     set({ isLoading: true })

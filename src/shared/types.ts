@@ -57,6 +57,7 @@ export interface Folder {
   position: number
   ai_overrides: string | null // JSON AIOverrides
   default_cwd: string | null
+  color: string | null
   created_at: string
   updated_at: string
 }

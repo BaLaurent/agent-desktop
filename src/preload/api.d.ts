@@ -38,6 +38,8 @@ export interface AgentAPI {
     create(title?: string): Promise<Conversation>
     update(id: number, data: Partial<Conversation>): Promise<void>
     delete(id: number): Promise<void>
+    deleteMany(ids: number[]): Promise<void>
+    moveMany(ids: number[], folderId: number | null): Promise<void>
     export(id: number, format: 'markdown' | 'json'): Promise<string>
     import(data: string): Promise<Conversation>
     search(query: string): Promise<Conversation[]>

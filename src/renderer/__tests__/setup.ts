@@ -20,6 +20,8 @@ export const mockAgent = {
     create: vi.fn().mockResolvedValue({ id: 1, title: 'New Conversation', folder_id: null, position: 0, model: 'claude-sonnet-4-6-20250514', system_prompt: null, cwd: null, kb_enabled: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     update: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
+    deleteMany: vi.fn().mockResolvedValue(undefined),
+    moveMany: vi.fn().mockResolvedValue(undefined),
     export: vi.fn().mockResolvedValue(''),
     import: vi.fn().mockResolvedValue({ id: 2, title: 'Imported' }),
     search: vi.fn().mockResolvedValue([]),

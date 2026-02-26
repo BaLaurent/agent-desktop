@@ -4,15 +4,25 @@ import { useConversationsStore } from '../../stores/conversationsStore'
 import { useSchedulerStore } from '../../stores/schedulerStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
 
+function invertHex(hex: string): string {
+  const r = 255 - parseInt(hex.slice(1, 3), 16)
+  const g = 255 - parseInt(hex.slice(3, 5), 16)
+  const b = 255 - parseInt(hex.slice(5, 7), 16)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 interface Props {
   conversation: Conversation & { folder_name?: string }
   isActive: boolean
+  isSelected: boolean
+  visibleOrder: number[]
   depth?: number
+  folderColor?: string | null
 }
 
-export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
+export function ConversationItem({ conversation, isActive, isSelected, visibleOrder, depth = 0, folderColor }: Props) {
   const isMobile = useMobileMode()
-  const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders } =
+  const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders, handleSelect, selectedIds, deleteSelected, moveSelectedToFolder, clearSelection } =
     useConversationsStore()
   const hasScheduledTask = useSchedulerStore((s) => s.tasks.some((t) => t.conversation_id === conversation.id))
   const [isRenaming, setIsRenaming] = useState(false)
@@ -144,7 +154,11 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
         {...(!isMobile ? {
           draggable: true,
           onDragStart: (e: React.DragEvent) => {
-            e.dataTransfer.setData('text/plain', String(conversation.id))
+            // If this item is part of a multi-selection, drag all selected IDs
+            const ids = isSelected && selectedIds.size > 1
+              ? JSON.stringify([...selectedIds])
+              : String(conversation.id)
+            e.dataTransfer.setData('text/plain', ids)
             e.dataTransfer.effectAllowed = 'move'
             e.currentTarget.classList.add('sidebar-dragging')
           },
@@ -153,17 +167,31 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
           },
           onDoubleClick: () => setIsRenaming(true),
         } : {})}
-        onClick={() => setActiveConversation(conversation.id)}
+        onClick={(e: React.MouseEvent) => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            e.preventDefault()
+            handleSelect(conversation.id, e.ctrlKey || e.metaKey, e.shiftKey, visibleOrder)
+          } else {
+            handleSelect(conversation.id, false, false, visibleOrder)
+          }
+        }}
         onContextMenu={!isMobile ? handleContextMenu : undefined}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onTouchMove={handleTouchMove}
-        className={`group py-2 cursor-pointer transition-colors rounded mx-1 ${!isActive ? 'hover:bg-[var(--color-bg)]' : ''}`}
+        className={`group py-2 cursor-pointer transition-colors rounded mx-1 ${!isActive && !isSelected ? 'hover:bg-[var(--color-bg)]' : ''}`}
         style={{
           paddingLeft: `${depth * 16 + 12}px`,
           paddingRight: '12px',
-          backgroundColor: isActive ? 'var(--color-deep)' : 'transparent',
-          borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
+          backgroundColor: isActive
+            ? (folderColor ? `color-mix(in srgb, ${folderColor} 12%, var(--color-deep))` : 'var(--color-deep)')
+            : isSelected ? 'var(--color-bg)'
+            : folderColor ? `color-mix(in srgb, ${folderColor} 8%, transparent)`
+            : 'transparent',
+          borderLeft: isActive ? '2px solid var(--color-primary)' : isSelected ? '2px solid var(--color-text-muted)' : '2px solid transparent',
+          ...(isActive && folderColor ? {
+            boxShadow: `0 0 8px 1px color-mix(in srgb, ${invertHex(folderColor)} 40%, transparent)`,
+          } : {}),
         }}
         role="treeitem"
         aria-selected={isActive}
@@ -228,7 +256,77 @@ export function ConversationItem({ conversation, isActive, depth = 0 }: Props) {
         )}
       </div>
 
-      {showMenu && (
+      {showMenu && isSelected && selectedIds.size > 1 ? (
+        <div
+          ref={menuRef}
+          className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"
+          style={{
+            left: menuPos.x,
+            top: menuPos.y,
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          role="menu"
+          aria-label="Bulk conversation actions"
+        >
+          <div
+            className="relative"
+            {...(!isMobile ? {
+              onMouseEnter: () => setShowFolderSubmenu(true),
+              onMouseLeave: () => setShowFolderSubmenu(false),
+            } : {})}
+          >
+            <button
+              className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
+              style={{ backgroundColor: 'transparent' }}
+              {...(isMobile ? {
+                onClick: () => setShowFolderSubmenu((v) => !v),
+              } : {})}
+            >
+              Move {selectedIds.size} to folder &rarr;
+            </button>
+            {showFolderSubmenu && (
+              <div
+                className="absolute left-full top-0 mobile:static mobile:pl-3 rounded shadow-lg py-1 text-sm min-w-[140px] border border-[var(--color-bg)] mobile:border-0"
+                style={{ backgroundColor: 'var(--color-surface)' }}
+              >
+                <button
+                  onClick={() => { setShowMenu(false); setShowFolderSubmenu(false); moveSelectedToFolder(null) }}
+                  className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
+                  style={{ backgroundColor: 'transparent' }}
+                >
+                  No folder
+                </button>
+                {folders.map((f: Folder) => (
+                  <button
+                    key={f.id}
+                    onClick={() => { setShowMenu(false); setShowFolderSubmenu(false); moveSelectedToFolder(f.id) }}
+                    className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
+                    style={{ backgroundColor: 'transparent' }}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="border-t my-1" style={{ borderColor: 'var(--color-bg)' }} />
+          <button
+            onClick={() => {
+              setShowMenu(false)
+              if (confirm(`Delete ${selectedIds.size} conversations?`)) {
+                deleteSelected()
+              }
+            }}
+            className="w-full text-left px-3 py-1.5 mobile:py-2.5 hover:bg-[var(--color-bg)]"
+            style={{ backgroundColor: 'transparent', color: 'var(--color-error)' }}
+            role="menuitem"
+          >
+            Delete {selectedIds.size} conversations
+          </button>
+        </div>
+      ) : showMenu && (
         <div
           ref={menuRef}
           className="fixed z-50 rounded shadow-lg py-1 text-sm min-w-[160px]"

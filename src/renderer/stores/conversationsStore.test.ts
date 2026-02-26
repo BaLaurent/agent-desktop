@@ -23,6 +23,8 @@ beforeEach(() => {
     activeConversationId: null,
     searchQuery: '',
     isLoading: false,
+    selectedIds: new Set(),
+    lastClickedId: null,
   })
 })
 
@@ -127,6 +129,107 @@ describe('conversationsStore', () => {
 
     expect(mockAgent.conversations.import).toHaveBeenCalledWith('{"data":"test"}')
     expect(mockAgent.conversations.list).toHaveBeenCalled()
+  })
+
+  describe('multi-select', () => {
+    it('handleSelect with ctrl toggles individual selection', () => {
+      const c1 = makeConversation({ id: 1 })
+      const c2 = makeConversation({ id: 2 })
+      useConversationsStore.setState({ conversations: [c1, c2], activeConversationId: 1 })
+
+      useConversationsStore.getState().handleSelect(2, true, false, [1, 2])
+      expect([...useConversationsStore.getState().selectedIds]).toEqual([2])
+
+      // Toggle off
+      useConversationsStore.getState().handleSelect(2, true, false, [1, 2])
+      expect(useConversationsStore.getState().selectedIds.size).toBe(0)
+    })
+
+    it('handleSelect with ctrl does not change activeConversationId', () => {
+      useConversationsStore.setState({ conversations: [makeConversation({ id: 1 }), makeConversation({ id: 2 })], activeConversationId: 1 })
+
+      useConversationsStore.getState().handleSelect(2, true, false, [1, 2])
+      expect(useConversationsStore.getState().activeConversationId).toBe(1)
+    })
+
+    it('handleSelect with shift selects range from lastClickedId', () => {
+      const convs = [1, 2, 3, 4, 5].map((id) => makeConversation({ id }))
+      useConversationsStore.setState({ conversations: convs })
+
+      // First ctrl+click sets anchor
+      useConversationsStore.getState().handleSelect(2, true, false, [1, 2, 3, 4, 5])
+      // Then shift+click selects range
+      useConversationsStore.getState().handleSelect(4, false, true, [1, 2, 3, 4, 5])
+
+      const selected = [...useConversationsStore.getState().selectedIds]
+      expect(selected.sort()).toEqual([2, 3, 4])
+    })
+
+    it('handleSelect without modifiers clears selection and sets active', () => {
+      useConversationsStore.setState({
+        conversations: [makeConversation({ id: 1 }), makeConversation({ id: 2 })],
+        selectedIds: new Set([1, 2]),
+      })
+
+      useConversationsStore.getState().handleSelect(1, false, false, [1, 2])
+
+      expect(useConversationsStore.getState().selectedIds.size).toBe(0)
+      expect(useConversationsStore.getState().activeConversationId).toBe(1)
+    })
+
+    it('clearSelection resets selectedIds and lastClickedId', () => {
+      useConversationsStore.setState({ selectedIds: new Set([1, 2, 3]), lastClickedId: 2 })
+
+      useConversationsStore.getState().clearSelection()
+
+      expect(useConversationsStore.getState().selectedIds.size).toBe(0)
+      expect(useConversationsStore.getState().lastClickedId).toBeNull()
+    })
+
+    it('deleteSelected removes selected conversations optimistically', async () => {
+      const convs = [1, 2, 3].map((id) => makeConversation({ id }))
+      useConversationsStore.setState({ conversations: convs, selectedIds: new Set([1, 3]), activeConversationId: 1 })
+
+      await useConversationsStore.getState().deleteSelected()
+
+      expect(mockAgent.conversations.deleteMany).toHaveBeenCalledWith(expect.arrayContaining([1, 3]))
+      const state = useConversationsStore.getState()
+      expect(state.conversations).toHaveLength(1)
+      expect(state.conversations[0].id).toBe(2)
+      expect(state.selectedIds.size).toBe(0)
+      expect(state.activeConversationId).toBeNull() // was in selection
+    })
+
+    it('deleteSelected preserves activeConversationId if not in selection', async () => {
+      const convs = [1, 2, 3].map((id) => makeConversation({ id }))
+      useConversationsStore.setState({ conversations: convs, selectedIds: new Set([2, 3]), activeConversationId: 1 })
+
+      await useConversationsStore.getState().deleteSelected()
+
+      expect(useConversationsStore.getState().activeConversationId).toBe(1)
+    })
+
+    it('moveSelectedToFolder optimistically updates folder_id for all selected', async () => {
+      const convs = [makeConversation({ id: 1, folder_id: null }), makeConversation({ id: 2, folder_id: null }), makeConversation({ id: 3, folder_id: null })]
+      useConversationsStore.setState({ conversations: convs, selectedIds: new Set([1, 3]) })
+
+      await useConversationsStore.getState().moveSelectedToFolder(5)
+
+      expect(mockAgent.conversations.moveMany).toHaveBeenCalledWith(expect.arrayContaining([1, 3]), 5)
+      const state = useConversationsStore.getState()
+      expect(state.conversations.find((c) => c.id === 1)!.folder_id).toBe(5)
+      expect(state.conversations.find((c) => c.id === 2)!.folder_id).toBeNull()
+      expect(state.conversations.find((c) => c.id === 3)!.folder_id).toBe(5)
+      expect(state.selectedIds.size).toBe(0)
+    })
+
+    it('deleteSelected is a no-op with empty selection', async () => {
+      useConversationsStore.setState({ conversations: [makeConversation({ id: 1 })], selectedIds: new Set() })
+
+      await useConversationsStore.getState().deleteSelected()
+
+      expect(mockAgent.conversations.deleteMany).not.toHaveBeenCalled()
+    })
   })
 
   describe('deleteFolder', () => {

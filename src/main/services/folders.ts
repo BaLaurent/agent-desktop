@@ -31,6 +31,10 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       if (data.name !== undefined) validateString(data.name as string, 'name', 500)
       if (data.ai_overrides !== undefined && data.ai_overrides !== null) validateString(data.ai_overrides as string, 'ai_overrides', 10_000)
       if (data.default_cwd !== undefined && data.default_cwd !== null) validateString(data.default_cwd as string, 'default_cwd', 1000)
+      if (data.color !== undefined && data.color !== null) {
+        const c = data.color as string
+        if (!/^#[0-9a-fA-F]{6}$/.test(c)) throw new Error('color must be a valid hex color (#rrggbb)')
+      }
       if ('parent_id' in data && data.parent_id !== null && data.parent_id !== undefined) {
         validatePositiveInt(data.parent_id as number, 'parent_id')
         if (data.parent_id === id) throw new Error('Folder cannot be its own parent')
@@ -44,7 +48,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
           current = parent?.parent_id ?? 0
         }
       }
-      const allowed = ['name', 'parent_id', 'ai_overrides', 'default_cwd']
+      const allowed = ['name', 'parent_id', 'ai_overrides', 'default_cwd', 'color']
       const fields: string[] = []
       const values: unknown[] = []
       for (const key of allowed) {

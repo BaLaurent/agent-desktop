@@ -182,6 +182,12 @@ function runMigrations(db: Database.Database): void {
     try { db.exec('ALTER TABLE folders ADD COLUMN default_cwd TEXT') } catch (e) { console.warn('[migration] folders.default_cwd:', e) }
   }
 
+  // Add color column to folders (visual folder tinting in sidebar)
+  const folderCols3 = db.pragma('table_info(folders)') as { name: string }[]
+  if (!folderCols3.some((c) => c.name === 'color')) {
+    try { db.exec('ALTER TABLE folders ADD COLUMN color TEXT') } catch (e) { console.warn('[migration] folders.color:', e) }
+  }
+
   // Add cleared_at column to conversations (context boundary for /clear command)
   if (!convCols.some((c) => c.name === 'cleared_at')) {
     try { db.exec('ALTER TABLE conversations ADD COLUMN cleared_at TEXT') } catch (e) { console.warn('[migration] conversations.cleared_at:', e) }

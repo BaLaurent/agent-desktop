@@ -168,6 +168,71 @@ describe('Conversations Service', () => {
     expect(results).toHaveLength(0)
   })
 
+  describe('deleteMany', () => {
+    it('deletes multiple conversations in a single transaction', async () => {
+      const c1 = await ipc.invoke('conversations:create', 'One') as any
+      const c2 = await ipc.invoke('conversations:create', 'Two') as any
+      const c3 = await ipc.invoke('conversations:create', 'Three') as any
+
+      await ipc.invoke('conversations:deleteMany', [c1.id, c3.id])
+
+      const list = await ipc.invoke('conversations:list') as any[]
+      expect(list).toHaveLength(1)
+      expect(list[0].id).toBe(c2.id)
+    })
+
+    it('cascades message deletion', async () => {
+      const c = await ipc.invoke('conversations:create', 'WithMsg') as any
+      db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)').run(c.id, 'user', 'hi')
+
+      await ipc.invoke('conversations:deleteMany', [c.id])
+
+      expect(db.prepare('SELECT * FROM messages WHERE conversation_id = ?').all(c.id)).toHaveLength(0)
+    })
+
+    it('is a no-op for empty array', async () => {
+      await ipc.invoke('conversations:create', 'Keep')
+      await ipc.invoke('conversations:deleteMany', [])
+      const list = await ipc.invoke('conversations:list') as any[]
+      expect(list).toHaveLength(1)
+    })
+
+    it('rejects invalid ids', async () => {
+      await expect(ipc.invoke('conversations:deleteMany', [-1])).rejects.toThrow()
+    })
+  })
+
+  describe('moveMany', () => {
+    it('moves multiple conversations to a folder', async () => {
+      const folder = await ipc.invoke('folders:create', 'Target') as any
+      const c1 = await ipc.invoke('conversations:create', 'A') as any
+      const c2 = await ipc.invoke('conversations:create', 'B') as any
+
+      await ipc.invoke('conversations:moveMany', [c1.id, c2.id], folder.id)
+
+      const updated1 = await ipc.invoke('conversations:get', c1.id) as any
+      const updated2 = await ipc.invoke('conversations:get', c2.id) as any
+      expect(updated1.folder_id).toBe(folder.id)
+      expect(updated2.folder_id).toBe(folder.id)
+    })
+
+    it('moves to unfiled (null folder)', async () => {
+      const folder = await ipc.invoke('folders:create', 'Source') as any
+      const c = await ipc.invoke('conversations:create', 'X') as any
+      await ipc.invoke('conversations:update', c.id, { folder_id: folder.id })
+
+      await ipc.invoke('conversations:moveMany', [c.id], null)
+
+      const updated = await ipc.invoke('conversations:get', c.id) as any
+      expect(updated.folder_id).toBeNull()
+    })
+
+    it('is a no-op for empty array', async () => {
+      await ipc.invoke('conversations:moveMany', [], null)
+      // No error thrown
+    })
+  })
+
   describe('fork', () => {
     it('creates a new conversation with "Fork: " prefix title', async () => {
       const conv = await ipc.invoke('conversations:create', 'Original Chat') as any

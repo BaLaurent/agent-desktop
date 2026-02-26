@@ -83,6 +83,21 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
   })
 
+  ipcMain.handle('conversations:deleteMany', (_e, ids: number[]) => {
+    if (!Array.isArray(ids) || ids.length === 0) return
+    for (const id of ids) validatePositiveInt(id, 'conversationId')
+    const stmt = db.prepare('DELETE FROM conversations WHERE id = ?')
+    db.transaction(() => { for (const id of ids) stmt.run(id) })()
+  })
+
+  ipcMain.handle('conversations:moveMany', (_e, ids: number[], folderId: number | null) => {
+    if (!Array.isArray(ids) || ids.length === 0) return
+    for (const id of ids) validatePositiveInt(id, 'conversationId')
+    if (folderId !== null) validatePositiveInt(folderId, 'folderId')
+    const stmt = db.prepare("UPDATE conversations SET folder_id = ?, updated_at = datetime('now') WHERE id = ?")
+    db.transaction(() => { for (const id of ids) stmt.run(folderId, id) })()
+  })
+
   ipcMain.handle(
     'conversations:export',
     (_e, id: number, format: 'markdown' | 'json') => {
