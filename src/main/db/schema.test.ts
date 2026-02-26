@@ -106,6 +106,17 @@ describe('schema', () => {
     db.close()
   })
 
+  it('conversations has sdk_session_id column after migration', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
+
+    const cols = db.pragma('table_info(conversations)') as { name: string }[]
+    const colNames = cols.map((c) => c.name)
+
+    expect(colNames).toContain('sdk_session_id')
+    db.close()
+  })
+
   it('mcp_servers type column defaults to stdio', async () => {
     const db = await createTestDb()
     createTables(db as any)

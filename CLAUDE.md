@@ -21,6 +21,7 @@
 - **Hybrid shortcuts** — X11: Electron `globalShortcut`, Wayland: XDG Desktop Portal
 - **Hyprland uses FIFO not D-Bus** — `dbus-next` signal delivery broken in Electron's event loop
 - **Session detection** — `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` (both can be set under XWayland)
+- **SDK session resume** — `sdk_session_id` on conversations; normal messages use `resume`, regenerate/edit/compact/clear reset to full history fallback; one-shot queries use `persistSession: false`
 
 ## Conventions & Cascade
 - **CSS**: `@import` before `@tailwind` directives
@@ -81,6 +82,8 @@
 - **CWD hooks**: return `'deny'` not `'ask'` — bypass mode auto-approves `'ask'` decisions
 - **Auto-title**: no `outputFormat: json_schema` — causes SDK internal tool_use cycle exhausting `maxTurns: 1`
 - **Stream isolation**: `streamBuffers` dict keyed by conversationId — a conversation is streaming iff its ID is a key (no separate flag)
+- **SDK session retry**: if `resume` fails (corrupted/deleted session), `streamAndSave` catches, clears `sdk_session_id`, and retries with full history — transparent to user
+- **SDK session invalidation**: regenerate, edit, compact, clear all set `sdk_session_id = NULL` — SDK's internal history no longer matches SQLite
 - **Compact summary injection**: `buildMessageHistory` prepends `compact_summary` as `[Previous conversation summary]` with role `assistant`
 - **Hook system messages**: `hook_response` output is JSON-parsed for `systemMessage` field — sent as `system_message` stream chunk with `hookName`/`hookEvent` metadata; non-JSON output silently ignored
 - **UserPromptSubmit hooks**: SDK does not yield `hook_response` for this event — executed app-side via `hookRunner.ts`; system messages saved as `<hook-system-message>content</hook-system-message>` tags prepended to assistant content; extracted and rendered with accent-styled boxes + `MarkdownRenderer` (not plain text)

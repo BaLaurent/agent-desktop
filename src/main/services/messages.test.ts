@@ -17,7 +17,7 @@ vi.mock('./anthropic', () => ({
 }))
 
 vi.mock('./streaming', () => ({
-  streamMessage: vi.fn().mockResolvedValue({ content: 'AI response', toolCalls: [], aborted: false }),
+  streamMessage: vi.fn().mockResolvedValue({ content: 'AI response', toolCalls: [], aborted: false, sessionId: null }),
   abortStream: vi.fn(),
   injectApiKeyEnv: vi.fn(() => null),
 }))

@@ -63,7 +63,11 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       if (data.ai_overrides !== undefined && data.ai_overrides !== null) validateString(data.ai_overrides as string, 'ai_overrides', 10_000)
       if (data.cleared_at !== undefined && data.cleared_at !== null) validateString(data.cleared_at as string, 'cleared_at', 50)
       if (data.folder_id !== undefined && data.folder_id !== null) validatePositiveInt(data.folder_id as number, 'folderId')
-      const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides', 'cleared_at', 'compact_summary']
+      const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides', 'cleared_at', 'compact_summary', 'sdk_session_id']
+      // Auto-clear SDK session when cleared_at is set — session context no longer matches
+      if (data.cleared_at !== undefined && data.cleared_at !== null) {
+        data.sdk_session_id = null
+      }
       const fields: string[] = []
       const values: unknown[] = []
       for (const key of allowed) {

@@ -31,6 +31,7 @@ export interface Conversation {
   ai_overrides: string | null // JSON AIOverrides
   cleared_at: string | null
   compact_summary: string | null
+  sdk_session_id: string | null
   created_at: string
   updated_at: string
 }

@@ -94,6 +94,24 @@ describe('Conversations Service', () => {
     expect(updated.cleared_at).toBe(ts)
   })
 
+  it('update cleared_at auto-clears sdk_session_id', async () => {
+    const conv = await ipc.invoke('conversations:create', 'Session Clear') as any
+    // Manually set a session ID
+    db.prepare('UPDATE conversations SET sdk_session_id = ? WHERE id = ?').run('session-123', conv.id)
+    // Setting cleared_at should also clear the SDK session
+    await ipc.invoke('conversations:update', conv.id, { cleared_at: '2024-06-15T12:00:00.000Z' })
+    const updated = await ipc.invoke('conversations:get', conv.id) as any
+    expect(updated.cleared_at).toBe('2024-06-15T12:00:00.000Z')
+    expect(updated.sdk_session_id).toBeNull()
+  })
+
+  it('update sdk_session_id directly', async () => {
+    const conv = await ipc.invoke('conversations:create', 'SDK Session') as any
+    await ipc.invoke('conversations:update', conv.id, { sdk_session_id: 'my-session-abc' })
+    const updated = await ipc.invoke('conversations:get', conv.id) as any
+    expect(updated.sdk_session_id).toBe('my-session-abc')
+  })
+
   it('update cleared_at to null clears the boundary', async () => {
     const conv = await ipc.invoke('conversations:create', 'Clear Reset') as any
     await ipc.invoke('conversations:update', conv.id, { cleared_at: '2024-01-01T00:00:00Z' })

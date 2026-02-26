@@ -58,6 +58,157 @@ describe('buildPromptWithHistory', () => {
   })
 })
 
+describe('streamMessage — SDK session resume', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+  })
+
+  it('passes resume option when sdkSessionId is provided', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'follow-up' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1,
+      'session-abc-123'
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.resume).toBe('session-abc-123')
+  })
+
+  it('sends only last message content as prompt when resuming', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [
+        { role: 'user', content: 'first question' },
+        { role: 'assistant', content: 'first answer' },
+        { role: 'user', content: 'follow-up question' },
+      ],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1,
+      'session-xyz'
+    )
+
+    const prompt = mockQueryFn.mock.calls[0][0].prompt
+    expect(prompt).toBe('follow-up question')
+    expect(prompt).not.toContain('<conversation_history>')
+  })
+
+  it('does not set resume when sdkSessionId is null', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1,
+      null
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.resume).toBeUndefined()
+  })
+
+  it('captures session_id from SDK messages', async () => {
+    let callCount = 0
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: { type: 'system', subtype: 'init', session_id: 'captured-session-id' },
+            })
+          }
+          return Promise.resolve({ done: true })
+        }),
+      }),
+    })
+
+    const result = await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(result.sessionId).toBe('captured-session-id')
+  })
+
+  it('returns null sessionId when SDK provides no session_id', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    const result = await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(result.sessionId).toBeNull()
+  })
+
+  it('passes persistSession: false when specified', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1,
+      null,
+      false
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.persistSession).toBe(false)
+  })
+
+  it('does not set persistSession when not specified', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    const opts = mockQueryFn.mock.calls[0][0].options
+    expect(opts.persistSession).toBeUndefined()
+  })
+})
+
 describe('streamMessage — MCP allowedTools', () => {
   beforeEach(() => {
     mockSendFn.mockClear()

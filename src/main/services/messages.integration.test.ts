@@ -18,7 +18,7 @@ vi.mock('./anthropic', () => ({
   loadAgentSDK: vi.fn(),
 }))
 
-const mockStreamMessage = vi.fn().mockResolvedValue({ content: 'AI response' })
+const mockStreamMessage = vi.fn().mockResolvedValue({ content: 'AI response', toolCalls: [], aborted: false, sessionId: null })
 vi.mock('./streaming', () => ({
   streamMessage: (...args: unknown[]) => mockStreamMessage(...args),
   abortStream: vi.fn(),
@@ -72,7 +72,7 @@ describe('messages integration', () => {
     ipc = createMockIpcMain()
     registerHandlers(ipc as never, db as any)
     mockStreamMessage.mockReset()
-    mockStreamMessage.mockResolvedValue({ content: 'AI response' })
+    mockStreamMessage.mockResolvedValue({ content: 'AI response', toolCalls: [], aborted: false, sessionId: null })
 
     // Create a conversation
     const result = db
@@ -103,7 +103,7 @@ describe('messages integration', () => {
   })
 
   it('messages:send with stream returning no content returns null', async () => {
-    mockStreamMessage.mockResolvedValueOnce({ content: '' })
+    mockStreamMessage.mockResolvedValueOnce({ content: '', toolCalls: [], aborted: false, sessionId: null })
 
     const result = await ipc.invoke('messages:send', convId, 'Hello')
 
@@ -129,7 +129,7 @@ describe('messages integration', () => {
       "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'assistant', 'Old reply', '[]', ?, ?)"
     ).run(convId, later, later)
 
-    mockStreamMessage.mockResolvedValueOnce({ content: 'New reply' })
+    mockStreamMessage.mockResolvedValueOnce({ content: 'New reply', toolCalls: [], aborted: false, sessionId: null })
 
     const result = await ipc.invoke('messages:regenerate', convId)
 
@@ -164,7 +164,7 @@ describe('messages integration', () => {
       .prepare("SELECT id FROM messages WHERE conversation_id = ? AND content = 'Original'")
       .get(convId) as { id: number }
 
-    mockStreamMessage.mockResolvedValueOnce({ content: 'New AI reply' })
+    mockStreamMessage.mockResolvedValueOnce({ content: 'New AI reply', toolCalls: [], aborted: false, sessionId: null })
 
     await ipc.invoke('messages:edit', userMsg.id, 'Edited')
 
@@ -178,17 +178,43 @@ describe('messages integration', () => {
     expect(assistantMsgs[assistantMsgs.length - 1].content).toBe('New AI reply')
   })
 
-  it('messages:send passes conversationId to streamMessage', async () => {
+  it('messages:send passes conversationId and null sdkSessionId to streamMessage', async () => {
     await ipc.invoke('messages:send', convId, 'Hello')
     expect(mockStreamMessage).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(String),
       expect.any(Object),
-      convId
+      convId,
+      null
     )
   })
 
-  it('messages:regenerate passes conversationId to streamMessage', async () => {
+  it('messages:send passes sdkSessionId when conversation has one', async () => {
+    db.prepare('UPDATE conversations SET sdk_session_id = ? WHERE id = ?').run('session-resume-test', convId)
+
+    await ipc.invoke('messages:send', convId, 'Follow-up')
+    expect(mockStreamMessage).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(String),
+      expect.any(Object),
+      convId,
+      'session-resume-test'
+    )
+  })
+
+  it('messages:send saves returned sessionId to conversation', async () => {
+    mockStreamMessage.mockResolvedValueOnce({ content: 'Reply', toolCalls: [], aborted: false, sessionId: 'new-session-id-abc' })
+
+    await ipc.invoke('messages:send', convId, 'Hello')
+
+    const conv = db.prepare('SELECT sdk_session_id FROM conversations WHERE id = ?').get(convId) as { sdk_session_id: string | null }
+    expect(conv.sdk_session_id).toBe('new-session-id-abc')
+  })
+
+  it('messages:regenerate clears sdkSessionId and passes null to streamMessage', async () => {
+    // Set a session ID first
+    db.prepare('UPDATE conversations SET sdk_session_id = ? WHERE id = ?').run('old-session', convId)
+
     const now = new Date().toISOString()
     db.prepare(
       "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Hi', '[]', ?, ?)"
@@ -199,15 +225,23 @@ describe('messages integration', () => {
     ).run(convId, later, later)
 
     await ipc.invoke('messages:regenerate', convId)
+
+    // Session should be cleared before streaming
+    const conv = db.prepare('SELECT sdk_session_id FROM conversations WHERE id = ?').get(convId) as { sdk_session_id: string | null }
+    expect(conv.sdk_session_id).toBeNull()
     expect(mockStreamMessage).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(String),
       expect.any(Object),
-      convId
+      convId,
+      null
     )
   })
 
-  it('messages:edit passes conversation_id to streamMessage', async () => {
+  it('messages:edit clears sdkSessionId and passes null to streamMessage', async () => {
+    // Set a session ID first
+    db.prepare('UPDATE conversations SET sdk_session_id = ? WHERE id = ?').run('edit-session', convId)
+
     const t1 = '2024-01-01T00:00:00.000Z'
     db.prepare(
       "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Original', '[]', ?, ?)"
@@ -217,11 +251,16 @@ describe('messages integration', () => {
       .get(convId) as { id: number }
 
     await ipc.invoke('messages:edit', userMsg.id, 'Edited')
+
+    // Session should be cleared before streaming
+    const conv = db.prepare('SELECT sdk_session_id FROM conversations WHERE id = ?').get(convId) as { sdk_session_id: string | null }
+    expect(conv.sdk_session_id).toBeNull()
     expect(mockStreamMessage).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(String),
       expect.any(Object),
-      convId
+      expect.any(Number),
+      null
     )
   })
 
@@ -254,7 +293,7 @@ describe('messages integration', () => {
       db.prepare('UPDATE conversations SET cleared_at = ? WHERE id = ?').run(t2, convId)
 
       // Send a message — buildMessageHistory should exclude old messages
-      mockStreamMessage.mockResolvedValueOnce({ content: 'Post-clear reply' })
+      mockStreamMessage.mockResolvedValueOnce({ content: 'Post-clear reply', toolCalls: [], aborted: false, sessionId: null })
       await ipc.invoke('messages:send', convId, 'After clear')
 
       // The history passed to streamMessage should only contain messages after cleared_at
@@ -273,7 +312,7 @@ describe('messages integration', () => {
         "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Hello', '[]', ?, ?)"
       ).run(convId, t1, t1)
 
-      mockStreamMessage.mockResolvedValueOnce({ content: 'Reply' })
+      mockStreamMessage.mockResolvedValueOnce({ content: 'Reply', toolCalls: [], aborted: false, sessionId: null })
       await ipc.invoke('messages:send', convId, 'World')
 
       const historyArg = mockStreamMessage.mock.calls[0][0] as { role: string; content: string }[]

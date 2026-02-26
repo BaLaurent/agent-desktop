@@ -421,6 +421,19 @@ export function saveMessage(
   }
 }
 
+function getConversationSdkSessionId(db: Database.Database, conversationId: number): string | null {
+  const row = db.prepare('SELECT sdk_session_id FROM conversations WHERE id = ?').get(conversationId) as { sdk_session_id: string | null } | undefined
+  return row?.sdk_session_id ?? null
+}
+
+function saveConversationSdkSessionId(db: Database.Database, conversationId: number, sessionId: string): void {
+  db.prepare('UPDATE conversations SET sdk_session_id = ? WHERE id = ?').run(sessionId, conversationId)
+}
+
+function clearConversationSdkSessionId(db: Database.Database, conversationId: number): void {
+  db.prepare('UPDATE conversations SET sdk_session_id = NULL WHERE id = ?').run(conversationId)
+}
+
 function updateConversationTimestamp(db: Database.Database, conversationId: number): void {
   db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(
     new Date().toISOString(),
@@ -433,14 +446,25 @@ async function streamAndSave(
   conversationId: number
 ): Promise<Message | null> {
   stopTts() // Stop any active TTS before new stream
-  const history = buildMessageHistory(db, conversationId)
+
+  const sdkSessionId = getConversationSdkSessionId(db, conversationId)
+  // When resuming an SDK session, only pass the last user message (SDK has the rest)
+  const history = sdkSessionId
+    ? (() => {
+        const lastRow = db.prepare(
+          "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1"
+        ).get(conversationId) as Pick<Message, 'role' | 'content'> | undefined
+        return lastRow ? [{ role: lastRow.role, content: lastRow.content }] : []
+      })()
+    : buildMessageHistory(db, conversationId)
+
   const aiSettings = getAISettings(db, conversationId)
   const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
 
   // Run UserPromptSubmit hooks manually — the SDK subprocess doesn't yield
   // hook_response for this event through the async iterator
   let hookSystemContents: string[] = []
-  const lastUserMsg = history[history.length - 1]
+  const lastUserMsg = sdkSessionId ? history[history.length - 1] : history[history.length - 1]
   if (lastUserMsg?.role === 'user') {
     const hookMessages = await runUserPromptSubmitHooks(
       lastUserMsg.content,
@@ -458,9 +482,13 @@ async function streamAndSave(
   }
 
   try {
-    const { content: responseContent, toolCalls } = await streamMessage(
-      history, systemPrompt, aiSettings, conversationId
+    const { content: responseContent, toolCalls, sessionId: newSessionId } = await streamMessage(
+      history, systemPrompt, aiSettings, conversationId, sdkSessionId
     )
+    // Save the SDK session ID for future resume
+    if (newSessionId) {
+      saveConversationSdkSessionId(db, conversationId, newSessionId)
+    }
     if (responseContent) {
       const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
       if (!exists) return null
@@ -478,6 +506,12 @@ async function streamAndSave(
       return assistantMsg
     }
   } catch (err) {
+    // If resume failed (corrupted/deleted session), retry without session
+    if (sdkSessionId) {
+      console.warn('[messages] SDK session resume failed, retrying with full history:', err instanceof Error ? err.message : String(err))
+      clearConversationSdkSessionId(db, conversationId)
+      return streamAndSave(db, conversationId)
+    }
     console.error('[messages] Stream error:', err instanceof Error ? err.message : String(err))
   }
   return null
@@ -510,6 +544,7 @@ async function generateConversationTitle(
       allowDangerouslySkipPermissions: true,
       permissionMode: 'bypassPermissions',
       tools: [],
+      persistSession: false,
     },
   })
 
@@ -580,6 +615,7 @@ async function compactConversation(
         allowDangerouslySkipPermissions: true,
         permissionMode: 'bypassPermissions',
         tools: [],
+        persistSession: false,
       },
     })
 
@@ -598,7 +634,7 @@ async function compactConversation(
     }
 
     const clearedAt = new Date().toISOString()
-    db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = ?, updated_at = ? WHERE id = ?')
+    db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = ?, sdk_session_id = NULL, updated_at = ? WHERE id = ?')
       .run(clearedAt, summary || null, clearedAt, conversationId)
 
     return { summary, clearedAt }
@@ -685,6 +721,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       db.prepare('DELETE FROM messages WHERE id = ?').run(lastAssistant.id)
     }
 
+    // Clear SDK session — history has diverged from the SDK's internal state
+    clearConversationSdkSessionId(db, conversationId)
+
     // Re-send: build history (now without last assistant), stream new response
     return streamAndSave(db, conversationId)
   })
@@ -701,7 +740,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     if (!msg) throw new Error('Message not found')
 
-    // Atomically update message content and delete all subsequent messages
+    // Atomically update message content, delete all subsequent messages, and clear SDK session
     db.transaction(() => {
       db.prepare('UPDATE messages SET content = ?, updated_at = ? WHERE id = ?').run(
         content,
@@ -711,6 +750,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       db.prepare(
         'DELETE FROM messages WHERE conversation_id = ? AND id > ?'
       ).run(msg.conversation_id, msg.id)
+      db.prepare('UPDATE conversations SET sdk_session_id = NULL WHERE id = ?').run(msg.conversation_id)
     })()
 
     // Re-send with updated history

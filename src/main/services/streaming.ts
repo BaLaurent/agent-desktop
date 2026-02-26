@@ -175,8 +175,10 @@ export async function streamMessage(
   messages: MessageParam[],
   systemPrompt?: string,
   aiSettings?: AISettings,
-  conversationId?: number
-): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean }> {
+  conversationId?: number,
+  sdkSessionId?: string | null,
+  persistSession?: boolean
+): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
   // Ensure the macOS OAuth token is fresh — skip when using API key auth
   if (!aiSettings?.apiKey) {
     await ensureFreshMacOSToken()
@@ -198,6 +200,7 @@ export async function streamMessage(
 
   let fullContent = ''
   let aborted = false
+  let capturedSessionId: string | null = null
 
   const convExtra = conversationId != null ? { conversationId } : {}
 
@@ -213,7 +216,10 @@ export async function streamMessage(
   try {
     sendChunk('text', '', convExtra)
 
-    const prompt = buildPromptWithHistory(messages)
+    // When resuming an SDK session, send only the last user message (the SDK already has context)
+    const prompt = sdkSessionId
+      ? messages[messages.length - 1]?.content ?? ''
+      : buildPromptWithHistory(messages)
 
     const rawPermMode = aiSettings?.permissionMode || 'bypassPermissions'
     const permMode: ValidPermissionMode = (VALID_PERMISSION_MODES as readonly string[]).includes(rawPermMode)
@@ -235,6 +241,12 @@ export async function streamMessage(
       permissionMode: permMode,
       abortController,
       executable: nodeExecutable,
+      ...(persistSession === false ? { persistSession: false } : {}),
+    }
+
+    // Resume existing SDK session when available
+    if (sdkSessionId) {
+      queryOptions.resume = sdkSessionId
     }
 
     // Buffer for chunks received while awaiting tool approval
@@ -379,6 +391,11 @@ export async function streamMessage(
 
     for await (const message of agentQuery) {
       const msg = message as SDKMessage
+
+      // Capture session_id from any SDK message that carries it
+      if (!capturedSessionId && typeof (msg as Record<string, unknown>).session_id === 'string') {
+        capturedSessionId = (msg as Record<string, unknown>).session_id as string
+      }
 
       if (msg.type === 'stream_event') {
         const event = msg.event as {
@@ -544,7 +561,7 @@ export async function streamMessage(
     restoreEnv?.()
   }
 
-  return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted }
+  return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted, sessionId: capturedSessionId }
 }
 
 export function notifyConversationUpdated(conversationId: number): void {

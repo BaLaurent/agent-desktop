@@ -211,6 +211,12 @@ function runMigrations(db: Database.Database): void {
     try { db.exec('ALTER TABLE folders ADD COLUMN is_default INTEGER DEFAULT 0') } catch (e) { console.warn('[migration] folders.is_default:', e) }
   }
 
+  // Add sdk_session_id column to conversations (SDK native session resumption)
+  const convCols4 = db.pragma('table_info(conversations)') as { name: string }[]
+  if (!convCols4.some((c) => c.name === 'sdk_session_id')) {
+    try { db.exec('ALTER TABLE conversations ADD COLUMN sdk_session_id TEXT') } catch (e) { console.warn('[migration] conversations.sdk_session_id:', e) }
+  }
+
   // Ensure exactly one default folder exists
   const hasDefault = db.prepare('SELECT id FROM folders WHERE is_default = 1').get()
   if (!hasDefault) {
