@@ -198,6 +198,16 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
                 Edit
               </button>
             )}
+            {isUser && onEdit && (
+              <button
+                onClick={() => onEdit(message.id, message.content)}
+                className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+                title="Retry this message"
+              >
+                Retry
+              </button>
+            )}
             {isUser && (
               <button
                 onClick={() => setShowTaskForm(true)}
@@ -247,6 +257,11 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
           {isUser && onEdit && (
             <ContextMenuItem onClick={() => { setShowContextMenu(false); handleStartEdit() }}>
               Edit
+            </ContextMenuItem>
+          )}
+          {isUser && onEdit && (
+            <ContextMenuItem onClick={() => { setShowContextMenu(false); onEdit(message.id, message.content) }}>
+              Retry
             </ContextMenuItem>
           )}
           {isUser && (

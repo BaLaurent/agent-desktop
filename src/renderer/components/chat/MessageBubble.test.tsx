@@ -27,10 +27,8 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { MessageBubble } from './MessageBubble'
 import type { Message } from '../../../shared/types'
 
-beforeAll(() => {
-  Object.assign(navigator, {
-    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
-  })
+Object.assign(navigator, {
+  clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
 })
 
 const makeMessage = (overrides: Partial<Message> = {}): Message => ({
@@ -256,8 +254,8 @@ describe('MessageBubble', () => {
     const labels = items.map((el) => el.textContent)
     expect(labels).toContain('Copy')
     expect(labels).toContain('Edit')
+    expect(labels).toContain('Retry')
     expect(labels).toContain('Schedule')
-    expect(labels).not.toContain('Retry')
   })
 
   it('right-click opens context menu with correct items for assistant messages', () => {
@@ -406,6 +404,59 @@ describe('MessageBubble', () => {
     const items = screen.getAllByRole('menuitem')
     const labels = items.map((el) => el.textContent)
     expect(labels).not.toContain('Edit')
+  })
+
+  // ── Retry tests (user messages) ──────────────────────────────
+
+  it('shows Retry hover button for user messages with onEdit', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    expect(screen.getByTitle('Retry this message')).toBeInTheDocument()
+  })
+
+  it('does not show Retry hover button for user messages without onEdit', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    expect(screen.queryByTitle('Retry this message')).not.toBeInTheDocument()
+  })
+
+  it('Retry hover button calls onEdit with same content', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', id: 5, content: 'hello world' })} isLast={false} onEdit={onEdit} />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    fireEvent.click(screen.getByTitle('Retry this message'))
+    expect(onEdit).toHaveBeenCalledWith(5, 'hello world')
+  })
+
+  it('context menu Retry calls onEdit with same content for user messages', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', id: 9, content: 'retry me' })} isLast={false} onEdit={onEdit} />,
+    )
+    rightClickBubble(container)
+
+    const retryBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Retry')!
+    expect(retryBtn).toBeDefined()
+    fireEvent.click(retryBtn)
+    expect(onEdit).toHaveBeenCalledWith(9, 'retry me')
+  })
+
+  it('context menu does not show Retry for user messages without onEdit', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} />,
+    )
+    rightClickBubble(container)
+
+    const items = screen.getAllByRole('menuitem')
+    const labels = items.map((el) => el.textContent)
+    expect(labels).not.toContain('Retry')
   })
 
   // ── Fork context menu tests ───────────────────────────────────
