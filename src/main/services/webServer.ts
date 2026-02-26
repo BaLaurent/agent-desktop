@@ -181,6 +181,7 @@ function generateShim(token: string): string {
       update: function(id, data) { return invoke('folders:update', [id, data]); },
       delete: function(id, mode) { return invoke('folders:delete', [id, mode]); },
       reorder: function(ids) { return invoke('folders:reorder', [ids]); },
+      getDefault: function() { return invoke('folders:getDefault', []); },
     },
     mcp: {
       listServers: function() { return invoke('mcp:listServers', []); },

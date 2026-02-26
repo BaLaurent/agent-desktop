@@ -25,6 +25,13 @@ describe('Folders Service', () => {
     expect(defaultFolder.position).toBe(-1)
   })
 
+  it('getDefault returns the default folder', async () => {
+    const defaultFolder = await ipc.invoke('folders:getDefault') as any
+    expect(defaultFolder).toBeDefined()
+    expect(defaultFolder.is_default).toBe(1)
+    expect(defaultFolder.name).toBe('Unsorted')
+  })
+
   it('create returns folder with name and id', async () => {
     const folder = await ipc.invoke('folders:create', 'My Folder') as any
     expect(folder).toBeDefined()

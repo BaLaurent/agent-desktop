@@ -77,6 +77,7 @@ export interface AgentAPI {
     update(id: number, data: Partial<Folder>): Promise<void>
     delete(id: number, mode?: 'keep' | 'delete'): Promise<void>
     reorder(ids: number[]): Promise<void>
+    getDefault(): Promise<Folder>
   }
   mcp: {
     listServers(): Promise<McpServer[]>

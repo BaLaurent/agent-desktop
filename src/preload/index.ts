@@ -74,6 +74,7 @@ const api: AgentAPI = {
     update: (id, data) => withTimeout(ipcRenderer.invoke('folders:update', id, data)),
     delete: (id, mode?) => withTimeout(ipcRenderer.invoke('folders:delete', id, mode)),
     reorder: (ids) => withTimeout(ipcRenderer.invoke('folders:reorder', ids)),
+    getDefault: () => withTimeout(ipcRenderer.invoke('folders:getDefault')),
   },
   mcp: {
     listServers: () => withTimeout(ipcRenderer.invoke('mcp:listServers')),

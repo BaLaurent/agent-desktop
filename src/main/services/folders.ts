@@ -121,4 +121,8 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     })
     reorder()
   })
+
+  ipcMain.handle('folders:getDefault', () => {
+    return db.prepare('SELECT * FROM folders WHERE is_default = 1').get()
+  })
 }
