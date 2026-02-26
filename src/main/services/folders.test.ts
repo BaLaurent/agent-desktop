@@ -17,6 +17,14 @@ describe('Folders Service', () => {
     db.close()
   })
 
+  it('default folder is auto-created on startup with is_default=1', async () => {
+    const list = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list.find((f: any) => f.is_default === 1)
+    expect(defaultFolder).toBeDefined()
+    expect(defaultFolder.name).toBe('Unsorted')
+    expect(defaultFolder.position).toBe(-1)
+  })
+
   it('create returns folder with name and id', async () => {
     const folder = await ipc.invoke('folders:create', 'My Folder') as any
     expect(folder).toBeDefined()
@@ -36,13 +44,16 @@ describe('Folders Service', () => {
     await ipc.invoke('folders:create', 'C')
 
     const list = await ipc.invoke('folders:list') as any[]
-    expect(list.length).toBe(3)
-    expect(list[0].name).toBe('A')
-    expect(list[0].position).toBe(0)
-    expect(list[1].name).toBe('B')
-    expect(list[1].position).toBe(1)
-    expect(list[2].name).toBe('C')
-    expect(list[2].position).toBe(2)
+    // Default folder (position -1) comes first, then user folders
+    expect(list.length).toBe(4)
+    expect(list[0].name).toBe('Unsorted')
+    expect(list[0].position).toBe(-1)
+    expect(list[1].name).toBe('A')
+    expect(list[1].position).toBe(0)
+    expect(list[2].name).toBe('B')
+    expect(list[2].position).toBe(1)
+    expect(list[3].name).toBe('C')
+    expect(list[3].position).toBe(2)
   })
 
   it('update name changes name', async () => {
@@ -75,20 +86,24 @@ describe('Folders Service', () => {
   })
 
   it('reorder updates positions transactionally', async () => {
+    const list0 = await ipc.invoke('folders:list') as any[]
+    const defaultFolder = list0.find((f: any) => f.is_default === 1)
     const a = await ipc.invoke('folders:create', 'A') as any
     const b = await ipc.invoke('folders:create', 'B') as any
     const c = await ipc.invoke('folders:create', 'C') as any
 
-    // Reverse the order
-    await ipc.invoke('folders:reorder', [c.id, b.id, a.id])
+    // Reverse user folders, keep default folder at front
+    await ipc.invoke('folders:reorder', [defaultFolder.id, c.id, b.id, a.id])
 
     const list = await ipc.invoke('folders:list') as any[]
-    expect(list[0].name).toBe('C')
+    expect(list[0].name).toBe('Unsorted')
     expect(list[0].position).toBe(0)
-    expect(list[1].name).toBe('B')
+    expect(list[1].name).toBe('C')
     expect(list[1].position).toBe(1)
-    expect(list[2].name).toBe('A')
+    expect(list[2].name).toBe('B')
     expect(list[2].position).toBe(2)
+    expect(list[3].name).toBe('A')
+    expect(list[3].position).toBe(3)
   })
 
   it('create assigns incremental positions', async () => {
@@ -197,7 +212,9 @@ describe('Folders Service', () => {
       await ipc.invoke('folders:delete', parent.id, 'delete')
 
       const folders = await ipc.invoke('folders:list') as any[]
-      expect(folders).toHaveLength(0)
+      // Only the default folder remains
+      expect(folders).toHaveLength(1)
+      expect(folders[0].is_default).toBe(1)
       const convs = db.prepare('SELECT * FROM conversations').all()
       expect(convs).toHaveLength(0)
     })
