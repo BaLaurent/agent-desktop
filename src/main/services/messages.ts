@@ -463,9 +463,10 @@ async function streamAndSave(
     if (responseContent) {
       const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
       if (!exists) return null
-      // Prepend hook system messages so they persist in the saved message
+      // Prepend hook system messages with a detectable tag so the renderer
+      // can extract them and apply accent styling (same as StreamingIndicator)
       const finalContent = hookSystemContents.length > 0
-        ? hookSystemContents.join('\n\n') + '\n\n---\n\n' + responseContent
+        ? hookSystemContents.map(c => `<hook-system-message>${c}</hook-system-message>`).join('\n') + '\n\n' + responseContent
         : responseContent
       const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], toolCalls)
       updateConversationTimestamp(db, conversationId)

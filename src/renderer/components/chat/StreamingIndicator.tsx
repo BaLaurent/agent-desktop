@@ -59,7 +59,7 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
                         {part.hookEvent}
                       </span>
                     )}
-                    <span>{part.content}</span>
+                    <MarkdownRenderer content={part.content} />
                   </div>
                 )
               }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolCallsSection } from './ToolCallsSection'
 import { TaskFormModal } from '../scheduler/TaskFormModal'
@@ -39,6 +39,17 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
 
   const isUser = message.role === 'user'
 
+  // Extract hook system messages from saved content (wrapped in <hook-system-message> tags)
+  const { hookMessages, cleanContent } = useMemo(() => {
+    if (isUser) return { hookMessages: [] as string[], cleanContent: message.content }
+    const hooks: string[] = []
+    const cleaned = message.content.replace(
+      /<hook-system-message>([\s\S]*?)<\/hook-system-message>\n?/g,
+      (_, content: string) => { hooks.push(content); return '' }
+    )
+    return { hookMessages: hooks, cleanContent: cleaned.replace(/^\n+/, '') }
+  }, [message.content, isUser])
+
   const speakingMessageId = useTtsStore((s) => s.speakingMessageId)
   const { playMessage, stopPlayback } = useTtsStore()
   const ttsProvider = useSettingsStore((s) => s.settings.tts_provider)
@@ -48,8 +59,8 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
     && !!ttsResponseMode && ttsResponseMode !== 'off'
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(message.content)
-  }, [message.content])
+    await navigator.clipboard.writeText(isUser ? message.content : cleanContent)
+  }, [message.content, isUser, cleanContent])
 
   const handleStartEdit = useCallback(() => {
     setEditContent(message.content)
@@ -146,7 +157,20 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
               <MarkdownRenderer content={message.content} />
             ) : (
               <>
-                <MarkdownRenderer content={message.content} />
+                {hookMessages.map((hm, i) => (
+                  <div
+                    key={`hook_${i}`}
+                    className="mb-2 rounded px-3 py-2 text-xs border"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-accent) 10%, transparent)',
+                      borderColor: 'color-mix(in srgb, var(--color-accent) 30%, transparent)',
+                      color: 'var(--color-text-muted)',
+                    }}
+                  >
+                    <MarkdownRenderer content={hm} />
+                  </div>
+                ))}
+                <MarkdownRenderer content={cleanContent} />
                 {message.tool_calls && (
                   <ToolCallsSection toolCallsJson={message.tool_calls} />
                 )}
@@ -180,7 +204,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
             </button>
             {showTtsButton && (
               <button
-                onClick={() => isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)}
+                onClick={() => isSpeakingThis ? stopPlayback() : playMessage(message.id, isUser ? message.content : cleanContent, message.conversation_id)}
                 className="rounded hover:opacity-80 transition-opacity px-2 py-0.5 text-[10px] mobile:px-4 mobile:py-3 mobile:text-sm"
                 style={{ color: isSpeakingThis ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
                 title={isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
@@ -249,7 +273,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
           {showTtsButton && (
             <ContextMenuItem onClick={() => {
               setShowContextMenu(false)
-              isSpeakingThis ? stopPlayback() : playMessage(message.id, message.content, message.conversation_id)
+              isSpeakingThis ? stopPlayback() : playMessage(message.id, isUser ? message.content : cleanContent, message.conversation_id)
             }}>
               {isSpeakingThis ? 'Stop TTS' : 'Play TTS'}
             </ContextMenuItem>
