@@ -488,6 +488,57 @@ describe('Messages Service', () => {
     })
   })
 
+  describe('buildMessageHistory with compact_summary', () => {
+    it('prepends compact_summary as assistant message when set on conversation', () => {
+      db.prepare('UPDATE conversations SET compact_summary = ? WHERE id = ?').run('Summary of prior discussion', convId)
+      db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'new question', '2025-01-02T00:00:00Z')").run(convId)
+
+      const history = buildMessageHistory(db, convId)
+      expect(history).toHaveLength(2)
+      expect(history[0].role).toBe('assistant')
+      expect(history[0].content).toBe('[Previous conversation summary]\nSummary of prior discussion')
+      expect(history[1].role).toBe('user')
+      expect(history[1].content).toBe('new question')
+    })
+
+    it('does not prepend anything when compact_summary is null', () => {
+      db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'hello', '2025-01-01T00:00:00Z')").run(convId)
+
+      const history = buildMessageHistory(db, convId)
+      expect(history).toHaveLength(1)
+      expect(history[0].role).toBe('user')
+      expect(history[0].content).toBe('hello')
+    })
+
+    it('prepends compact_summary with cleared_at filtering combined', () => {
+      const clearedAt = '2025-01-01T12:00:00Z'
+      db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = ? WHERE id = ?').run(clearedAt, 'Old context summary', convId)
+      // Message before cleared_at — should be excluded
+      db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'old message', '2025-01-01T00:00:00Z')").run(convId)
+      // Message after cleared_at — should be included
+      db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'new message', '2025-01-02T00:00:00Z')").run(convId)
+
+      const history = buildMessageHistory(db, convId)
+      expect(history).toHaveLength(2)
+      expect(history[0].role).toBe('assistant')
+      expect(history[0].content).toContain('[Previous conversation summary]')
+      expect(history[0].content).toContain('Old context summary')
+      expect(history[1].content).toBe('new message')
+    })
+
+    it('returns only compact_summary when no messages exist after cleared_at', () => {
+      const clearedAt = '2025-01-01T12:00:00Z'
+      db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = ? WHERE id = ?').run(clearedAt, 'All prior context', convId)
+      // All messages before cleared_at
+      db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'old', '2025-01-01T00:00:00Z')").run(convId)
+
+      const history = buildMessageHistory(db, convId)
+      expect(history).toHaveLength(1)
+      expect(history[0].role).toBe('assistant')
+      expect(history[0].content).toBe('[Previous conversation summary]\nAll prior context')
+    })
+  })
+
   describe('attachment links in message content', () => {
     it('messages:send augments content with attachment links', () => {
       // Simulate what the handler does: content + contentSuffix saved together

@@ -135,6 +135,87 @@ describe('chatStore', () => {
     expect(useChatStore.getState().clearedAt).toBeNull()
   })
 
+  it('clearContext sets compactSummary to null', async () => {
+    useChatStore.setState({ compactSummary: 'old summary' })
+    await useChatStore.getState().clearContext(42)
+
+    const state = useChatStore.getState()
+    expect(state.compactSummary).toBeNull()
+    expect(mockAgent.conversations.update).toHaveBeenCalledWith(42, expect.objectContaining({ compact_summary: null }))
+  })
+
+  it('compactContext sets isCompacting then resolves with summary', async () => {
+    mockAgent.messages.compact.mockResolvedValueOnce({ summary: 'Compacted summary', clearedAt: '2025-06-01T00:00:00.000Z' })
+
+    const promise = useChatStore.getState().compactContext(1)
+
+    // isCompacting should be true immediately
+    expect(useChatStore.getState().isCompacting).toBe(true)
+
+    await promise
+
+    const state = useChatStore.getState()
+    expect(state.isCompacting).toBe(false)
+    expect(state.compactSummary).toBe('Compacted summary')
+    expect(state.clearedAt).toBe('2025-06-01T00:00:00.000Z')
+    expect(mockAgent.messages.compact).toHaveBeenCalledWith(1)
+  })
+
+  it('compactContext sets compactSummary to null when summary is empty', async () => {
+    mockAgent.messages.compact.mockResolvedValueOnce({ summary: '', clearedAt: '2025-06-01T00:00:00.000Z' })
+
+    await useChatStore.getState().compactContext(1)
+
+    const state = useChatStore.getState()
+    expect(state.compactSummary).toBeNull()
+    expect(state.isCompacting).toBe(false)
+  })
+
+  it('compactContext sets error on failure', async () => {
+    mockAgent.messages.compact.mockRejectedValueOnce(new Error('Compact failed'))
+
+    await useChatStore.getState().compactContext(1)
+
+    const state = useChatStore.getState()
+    expect(state.error).toBe('Compact failed')
+    expect(state.isCompacting).toBe(false)
+  })
+
+  it('clearChat resets compactSummary and isCompacting', () => {
+    useChatStore.setState({ compactSummary: 'some summary', isCompacting: true })
+    useChatStore.getState().clearChat()
+
+    const state = useChatStore.getState()
+    expect(state.compactSummary).toBeNull()
+    expect(state.isCompacting).toBe(false)
+  })
+
+  it('loadMessages extracts compactSummary from conversation', async () => {
+    mockAgent.conversations.get.mockResolvedValueOnce({
+      id: 1,
+      title: 'Test',
+      compact_summary: 'Loaded summary',
+      messages: [],
+    })
+
+    await useChatStore.getState().loadMessages(1)
+
+    expect(useChatStore.getState().compactSummary).toBe('Loaded summary')
+  })
+
+  it('loadMessages sets compactSummary to null when conversation has no compact_summary', async () => {
+    useChatStore.setState({ compactSummary: 'stale summary' })
+    mockAgent.conversations.get.mockResolvedValueOnce({
+      id: 1,
+      title: 'Test',
+      messages: [],
+    })
+
+    await useChatStore.getState().loadMessages(1)
+
+    expect(useChatStore.getState().compactSummary).toBeNull()
+  })
+
   it('loadMessages extracts clearedAt from conversation', async () => {
     const clearedTs = '2024-06-15T12:00:00.000Z'
     mockAgent.conversations.get.mockResolvedValueOnce({

@@ -30,6 +30,7 @@ export const mockAgent = {
     stop: vi.fn().mockResolvedValue(undefined),
     regenerate: vi.fn().mockResolvedValue(undefined),
     edit: vi.fn().mockResolvedValue(undefined),
+    compact: vi.fn().mockResolvedValue({ summary: 'Test summary', clearedAt: '2025-01-01T00:00:00.000Z' }),
     respondToApproval: vi.fn().mockResolvedValue(undefined),
     onStream: vi.fn().mockImplementation((cb: (chunk: unknown) => void) => {
       capturedStreamListener = cb

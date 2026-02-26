@@ -30,6 +30,8 @@
 - **Tinting**: `color-mix(in srgb, ...)` — Tailwind opacity modifiers don't work with raw CSS var values
 - **Settings cascade**: Conversation > Folder > Global; `null`/`{}` = inherited
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
+- **`/compact`**: uses Haiku to summarize conversation; summary stored in `compact_summary` column on conversations table
+- **`/clear`**: just sets `cleared_at` with no AI call
 - **`allowedTools` wildcards** (`mcp__<name>__*`) REQUIRED — MCP tools unusable without them, even with bypass
 - **`bypassPermissions`** is the only mode that sets `allowDangerouslySkipPermissions`
 - **Tests**: `createTestDb()` is async — all `beforeEach` must `await`; tests colocated as `*.test.ts`
@@ -70,6 +72,7 @@
 - **CWD hooks**: return `'deny'` not `'ask'` — bypass mode auto-approves `'ask'` decisions
 - **Auto-title**: no `outputFormat: json_schema` — causes SDK internal tool_use cycle exhausting `maxTurns: 1`
 - **Stream isolation**: `streamBuffers` dict keyed by conversationId — a conversation is streaming iff its ID is a key (no separate flag)
+- **Compact summary injection**: `buildMessageHistory` prepends `compact_summary` as `[Previous conversation summary]` with role `assistant`
 
 ## Quick Chat & TTS Gotchas
 - **Shortcut re-toggle**: voice sends stop-recording, text hides; only creates new window if hidden/destroyed
