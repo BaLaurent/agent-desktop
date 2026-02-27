@@ -24,7 +24,7 @@ export interface AIOverrides {
   tts_responseMode?: string    // 'off' | 'full' | 'summary' | 'auto'
   tts_summaryPrompt?: string   // prompt template with {response} placeholder
   ai_sdkBackend?: string       // 'claude-agent-sdk' | 'pi'
-  hooks_sharedAcrossBackends?: string  // 'true' | 'false'
+  settings_sharedAcrossBackends?: string  // 'true' | 'false'
 }
 
 export interface Conversation {

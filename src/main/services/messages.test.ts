@@ -183,7 +183,7 @@ describe('Messages Service', () => {
   })
 
   it('getAISettings returns sharedHooks false when set', () => {
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('hooks_sharedAcrossBackends', 'false')").run()
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('settings_sharedAcrossBackends', 'false')").run()
     const settings = getAISettings(db, convId)
     expect(settings.sharedHooks).toBe(false)
   })
@@ -192,7 +192,7 @@ describe('Messages Service', () => {
     const folder = db.prepare("INSERT INTO folders (name) VALUES ('Isolated Folder')").run()
     const folderId = folder.lastInsertRowid as number
     db.prepare('UPDATE folders SET ai_overrides = ? WHERE id = ?').run(
-      JSON.stringify({ hooks_sharedAcrossBackends: 'false' }),
+      JSON.stringify({ settings_sharedAcrossBackends: 'false' }),
       folderId
     )
     db.prepare('UPDATE conversations SET folder_id = ? WHERE id = ?').run(folderId, convId)

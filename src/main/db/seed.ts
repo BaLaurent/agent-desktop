@@ -58,7 +58,7 @@ function seedSettings(db: Database.Database): void {
     ['openscad_binaryPath', 'openscad'],
     ['hooks_cwdRestriction', 'true'],
     ['hooks_cwdWhitelist', '[]'],
-    ['hooks_sharedAcrossBackends', 'true'],
+    ['settings_sharedAcrossBackends', 'true'],
     ['ai_skills', 'off'],
     ['ai_skillsEnabled', 'true'],
     ['ai_disabledSkills', '[]'],

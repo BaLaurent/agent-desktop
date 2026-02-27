@@ -53,7 +53,7 @@ export const SKILLS_TOGGLE_OPTIONS = [
   { value: 'false', label: 'Disabled' },
 ] as const
 
-export const HOOKS_SHARED_OPTIONS = [
+export const CONFIG_SHARING_OPTIONS = [
   { value: 'true', label: 'Shared' },
   { value: 'false', label: 'Per-backend' },
 ] as const
@@ -95,7 +95,7 @@ export const SETTING_DEFS: SettingDef[] = [
   { key: 'ai_skills', label: 'Setting Sources', type: 'select', options: SETTING_SOURCES_OPTIONS },
   { key: 'ai_skillsEnabled', label: 'Skills', type: 'select', options: SKILLS_TOGGLE_OPTIONS },
   { key: 'ai_defaultSystemPrompt', label: 'System Prompt', type: 'textarea' },
-  { key: 'hooks_sharedAcrossBackends', label: 'Shared Hooks', type: 'select', options: HOOKS_SHARED_OPTIONS },
+  { key: 'settings_sharedAcrossBackends', label: 'Share Claude Config', type: 'select', options: CONFIG_SHARING_OPTIONS },
   { key: 'files_excludePatterns', label: 'File Exclude Patterns', type: 'textarea' },
   { key: 'tts_responseMode', label: 'Response TTS', type: 'select', options: TTS_RESPONSE_OPTIONS },
   { key: 'tts_summaryPrompt', label: 'TTS Summary Prompt', type: 'textarea' },
@@ -118,7 +118,7 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_skillsEnabled',
   'ai_disabledSkills',
   'hooks_cwdWhitelist',
-  'hooks_sharedAcrossBackends',
+  'settings_sharedAcrossBackends',
   'files_excludePatterns',
   'tts_responseMode',
   'tts_summaryPrompt',
