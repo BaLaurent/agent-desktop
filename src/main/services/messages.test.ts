@@ -143,6 +143,64 @@ describe('Messages Service', () => {
     expect(settings.permissionMode).toBe('bypassPermissions')
   })
 
+  it('getAISettings returns sdkBackend defaulting to claude-agent-sdk', () => {
+    const settings = getAISettings(db, convId)
+    expect(settings.sdkBackend).toBe('claude-agent-sdk')
+  })
+
+  it('getAISettings returns sdkBackend from settings', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_sdkBackend', 'pi')").run()
+    const settings = getAISettings(db, convId)
+    expect(settings.sdkBackend).toBe('pi')
+  })
+
+  it('getAISettings cascades sdkBackend from folder overrides', () => {
+    const folder = db.prepare("INSERT INTO folders (name) VALUES ('PI Folder')").run()
+    const folderId = folder.lastInsertRowid as number
+    db.prepare('UPDATE folders SET ai_overrides = ? WHERE id = ?').run(
+      JSON.stringify({ ai_sdkBackend: 'pi' }),
+      folderId
+    )
+    db.prepare('UPDATE conversations SET folder_id = ? WHERE id = ?').run(folderId, convId)
+
+    const settings = getAISettings(db, convId)
+    expect(settings.sdkBackend).toBe('pi')
+  })
+
+  it('getAISettings cascades sdkBackend from conversation overrides', () => {
+    db.prepare('UPDATE conversations SET ai_overrides = ? WHERE id = ?').run(
+      JSON.stringify({ ai_sdkBackend: 'pi' }),
+      convId
+    )
+
+    const settings = getAISettings(db, convId)
+    expect(settings.sdkBackend).toBe('pi')
+  })
+
+  it('getAISettings returns sharedHooks defaulting to true', () => {
+    const settings = getAISettings(db, convId)
+    expect(settings.sharedHooks).toBe(true)
+  })
+
+  it('getAISettings returns sharedHooks false when set', () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('hooks_sharedAcrossBackends', 'false')").run()
+    const settings = getAISettings(db, convId)
+    expect(settings.sharedHooks).toBe(false)
+  })
+
+  it('getAISettings cascades sharedHooks from folder overrides', () => {
+    const folder = db.prepare("INSERT INTO folders (name) VALUES ('Isolated Folder')").run()
+    const folderId = folder.lastInsertRowid as number
+    db.prepare('UPDATE folders SET ai_overrides = ? WHERE id = ?').run(
+      JSON.stringify({ hooks_sharedAcrossBackends: 'false' }),
+      folderId
+    )
+    db.prepare('UPDATE conversations SET folder_id = ? WHERE id = ?').run(folderId, convId)
+
+    const settings = getAISettings(db, convId)
+    expect(settings.sharedHooks).toBe(false)
+  })
+
   it('getAISettings parses tools preset correctly', () => {
     const settings = getAISettings(db, convId)
     expect(settings.tools).toEqual({ type: 'preset', preset: 'claude_code' })

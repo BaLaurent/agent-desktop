@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
+import { streamMessagePI } from './streamingPI'
 import { buildCwdRestrictionHooks } from './cwdHooks'
 import { findBinaryInPath, ensureFreshMacOSToken } from '../utils/env'
 import { broadcast } from '../utils/broadcast'
@@ -9,7 +10,8 @@ import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall, 
 
 // Per-conversation abort controllers: Map<conversationId, AbortController>
 // Allows aborting a specific stream without affecting others
-const abortControllers = new Map<number, AbortController>()
+// Exported for use by alternative backend implementations (e.g. streamingPI)
+export const abortControllers = new Map<number, AbortController>()
 
 // Deferred promise map for tool approval / ask-user responses from the renderer
 const pendingRequests = new Map<string, { resolve: (value: unknown) => void; conversationId?: number }>()
@@ -89,6 +91,7 @@ export function buildPromptWithHistory(messages: MessageParam[]): string {
 }
 
 export interface AISettings {
+  sdkBackend?: string
   model?: string
   maxTurns?: number
   maxThinkingTokens?: number
@@ -99,6 +102,7 @@ export interface AISettings {
   mcpServers?: Record<string, { command: string; args: string[]; env?: Record<string, string> } | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> }>
   cwdRestrictionEnabled?: boolean
   cwdWhitelist?: CwdWhitelistEntry[]
+  sharedHooks?: boolean
   skills?: 'off' | 'user' | 'project' | 'local'
   skillsEnabled?: boolean
   disabledSkills?: string[]
@@ -179,6 +183,11 @@ export async function streamMessage(
   sdkSessionId?: string | null,
   persistSession?: boolean
 ): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
+  // Delegate to PI-SDK backend when selected
+  if (aiSettings?.sdkBackend === 'pi') {
+    return streamMessagePI(messages, systemPrompt, aiSettings, conversationId)
+  }
+
   // Ensure the macOS OAuth token is fresh — skip when using API key auth
   if (!aiSettings?.apiKey) {
     await ensureFreshMacOSToken()

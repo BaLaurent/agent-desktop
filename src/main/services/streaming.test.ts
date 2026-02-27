@@ -15,6 +15,11 @@ vi.mock('./anthropic', () => ({
   }),
 }))
 
+const mockStreamMessagePI = vi.fn()
+vi.mock('./streamingPI', () => ({
+  streamMessagePI: (...args: unknown[]) => mockStreamMessagePI(...args),
+}))
+
 import { buildPromptWithHistory, streamMessage, registerStreamWindow, notifyConversationUpdated } from './streaming'
 
 describe('buildPromptWithHistory', () => {
@@ -1068,5 +1073,72 @@ describe('notifyConversationUpdated', () => {
     notifyConversationUpdated(1)
 
     expect(sendFn).not.toHaveBeenCalled()
+  })
+})
+
+describe('streamMessage — PI backend delegation', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+    mockStreamMessagePI.mockClear()
+  })
+
+  it('delegates to streamMessagePI when sdkBackend is pi', async () => {
+    const piResult = { content: 'PI response', toolCalls: [], aborted: false, sessionId: null }
+    mockStreamMessagePI.mockResolvedValue(piResult)
+
+    const result = await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { sdkBackend: 'pi', cwd: '/tmp/test' },
+      1
+    )
+
+    expect(mockStreamMessagePI).toHaveBeenCalledTimes(1)
+    expect(mockStreamMessagePI).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { sdkBackend: 'pi', cwd: '/tmp/test' },
+      1
+    )
+    expect(result).toBe(piResult)
+    // Claude SDK query should NOT have been called
+    expect(mockQueryFn).not.toHaveBeenCalled()
+  })
+
+  it('does not delegate when sdkBackend is claude-agent-sdk', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { sdkBackend: 'claude-agent-sdk', permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(mockStreamMessagePI).not.toHaveBeenCalled()
+    expect(mockQueryFn).toHaveBeenCalled()
+  })
+
+  it('does not delegate when sdkBackend is undefined', async () => {
+    mockQueryFn.mockReturnValue({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn().mockResolvedValue({ done: true }),
+      }),
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(mockStreamMessagePI).not.toHaveBeenCalled()
+    expect(mockQueryFn).toHaveBeenCalled()
   })
 })

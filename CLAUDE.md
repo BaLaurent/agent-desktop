@@ -11,6 +11,7 @@
 
 ## Architecture Decisions
 - Electron + React + Zustand + Tailwind + sql.js (WASM SQLite)
+- **Dual SDK backend** — `ai_sdkBackend` selects Claude Agent SDK (default) or PI Coding Agent; 4-line branch in `streamMessage()` delegates to `streamMessagePI()`; no abstraction layer (only 2 backends)
 - **electron-vite** outputs to `out/`, not `dist-electron/`
 - **asar: false** — SDK `import.meta.url` resolves inside `app.asar`; system `node` can't read asar archives
 - **sql.js (WASM)** — no native ABI swap needed; same binary in tests and prod

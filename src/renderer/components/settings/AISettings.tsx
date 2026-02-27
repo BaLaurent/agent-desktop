@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useAuthStore } from '../../stores/authStore'
-import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS } from '../../../shared/constants'
+import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS, SDK_BACKEND_OPTIONS, HOOKS_SHARED_OPTIONS } from '../../../shared/constants'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 import { CwdWhitelistEditor } from './CwdWhitelistEditor'
 import type { CwdWhitelistEntry } from '../../../shared/types'
@@ -14,6 +14,7 @@ export function AISettings() {
     loadSettings()
   }, [loadSettings])
 
+  const sdkBackend = settings['ai_sdkBackend'] ?? 'claude-agent-sdk'
   const apiKey = settings['ai_apiKey'] ?? ''
   const baseUrl = settings['ai_baseUrl'] ?? ''
   const customModel = settings['ai_customModel'] ?? ''
@@ -32,6 +33,7 @@ export function AISettings() {
   const maxBudgetUsd = settings['ai_maxBudgetUsd'] ?? '0'
   const permissionMode = settings['ai_permissionMode'] ?? 'bypassPermissions'
   const skills = settings['ai_skills'] ?? 'off'
+  const sharedHooks = settings['hooks_sharedAcrossBackends'] ?? 'true'
   const cwdRestriction = settings['hooks_cwdRestriction'] ?? 'true'
   const cwdWhitelistRaw = settings['hooks_cwdWhitelist'] ?? '[]'
   const cwdWhitelist: CwdWhitelistEntry[] = (() => {
@@ -58,6 +60,34 @@ export function AISettings() {
 
   return (
     <div className="flex flex-col gap-1">
+      {/* Backend */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Backend
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Claude Agent SDK has more built-in features. PI is extensible via TypeScript extensions.
+          </span>
+        </div>
+        <select
+          value={sdkBackend}
+          onChange={(e) => setSetting('ai_sdkBackend', e.target.value)}
+          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          aria-label="Select SDK backend"
+        >
+          {SDK_BACKEND_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* API Key */}
       <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
         <div className="flex flex-col gap-0.5 pr-4">
@@ -463,6 +493,34 @@ export function AISettings() {
           />
         </div>
       )}
+
+      {/* Shared Hooks */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Shared Hooks
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Apply Claude Code hooks (~/.claude/settings.json) to all backends. When per-backend, hooks only run for Claude SDK.
+          </span>
+        </div>
+        <select
+          value={sharedHooks}
+          onChange={(e) => setSetting('hooks_sharedAcrossBackends', e.target.value)}
+          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          aria-label="Shared hooks mode"
+        >
+          {HOOKS_SHARED_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Default System Prompt */}
       <div className="flex flex-col gap-2 py-3">

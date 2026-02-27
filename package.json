@@ -25,6 +25,8 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.37",
     "@fontsource/jetbrains-mono": "^5.2.8",
+    "@mariozechner/pi-ai": "^0.55.1",
+    "@mariozechner/pi-coding-agent": "^0.55.1",
     "@monaco-editor/react": "^4.7.0",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",

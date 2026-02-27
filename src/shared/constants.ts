@@ -1,5 +1,12 @@
 import type { AIOverrides } from './types'
 
+// ─── SDK Backend Constants ──────────────────────────────────
+
+export const SDK_BACKEND_OPTIONS = [
+  { value: 'claude-agent-sdk', label: 'Claude Agent SDK' },
+  { value: 'pi', label: 'PI Coding Agent' },
+] as const
+
 // ─── Model Constants ─────────────────────────────────────────
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6-20250514'
@@ -46,6 +53,11 @@ export const SKILLS_TOGGLE_OPTIONS = [
   { value: 'false', label: 'Disabled' },
 ] as const
 
+export const HOOKS_SHARED_OPTIONS = [
+  { value: 'true', label: 'Shared' },
+  { value: 'false', label: 'Per-backend' },
+] as const
+
 // ─── TTS Response Options ───────────────────────────────────
 
 export const TTS_RESPONSE_OPTIONS = [
@@ -74,6 +86,7 @@ export interface SettingDef {
 }
 
 export const SETTING_DEFS: SettingDef[] = [
+  { key: 'ai_sdkBackend', label: 'Backend', type: 'select', options: SDK_BACKEND_OPTIONS },
   { key: 'ai_model', label: 'Model', type: 'select', options: MODEL_OPTIONS },
   { key: 'ai_maxTurns', label: 'Max Turns', type: 'number', min: 0 },
   { key: 'ai_maxThinkingTokens', label: 'Thinking Tokens', type: 'number', min: 0, max: 100000, step: 1000 },
@@ -82,6 +95,7 @@ export const SETTING_DEFS: SettingDef[] = [
   { key: 'ai_skills', label: 'Setting Sources', type: 'select', options: SETTING_SOURCES_OPTIONS },
   { key: 'ai_skillsEnabled', label: 'Skills', type: 'select', options: SKILLS_TOGGLE_OPTIONS },
   { key: 'ai_defaultSystemPrompt', label: 'System Prompt', type: 'textarea' },
+  { key: 'hooks_sharedAcrossBackends', label: 'Shared Hooks', type: 'select', options: HOOKS_SHARED_OPTIONS },
   { key: 'files_excludePatterns', label: 'File Exclude Patterns', type: 'textarea' },
   { key: 'tts_responseMode', label: 'Response TTS', type: 'select', options: TTS_RESPONSE_OPTIONS },
   { key: 'tts_summaryPrompt', label: 'TTS Summary Prompt', type: 'textarea' },
@@ -90,6 +104,7 @@ export const SETTING_DEFS: SettingDef[] = [
 // ─── AI Override Keys ────────────────────────────────────────
 
 export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
+  'ai_sdkBackend',
   'ai_model',
   'ai_maxTurns',
   'ai_maxThinkingTokens',
@@ -103,6 +118,7 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_skillsEnabled',
   'ai_disabledSkills',
   'hooks_cwdWhitelist',
+  'hooks_sharedAcrossBackends',
   'files_excludePatterns',
   'tts_responseMode',
   'tts_summaryPrompt',

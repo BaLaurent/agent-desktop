@@ -293,7 +293,7 @@ function filterMcpServers(
 }
 
 export function getAISettings(db: Database.Database, conversationId: number): AISettings {
-  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'hooks_cwdWhitelist', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel']
+  const keys = ['ai_sdkBackend', 'ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'hooks_cwdWhitelist', 'hooks_sharedAcrossBackends', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel']
   const rows = db
     .prepare(`SELECT key, value FROM settings WHERE key IN (${keys.map(() => '?').join(',')})`)
     .all(...keys) as { key: string; value: string }[]
@@ -397,6 +397,7 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
   }
 
   return {
+    sdkBackend: (map['ai_sdkBackend'] || 'claude-agent-sdk') as string,
     model: finalModel,
     maxTurns: map['ai_maxTurns'] ? Number(map['ai_maxTurns']) : undefined,
     maxThinkingTokens: map['ai_maxThinkingTokens'] ? Number(map['ai_maxThinkingTokens']) : undefined,
@@ -407,6 +408,7 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     mcpServers: filterMcpServers(mcpServers, map['ai_mcpDisabled']),
     cwdRestrictionEnabled: (map['hooks_cwdRestriction'] ?? 'true') === 'true',
     cwdWhitelist,
+    sharedHooks: (map['hooks_sharedAcrossBackends'] ?? 'true') === 'true',
     skills: (map['ai_skills'] as 'off' | 'user' | 'project' | 'local') || 'off',
     skillsEnabled: (map['ai_skillsEnabled'] ?? 'true') === 'true',
     disabledSkills: safeJsonParse<string[]>(map['ai_disabledSkills'] || '[]', []),
@@ -500,9 +502,12 @@ async function streamAndSave(
 
   // Run UserPromptSubmit hooks manually — the SDK subprocess doesn't yield
   // hook_response for this event through the async iterator (ONCE, not per retry)
+  // Skip hooks for non-Claude backends when sharedHooks is disabled
+  const isClaudeBackend = aiSettings.sdkBackend !== 'pi'
+  const runHooks = isClaudeBackend || aiSettings.sharedHooks !== false
   let hookSystemContents: string[] = []
   const lastUserMsg = messages[messages.length - 1]
-  if (lastUserMsg?.role === 'user') {
+  if (runHooks && lastUserMsg?.role === 'user') {
     const hookMessages = await runUserPromptSubmitHooks(
       lastUserMsg.content,
       aiSettings.cwd || process.cwd(),
