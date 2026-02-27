@@ -4,6 +4,13 @@ import { DEFAULT_NOTIFICATION_CONFIG, NOTIFICATION_EVENTS } from '../../shared/c
 import { useSettingsStore } from './settingsStore'
 import { playCompletionSound, playErrorSound } from '../utils/notificationSound'
 
+export interface QueuedMessage {
+  id: string
+  content: string
+  attachments?: Attachment[]
+  createdAt: number
+}
+
 interface ChatState {
   messages: Message[]
   clearedAt: string | null
@@ -16,6 +23,8 @@ interface ChatState {
   isLoading: boolean
   error: string | null
   activeConversationId: number | null
+  messageQueues: Record<number, QueuedMessage[]>
+  queuePaused: Record<number, boolean>
 
   loadMessages: (conversationId: number) => Promise<void>
   sendMessage: (conversationId: number, content: string, attachments?: Attachment[]) => Promise<void>
@@ -26,6 +35,13 @@ interface ChatState {
   clearChat: () => void
   clearContext: (conversationId: number) => Promise<void>
   compactContext: (conversationId: number) => Promise<void>
+  addToQueue: (conversationId: number, content: string, attachments?: Attachment[]) => void
+  removeFromQueue: (conversationId: number, messageId: string) => void
+  editQueuedMessage: (conversationId: number, messageId: string, newContent: string) => void
+  reorderQueue: (conversationId: number, fromIndex: number, toIndex: number) => void
+  clearQueue: (conversationId: number) => void
+  pauseQueue: (conversationId: number) => void
+  resumeQueue: (conversationId: number) => void
 }
 
 function getTextFromParts(parts: StreamPart[]): string {
@@ -74,6 +90,11 @@ function shouldShowDesktopNotification(mode: string): boolean {
   }
 }
 
+function randomQueueDelay(): Promise<void> {
+  const ms = 1000 + Math.random() * 4000 // 1–5 seconds
+  return new Promise((r) => setTimeout(r, ms))
+}
+
 function cleanupStreamBuffer(
   state: { streamBuffers: Record<number, StreamPart[]>; activeConversationId: number | null },
   conversationId: number
@@ -101,10 +122,31 @@ async function streamOperation(
       await get().loadMessages(conversationId)
     }
     set(cleanupStreamBuffer(get(), conversationId))
+
+    // Drain queue: send next queued message if not paused
+    const queue = get().messageQueues[conversationId]
+    if (queue?.length && !get().queuePaused[conversationId]) {
+      const next = queue[0]
+      await randomQueueDelay()
+      // Re-check pause after delay — user may have paused while waiting
+      if (!get().queuePaused[conversationId]) {
+        const fresh = get().messageQueues[conversationId] || []
+        const rest = fresh.slice(1)
+        set({
+          messageQueues: rest.length
+            ? { ...get().messageQueues, [conversationId]: rest }
+            : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+        })
+        await get().sendMessage(conversationId, next.content, next.attachments)
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : errorLabel
     const cleanup = cleanupStreamBuffer(get(), conversationId)
-    set(get().activeConversationId === conversationId ? { error: msg, ...cleanup } : cleanup)
+    set(get().activeConversationId === conversationId
+      ? { error: msg, ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
+      : { ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
+    )
   }
 }
 
@@ -120,6 +162,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   error: null,
   activeConversationId: null,
+  messageQueues: {},
+  queuePaused: {},
 
   loadMessages: async (conversationId: number) => {
     set((s) => ({ isLoading: true, error: s.error ?? null }))
@@ -162,7 +206,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   stopGeneration: async () => {
     const convId = get().activeConversationId
-    if (convId) await window.agent.messages.stop(convId)
+    if (convId) {
+      set({ queuePaused: { ...get().queuePaused, [convId]: true } })
+      await window.agent.messages.stop(convId)
+    }
   },
 
   regenerateLastResponse: async (conversationId: number) => {
@@ -177,6 +224,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingContent: '',
       streamBuffers: { ...get().streamBuffers, [conversationId]: [] },
       error: null,
+      queuePaused: { ...get().queuePaused, [conversationId]: true },
     }))
 
     await streamOperation(
@@ -204,6 +252,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingContent: '',
         streamBuffers: convId != null ? { ...s.streamBuffers, [convId]: [] } : s.streamBuffers,
         error: null,
+        queuePaused: convId != null ? { ...s.queuePaused, [convId]: true } : s.queuePaused,
       }
     })
 
@@ -254,6 +303,91 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to compact context'
       set({ error: msg, isCompacting: false })
+    }
+  },
+
+  addToQueue: (conversationId, content, attachments?) => {
+    set((s) => {
+      const queue = s.messageQueues[conversationId] || []
+      return {
+        messageQueues: {
+          ...s.messageQueues,
+          [conversationId]: [...queue, {
+            id: crypto.randomUUID(),
+            content,
+            attachments,
+            createdAt: Date.now(),
+          }],
+        },
+      }
+    })
+  },
+
+  removeFromQueue: (conversationId, messageId) => {
+    set((s) => {
+      const queue = (s.messageQueues[conversationId] || []).filter((m) => m.id !== messageId)
+      if (queue.length === 0) {
+        const { [conversationId]: _, ...rest } = s.messageQueues
+        return { messageQueues: rest }
+      }
+      return { messageQueues: { ...s.messageQueues, [conversationId]: queue } }
+    })
+  },
+
+  editQueuedMessage: (conversationId, messageId, newContent) => {
+    set((s) => {
+      const queue = (s.messageQueues[conversationId] || []).map((m) =>
+        m.id === messageId ? { ...m, content: newContent } : m
+      )
+      return { messageQueues: { ...s.messageQueues, [conversationId]: queue } }
+    })
+  },
+
+  reorderQueue: (conversationId, fromIndex, toIndex) => {
+    set((s) => {
+      const queue = [...(s.messageQueues[conversationId] || [])]
+      const [item] = queue.splice(fromIndex, 1)
+      queue.splice(toIndex, 0, item)
+      return { messageQueues: { ...s.messageQueues, [conversationId]: queue } }
+    })
+  },
+
+  clearQueue: (conversationId) => {
+    set((s) => {
+      const { [conversationId]: _, ...rest } = s.messageQueues
+      const { [conversationId]: __, ...pausedRest } = s.queuePaused
+      return { messageQueues: rest, queuePaused: pausedRest }
+    })
+  },
+
+  pauseQueue: (conversationId) => {
+    set((s) => ({
+      queuePaused: { ...s.queuePaused, [conversationId]: true },
+    }))
+  },
+
+  resumeQueue: (conversationId) => {
+    const { [conversationId]: _, ...rest } = get().queuePaused
+    set({ queuePaused: rest })
+
+    // If not currently streaming, drain immediately
+    const isConvStreaming = conversationId in get().streamBuffers
+    const queue = get().messageQueues[conversationId]
+    if (!isConvStreaming && queue?.length) {
+      const next = queue[0]
+      randomQueueDelay().then(() => {
+        // Re-check pause after delay — user may have paused while waiting
+        if (!get().queuePaused[conversationId]) {
+          const fresh = get().messageQueues[conversationId] || []
+          const rest = fresh.slice(1)
+          set({
+            messageQueues: rest.length
+              ? { ...get().messageQueues, [conversationId]: rest }
+              : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+          })
+          get().sendMessage(conversationId, next.content, next.attachments)
+        }
+      })
     }
   },
 }))

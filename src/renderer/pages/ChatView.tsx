@@ -8,6 +8,7 @@ import { VoiceInputButton } from '../components/chat/VoiceInputButton'
 import { AttachmentPreview } from '../components/attachments/AttachmentPreview'
 import { AIOverridesPopover } from '../components/settings/AIOverridesPopover'
 import { ChatStatusLine } from '../components/chat/ChatStatusLine'
+import { QueuePanel } from '../components/chat/QueuePanel'
 import { useMobileMode, useCompactMode } from '../hooks/useMobileMode'
 import { useUiStore } from '../stores/uiStore'
 import { useChatStore } from '../stores/chatStore'
@@ -51,6 +52,15 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     clearChat,
     setActiveConversation,
   } = useChatStore()
+
+  const messageQueues = useChatStore((s) => s.messageQueues)
+  const queuePaused = useChatStore((s) => s.queuePaused)
+  const addToQueue = useChatStore((s) => s.addToQueue)
+  const removeFromQueue = useChatStore((s) => s.removeFromQueue)
+  const editQueuedMessage = useChatStore((s) => s.editQueuedMessage)
+  const reorderQueue = useChatStore((s) => s.reorderQueue)
+  const clearQueue = useChatStore((s) => s.clearQueue)
+  const resumeQueue = useChatStore((s) => s.resumeQueue)
 
   const { isAuthenticated } = useAuthStore()
   const globalSettings = useSettingsStore((s) => s.settings)
@@ -310,6 +320,36 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     setAttachments([])
   }
 
+  const currentQueue = conversationId != null ? messageQueues[conversationId] ?? [] : []
+  const currentQueuePaused = conversationId != null ? !!queuePaused[conversationId] : false
+  const hasQueuedMessages = currentQueue.length > 0
+
+  const handleQueue = useCallback((content: string) => {
+    if (!conversationId) return
+    addToQueue(conversationId, content, attachments.length > 0 ? attachments : undefined)
+    setAttachments([])
+  }, [conversationId, addToQueue, attachments])
+
+  const handleQueueEdit = useCallback((messageId: string, newContent: string) => {
+    if (conversationId) editQueuedMessage(conversationId, messageId, newContent)
+  }, [conversationId, editQueuedMessage])
+
+  const handleQueueDelete = useCallback((messageId: string) => {
+    if (conversationId) removeFromQueue(conversationId, messageId)
+  }, [conversationId, removeFromQueue])
+
+  const handleQueueReorder = useCallback((from: number, to: number) => {
+    if (conversationId) reorderQueue(conversationId, from, to)
+  }, [conversationId, reorderQueue])
+
+  const handleQueueClear = useCallback(() => {
+    if (conversationId) clearQueue(conversationId)
+  }, [conversationId, clearQueue])
+
+  const handleQueueResume = useCallback(() => {
+    if (conversationId) resumeQueue(conversationId)
+  }, [conversationId, resumeQueue])
+
   const handleRegenerate = () => {
     if (!conversationId) return
     regenerateLastResponse(conversationId)
@@ -437,6 +477,17 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           </div>
         )}
 
+        {/* Queue panel (between attachments and input) */}
+        <QueuePanel
+          messages={currentQueue}
+          paused={currentQueuePaused}
+          onEdit={handleQueueEdit}
+          onDelete={handleQueueDelete}
+          onReorder={handleQueueReorder}
+          onClear={handleQueueClear}
+          onResume={handleQueueResume}
+        />
+
         {/* Status line above input */}
         <div className="flex-shrink-0 px-4 pt-2">
           <ChatStatusLine
@@ -480,6 +531,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
                 <MessageInput
                   ref={messageInputRef}
                   onSend={handleSend}
+                  onQueue={handleQueue}
+                  hasQueuedMessages={hasQueuedMessages}
                   onPaste={handlePaste}
                   disabled={!isAuthenticated || !conversationId}
                   isStreaming={isStreaming}
@@ -528,6 +581,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
               <MessageInput
                 ref={messageInputRef}
                 onSend={handleSend}
+                onQueue={handleQueue}
+                hasQueuedMessages={hasQueuedMessages}
                 onPaste={handlePaste}
                 disabled={!isAuthenticated || !conversationId}
                 isStreaming={isStreaming}

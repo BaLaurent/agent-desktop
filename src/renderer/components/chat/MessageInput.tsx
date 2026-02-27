@@ -13,6 +13,8 @@ export interface MessageInputHandle {
 
 interface MessageInputProps {
   onSend: (content: string) => void
+  onQueue?: (content: string) => void
+  hasQueuedMessages?: boolean
   disabled: boolean
   isStreaming: boolean
   externalText?: { text: string; id: number }
@@ -25,7 +27,7 @@ interface MessageInputProps {
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
-  function MessageInput({ onSend, disabled, isStreaming, externalText, cwd, excludePatterns, skillsMode, disabledSkills, onCanSendChange, onPaste }, ref) {
+  function MessageInput({ onSend, onQueue, hasQueuedMessages, disabled, isStreaming, externalText, cwd, excludePatterns, skillsMode, disabledSkills, onCanSendChange, onPaste }, ref) {
     const [content, setContent] = useState('')
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
@@ -88,25 +90,31 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
 
     const handleSend = useCallback(() => {
       const trimmed = content.trim()
-      if (!trimmed || disabled || isStreaming) return
+      if (!trimmed || disabled) return
       // Resolve @mentions to markdown links before sending
       let resolved = trimmed
       for (const m of resolvedMentions) {
         resolved = resolved.replaceAll(`@${m.display}`, `[${m.name}](${m.path})`)
       }
-      onSend(resolved)
+
+      if ((isStreaming || hasQueuedMessages) && onQueue) {
+        onQueue(resolved)
+      } else {
+        onSend(resolved)
+      }
+
       setContent('')
       setResolvedMentions([])
       setMentionOpen(false)
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
-    }, [content, disabled, isStreaming, onSend, resolvedMentions])
+    }, [content, disabled, isStreaming, hasQueuedMessages, onSend, onQueue, resolvedMentions])
 
-    // Notify parent of canSend state
+    // Notify parent of canSend state (can always send if queue is available)
     useEffect(() => {
-      onCanSendChange?.(!!content.trim() && !disabled && !isStreaming)
-    }, [content, disabled, isStreaming, onCanSendChange])
+      onCanSendChange?.(!!content.trim() && !disabled && (!isStreaming || !!onQueue))
+    }, [content, disabled, isStreaming, onQueue, onCanSendChange])
 
     // Expose triggerMention and send to parent
     useImperativeHandle(ref, () => ({

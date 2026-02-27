@@ -27,6 +27,8 @@ beforeEach(() => {
     isLoading: false,
     error: null,
     activeConversationId: null,
+    messageQueues: {},
+    queuePaused: {},
   })
 })
 
@@ -1221,6 +1223,214 @@ describe('chatStore', () => {
 
       listener()({ type: 'done', conversationId: 1 })
       expect(playCompletionSound).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('message queue', () => {
+    it('addToQueue pushes message to messageQueues for conversation', () => {
+      useChatStore.getState().addToQueue(1, 'test message')
+
+      const state = useChatStore.getState()
+      expect(state.messageQueues[1]).toHaveLength(1)
+      expect(state.messageQueues[1][0].content).toBe('test message')
+      expect(state.messageQueues[1][0].id).toBeDefined()
+    })
+
+    it('addToQueue appends to existing queue', () => {
+      useChatStore.getState().addToQueue(1, 'first')
+      useChatStore.getState().addToQueue(1, 'second')
+
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(2)
+      expect(useChatStore.getState().messageQueues[1][1].content).toBe('second')
+    })
+
+    it('addToQueue keeps separate queues per conversation', () => {
+      useChatStore.getState().addToQueue(1, 'conv1')
+      useChatStore.getState().addToQueue(2, 'conv2')
+
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+      expect(useChatStore.getState().messageQueues[2]).toHaveLength(1)
+    })
+
+    it('removeFromQueue removes by id', () => {
+      useChatStore.getState().addToQueue(1, 'keep')
+      useChatStore.getState().addToQueue(1, 'remove')
+      const id = useChatStore.getState().messageQueues[1][1].id
+      useChatStore.getState().removeFromQueue(1, id)
+
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+      expect(useChatStore.getState().messageQueues[1][0].content).toBe('keep')
+    })
+
+    it('editQueuedMessage updates content in place', () => {
+      useChatStore.getState().addToQueue(1, 'original')
+      const id = useChatStore.getState().messageQueues[1][0].id
+      useChatStore.getState().editQueuedMessage(1, id, 'edited')
+
+      expect(useChatStore.getState().messageQueues[1][0].content).toBe('edited')
+    })
+
+    it('reorderQueue moves item from one index to another', () => {
+      useChatStore.getState().addToQueue(1, 'A')
+      useChatStore.getState().addToQueue(1, 'B')
+      useChatStore.getState().addToQueue(1, 'C')
+      useChatStore.getState().reorderQueue(1, 2, 0) // move C to front
+
+      const q = useChatStore.getState().messageQueues[1]
+      expect(q.map((m) => m.content)).toEqual(['C', 'A', 'B'])
+    })
+
+    it('clearQueue removes all messages for conversation', () => {
+      useChatStore.getState().addToQueue(1, 'a')
+      useChatStore.getState().addToQueue(1, 'b')
+      useChatStore.getState().clearQueue(1)
+
+      expect(useChatStore.getState().messageQueues[1]).toBeUndefined()
+    })
+
+    it('pauseQueue sets queuePaused for conversation', () => {
+      useChatStore.getState().pauseQueue(1)
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('resumeQueue sets queuePaused false', () => {
+      useChatStore.getState().pauseQueue(1)
+      useChatStore.getState().resumeQueue(1)
+      expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
+    })
+
+    it('streamOperation drains queue after stream completes', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        streamBuffers: { 1: [] },
+        messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
+        queuePaused: {},
+      })
+
+      // First send resolves (the initial message)
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'done' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      // Second send resolves (the queued message drained)
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 3, role: 'assistant', content: 'queued reply' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      await useChatStore.getState().sendMessage(1, 'first msg')
+
+      // Queue should be drained
+      expect(useChatStore.getState().messageQueues[1] || []).toHaveLength(0)
+    })
+
+    it('streamOperation does NOT drain queue when paused', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queuePaused: { 1: true },
+      })
+
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'done' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      await useChatStore.getState().sendMessage(1, 'first')
+
+      // Queue should remain since paused
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+    })
+
+    it('stopGeneration pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+      })
+      mockAgent.messages.stop.mockResolvedValueOnce(undefined)
+
+      await useChatStore.getState().stopGeneration()
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('regenerateLastResponse pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messages: [{ id: 1, role: 'assistant', content: 'hi', conversation_id: 1, created_at: '', updated_at: '' }],
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+      })
+      mockAgent.messages.regenerate.mockResolvedValueOnce({})
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+
+      await useChatStore.getState().regenerateLastResponse(1)
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('editMessage pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messages: [{ id: 10, role: 'user', content: 'orig', conversation_id: 1, created_at: '', updated_at: '' }],
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+      })
+      mockAgent.messages.edit.mockResolvedValueOnce({})
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+
+      await useChatStore.getState().editMessage(10, 'edited')
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('stream error pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queuePaused: {},
+      })
+
+      mockAgent.messages.send.mockRejectedValueOnce(new Error('stream failed'))
+
+      await useChatStore.getState().sendMessage(1, 'first')
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('resumeQueue sends next queued message if not streaming', async () => {
+      vi.useFakeTimers()
+      try {
+        useChatStore.setState({
+          activeConversationId: 1,
+          streamBuffers: {},  // NOT streaming
+          messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
+          queuePaused: { 1: true },
+        })
+
+        mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'reply' })
+        mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+
+        useChatStore.getState().resumeQueue(1)
+
+        expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
+
+        // Advance past the random delay (max 5s)
+        await vi.advanceTimersByTimeAsync(5000)
+
+        // Queue should have been drained
+        expect(useChatStore.getState().messageQueues[1] || []).toHaveLength(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('resumeQueue does not send if currently streaming', () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        streamBuffers: { 1: [] },  // currently streaming
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queuePaused: { 1: true },
+      })
+
+      useChatStore.getState().resumeQueue(1)
+
+      // Queue should remain — drain will happen after current stream via streamOperation
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+      expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
     })
   })
 })
