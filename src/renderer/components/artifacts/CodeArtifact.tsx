@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import hljs from 'highlight.js'
+import hljs from '../../lib/hljs'
 
 interface CodeArtifactProps {
   content: string

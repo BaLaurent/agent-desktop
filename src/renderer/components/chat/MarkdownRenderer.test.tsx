@@ -3,6 +3,10 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { useFileExplorerStore } from '../../stores/fileExplorerStore'
 import { useUiStore } from '../../stores/uiStore'
 
+vi.mock('../../lib/hljs', () => ({
+  default: { highlightElement: vi.fn() },
+}))
+
 beforeAll(() => {
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },

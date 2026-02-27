@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import hljs from '../../lib/hljs'
 
 interface CodeBlockProps {
   language?: string
@@ -10,6 +11,23 @@ export function CodeBlock({ language, children, defaultCollapsed }: CodeBlockPro
   const lineCount = children.split('\n').length
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? lineCount > 10)
   const [copied, setCopied] = useState(false)
+  const codeRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (collapsed || !codeRef.current || !language) return
+    // Debounce: during streaming, children changes every chunk — wait for
+    // content to stabilize before highlighting to avoid DOM conflicts
+    const timer = setTimeout(() => {
+      if (!codeRef.current) return
+      codeRef.current.textContent = children
+      try {
+        hljs.highlightElement(codeRef.current)
+      } catch {
+        // Language not supported — leave as plain text
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [children, language, collapsed])
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(children)
@@ -65,7 +83,7 @@ export function CodeBlock({ language, children, defaultCollapsed }: CodeBlockPro
       {/* Code content */}
       {!collapsed && (
         <pre className="p-3 overflow-x-auto text-sm leading-relaxed">
-          <code className={language ? `language-${language}` : ''}>
+          <code ref={codeRef} className={language ? `language-${language}` : ''}>
             {children}
           </code>
         </pre>

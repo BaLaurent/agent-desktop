@@ -1,10 +1,21 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { CodeBlock } from './CodeBlock'
 
+vi.mock('../../lib/hljs', () => ({
+  default: { highlightElement: vi.fn() },
+}))
+
+import hljs from '../../lib/hljs'
+
 beforeAll(() => {
+  vi.useFakeTimers()
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   })
+})
+
+afterAll(() => {
+  vi.useRealTimers()
 })
 
 const shortCode = 'const x = 1'
@@ -79,5 +90,45 @@ describe('CodeBlock', () => {
   it('keeps Copy button visible when collapsed', () => {
     render(<CodeBlock language="js">{longCode}</CodeBlock>)
     expect(screen.getByText('Copy')).toBeInTheDocument()
+  })
+
+  // --- Syntax highlighting tests ---
+
+  it('calls hljs.highlightElement after debounce when language is provided and expanded', () => {
+    vi.mocked(hljs.highlightElement).mockClear()
+    render(<CodeBlock language="typescript">{shortCode}</CodeBlock>)
+    // Not called immediately (debounced)
+    expect(hljs.highlightElement).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(hljs.highlightElement).toHaveBeenCalled()
+  })
+
+  it('does not call hljs.highlightElement when no language', () => {
+    vi.mocked(hljs.highlightElement).mockClear()
+    render(<CodeBlock>{shortCode}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(hljs.highlightElement).not.toHaveBeenCalled()
+  })
+
+  it('does not call hljs.highlightElement when collapsed', () => {
+    vi.mocked(hljs.highlightElement).mockClear()
+    render(<CodeBlock language="js">{longCode}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    // longCode > 10 lines → collapsed by default
+    expect(hljs.highlightElement).not.toHaveBeenCalled()
+  })
+
+  it('debounces hljs during rapid content changes (streaming)', () => {
+    vi.mocked(hljs.highlightElement).mockClear()
+    const { rerender } = render(<CodeBlock language="js">{'chunk 1'}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(50) })
+    rerender(<CodeBlock language="js">{'chunk 1\nchunk 2'}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(50) })
+    rerender(<CodeBlock language="js">{'chunk 1\nchunk 2\nchunk 3'}</CodeBlock>)
+    // Still within debounce window — not called yet
+    expect(hljs.highlightElement).not.toHaveBeenCalled()
+    // After final chunk settles
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(hljs.highlightElement).toHaveBeenCalledTimes(1)
   })
 })

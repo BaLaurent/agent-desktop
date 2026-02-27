@@ -1,0 +1,106 @@
+/*
+ * highlight.js theme — mapped to CSS custom properties
+ * Auto-adapts to any app theme. Background transparent (CodeBlock sets its own).
+ */
+
+.hljs {
+  background: transparent;
+  color: var(--color-text);
+}
+
+/* Keywords: if, else, return, const, let, function, class, import, export... */
+.hljs-keyword,
+.hljs-selector-tag {
+  color: var(--color-primary);
+}
+
+/* Strings, regex, diff additions */
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--color-success);
+}
+
+/* Comments */
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Numbers, booleans, null */
+.hljs-number,
+.hljs-literal {
+  color: var(--color-warning);
+}
+
+/* Function/class names */
+.hljs-title,
+.hljs-title.function_ {
+  color: var(--color-tool);
+}
+
+/* Types, built-ins (Array, Promise, int, str...) */
+.hljs-type,
+.hljs-built_in {
+  color: color-mix(in srgb, var(--color-accent) 70%, var(--color-text));
+}
+
+/* Attributes, object properties */
+.hljs-attr,
+.hljs-property {
+  color: color-mix(in srgb, var(--color-primary) 50%, var(--color-tool));
+}
+
+/* Diff deletions */
+.hljs-deletion {
+  color: var(--color-error);
+}
+
+/* Meta (shebangs, pragmas, preprocessor) */
+.hljs-meta {
+  color: var(--color-text-muted);
+}
+
+/* HTML/XML angle brackets */
+.hljs-tag {
+  color: var(--color-text-muted);
+}
+
+/* HTML/XML tag names */
+.hljs-name {
+  color: var(--color-primary);
+}
+
+/* Template variables, interpolation */
+.hljs-template-variable,
+.hljs-variable {
+  color: var(--color-text);
+}
+
+/* Section headers (markdown headings in code, etc.) */
+.hljs-section {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Symbols, bullets */
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--color-accent);
+}
+
+/* Links in code comments */
+.hljs-link {
+  color: var(--color-tool);
+  text-decoration: underline;
+}
+
+/* Emphasis / strong in doc comments */
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
