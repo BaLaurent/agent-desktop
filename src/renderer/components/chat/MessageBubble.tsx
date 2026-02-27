@@ -38,6 +38,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
   const mobile = useMobileMode()
 
   const isUser = message.role === 'user'
+  const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
 
   // Extract hook system messages from saved content (wrapped in <hook-system-message> tags)
   const { hookMessages, cleanContent } = useMemo(() => {
@@ -78,6 +79,25 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
     setIsEditing(false)
     setEditContent(message.content)
   }, [message.content])
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      handleCancelEdit()
+      return
+    }
+    if (sendOnEnter === 'false') {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        handleSaveEdit()
+      }
+    } else {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSaveEdit()
+      }
+    }
+  }, [sendOnEnter, handleSaveEdit, handleCancelEdit])
 
   const handleScheduleSave = useCallback(async (data: CreateScheduledTask) => {
     await window.agent.scheduler.create(data)
@@ -126,6 +146,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
+              onKeyDown={handleEditKeyDown}
               className="w-full rounded p-2 resize-none text-sm mobile:text-base"
               style={{
                 backgroundColor: 'var(--color-bg)',

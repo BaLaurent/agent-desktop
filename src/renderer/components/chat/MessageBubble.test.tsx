@@ -7,9 +7,10 @@ vi.mock('../../stores/ttsStore', () => ({
   ),
 }))
 
+const settingsMock: Record<string, string> = { tts_provider: 'spd-say', tts_responseMode: 'full' }
 vi.mock('../../stores/settingsStore', () => ({
   useSettingsStore: (selector: (s: { settings: Record<string, string> }) => unknown) =>
-    selector({ settings: { tts_provider: 'spd-say', tts_responseMode: 'full' } }),
+    selector({ settings: settingsMock }),
 }))
 
 // ─── Component mocks ─────────────────────────────────────────
@@ -230,6 +231,85 @@ describe('MessageBubble', () => {
     fireEvent.change(textarea, { target: { value: 'a\nb\nc\nd\ne\nf' } })
     // 6 lines → split('\n').length + 1 = 7, Math.max(3, 7) = 7
     expect(textarea.rows).toBe(7)
+  })
+
+  // ── Edit mode keyboard shortcut tests ──────────────────────
+
+  it('Enter saves edit when sendOnEnter is true (default)', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', id: 1, content: 'original' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'edited' } })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(onEdit).toHaveBeenCalledWith(1, 'edited')
+  })
+
+  it('Shift+Enter does NOT save edit (inserts newline)', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+
+    expect(onEdit).not.toHaveBeenCalled()
+    // Should still be in edit mode
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+
+  it('Ctrl+Enter saves edit when sendOnEnter is false', () => {
+    settingsMock.sendOnEnter = 'false'
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', id: 2, content: 'original' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'ctrl-edited' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+    expect(onEdit).toHaveBeenCalledWith(2, 'ctrl-edited')
+    delete settingsMock.sendOnEnter
+  })
+
+  it('plain Enter does NOT save when sendOnEnter is false', () => {
+    settingsMock.sendOnEnter = 'false'
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+    delete settingsMock.sendOnEnter
+  })
+
+  it('Escape cancels edit mode', () => {
+    const onEdit = vi.fn()
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'user', content: 'original' })} isLast={false} onEdit={onEdit} />,
+    )
+    enterEditMode(container)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'unsaved changes' } })
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+
+    // Should exit edit mode without saving
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 
   // ── Context menu tests ──────────────────────────────────────
