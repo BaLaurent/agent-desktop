@@ -280,4 +280,4 @@ src/
 ## License
 
 
-[GPL-3.0](LICENSE)
+[AGPL-3.0](LICENSE)

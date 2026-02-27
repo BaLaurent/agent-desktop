@@ -21,7 +21,7 @@
     "test:coverage": "vitest run --config vitest.config.main.ts --coverage && vitest run --config vitest.config.renderer.ts --coverage"
   },
   "author": "Agent Desktop Contributors",
-  "license": "GPL-3.0-only",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.37",
     "@fontsource/jetbrains-mono": "^5.2.8",
