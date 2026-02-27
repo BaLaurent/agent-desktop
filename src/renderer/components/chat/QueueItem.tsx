@@ -13,14 +13,18 @@ export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }:
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(content)
   const inputRef = useRef<HTMLInputElement>(null)
+  const savingRef = useRef(false)
 
   const handleEditClick = useCallback(() => {
     setEditValue(content)
     setEditing(true)
+    savingRef.current = false
     setTimeout(() => inputRef.current?.focus(), 0)
   }, [content])
 
   const handleSave = useCallback(() => {
+    if (savingRef.current) return
+    savingRef.current = true
     const trimmed = editValue.trim()
     if (trimmed && trimmed !== content) {
       onEdit(id, trimmed)

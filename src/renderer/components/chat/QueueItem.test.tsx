@@ -41,6 +41,20 @@ describe('QueueItem', () => {
     expect(onEdit).toHaveBeenCalledWith('q1', 'Updated content')
   })
 
+  it('does not double-call onEdit when Enter triggers blur', () => {
+    const onEdit = vi.fn()
+    render(<QueueItem {...defaultProps} onEdit={onEdit} />)
+
+    fireEvent.click(screen.getByLabelText('Edit queued message'))
+
+    const input = screen.getByDisplayValue('Fix the login bug in the auth module')
+    fireEvent.change(input, { target: { value: 'Updated content' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.blur(input)
+
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
   it('exits edit mode on Escape without saving', () => {
     const onEdit = vi.fn()
     render(<QueueItem {...defaultProps} onEdit={onEdit} />)

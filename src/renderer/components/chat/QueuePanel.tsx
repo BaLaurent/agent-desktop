@@ -13,8 +13,6 @@ interface QueuePanelProps {
 }
 
 export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onClear, onResume }: QueuePanelProps) {
-  if (messages.length === 0) return null
-
   const listRef = useRef<HTMLDivElement>(null)
   const dropIndexRef = useRef<number | null>(null)
 
@@ -47,6 +45,8 @@ export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onCl
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   }, [messages.length, onReorder])
+
+  if (messages.length === 0) return null
 
   return (
     <div className="flex-shrink-0 px-4 py-2 border-t" style={{ borderColor: 'var(--color-surface)' }}>
