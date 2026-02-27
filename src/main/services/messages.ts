@@ -443,6 +443,16 @@ function updateConversationTimestamp(db: Database.Database, conversationId: numb
   )
 }
 
+function buildLastUserMessage(
+  db: Database.Database,
+  conversationId: number
+): Array<{ role: Message['role']; content: string }> {
+  const row = db.prepare(
+    'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1'
+  ).get(conversationId) as Pick<Message, 'role' | 'content'> | undefined
+  return row ? [{ role: row.role, content: row.content }] : []
+}
+
 async function streamAndSave(
   db: Database.Database,
   conversationId: number
@@ -450,14 +460,10 @@ async function streamAndSave(
   stopTts() // Stop any active TTS before new stream
 
   const sdkSessionId = getConversationSdkSessionId(db, conversationId)
-  // When resuming an SDK session, only pass the last user message (SDK has the rest)
-  const history = sdkSessionId
-    ? (() => {
-        const lastRow = db.prepare(
-          "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1"
-        ).get(conversationId) as Pick<Message, 'role' | 'content'> | undefined
-        return lastRow ? [{ role: lastRow.role, content: lastRow.content }] : []
-      })()
+  // Session active : le SDK détient tout le contexte — envoyer uniquement le nouveau prompt.
+  // Pas de session (fork, regenerate, clear, etc.) : envoyer l'historique complet comme fallback.
+  const messages = sdkSessionId
+    ? buildLastUserMessage(db, conversationId)
     : buildMessageHistory(db, conversationId)
 
   const aiSettings = getAISettings(db, conversationId)
@@ -466,7 +472,7 @@ async function streamAndSave(
   // Run UserPromptSubmit hooks manually — the SDK subprocess doesn't yield
   // hook_response for this event through the async iterator
   let hookSystemContents: string[] = []
-  const lastUserMsg = sdkSessionId ? history[history.length - 1] : history[history.length - 1]
+  const lastUserMsg = messages[messages.length - 1]
   if (lastUserMsg?.role === 'user') {
     const hookMessages = await runUserPromptSubmitHooks(
       lastUserMsg.content,
@@ -485,7 +491,7 @@ async function streamAndSave(
 
   try {
     const { content: responseContent, toolCalls, sessionId: newSessionId } = await streamMessage(
-      history, systemPrompt, aiSettings, conversationId, sdkSessionId
+      messages, systemPrompt, aiSettings, conversationId, sdkSessionId
     )
     // Save the SDK session ID for future resume
     if (newSessionId) {
