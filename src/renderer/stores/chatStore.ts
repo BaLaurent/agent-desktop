@@ -4,6 +4,13 @@ import { DEFAULT_NOTIFICATION_CONFIG, NOTIFICATION_EVENTS } from '../../shared/c
 import { useSettingsStore } from './settingsStore'
 import { playCompletionSound, playErrorSound } from '../utils/notificationSound'
 
+export interface QueuedMessage {
+  id: string
+  content: string
+  attachments?: Attachment[]
+  createdAt: number
+}
+
 interface ChatState {
   messages: Message[]
   clearedAt: string | null
@@ -16,6 +23,8 @@ interface ChatState {
   isLoading: boolean
   error: string | null
   activeConversationId: number | null
+  messageQueues: Record<number, QueuedMessage[]>
+  queuePaused: Record<number, boolean>
 
   loadMessages: (conversationId: number) => Promise<void>
   sendMessage: (conversationId: number, content: string, attachments?: Attachment[]) => Promise<void>
@@ -26,6 +35,13 @@ interface ChatState {
   clearChat: () => void
   clearContext: (conversationId: number) => Promise<void>
   compactContext: (conversationId: number) => Promise<void>
+  addToQueue: (conversationId: number, content: string, attachments?: Attachment[]) => void
+  removeFromQueue: (conversationId: number, messageId: string) => void
+  editQueuedMessage: (conversationId: number, messageId: string, newContent: string) => void
+  reorderQueue: (conversationId: number, fromIndex: number, toIndex: number) => void
+  clearQueue: (conversationId: number) => void
+  pauseQueue: (conversationId: number) => void
+  resumeQueue: (conversationId: number) => void
 }
 
 function getTextFromParts(parts: StreamPart[]): string {
@@ -120,6 +136,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   error: null,
   activeConversationId: null,
+  messageQueues: {},
+  queuePaused: {},
 
   loadMessages: async (conversationId: number) => {
     set((s) => ({ isLoading: true, error: s.error ?? null }))
@@ -255,6 +273,73 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const msg = err instanceof Error ? err.message : 'Failed to compact context'
       set({ error: msg, isCompacting: false })
     }
+  },
+
+  addToQueue: (conversationId, content, attachments?) => {
+    set((s) => {
+      const queue = s.messageQueues[conversationId] || []
+      return {
+        messageQueues: {
+          ...s.messageQueues,
+          [conversationId]: [...queue, {
+            id: crypto.randomUUID(),
+            content,
+            attachments,
+            createdAt: Date.now(),
+          }],
+        },
+      }
+    })
+  },
+
+  removeFromQueue: (conversationId, messageId) => {
+    set((s) => {
+      const queue = (s.messageQueues[conversationId] || []).filter((m) => m.id !== messageId)
+      if (queue.length === 0) {
+        const { [conversationId]: _, ...rest } = s.messageQueues
+        return { messageQueues: rest }
+      }
+      return { messageQueues: { ...s.messageQueues, [conversationId]: queue } }
+    })
+  },
+
+  editQueuedMessage: (conversationId, messageId, newContent) => {
+    set((s) => {
+      const queue = (s.messageQueues[conversationId] || []).map((m) =>
+        m.id === messageId ? { ...m, content: newContent } : m
+      )
+      return { messageQueues: { ...s.messageQueues, [conversationId]: queue } }
+    })
+  },
+
+  reorderQueue: (conversationId, fromIndex, toIndex) => {
+    set((s) => {
+      const queue = [...(s.messageQueues[conversationId] || [])]
+      const [item] = queue.splice(fromIndex, 1)
+      queue.splice(toIndex, 0, item)
+      return { messageQueues: { ...s.messageQueues, [conversationId]: queue } }
+    })
+  },
+
+  clearQueue: (conversationId) => {
+    set((s) => {
+      const { [conversationId]: _, ...rest } = s.messageQueues
+      const { [conversationId]: __, ...pausedRest } = s.queuePaused
+      return { messageQueues: rest, queuePaused: pausedRest }
+    })
+  },
+
+  pauseQueue: (conversationId) => {
+    set((s) => ({
+      queuePaused: { ...s.queuePaused, [conversationId]: true },
+    }))
+  },
+
+  resumeQueue: (conversationId) => {
+    set((s) => {
+      const { [conversationId]: _, ...rest } = s.queuePaused
+      return { queuePaused: rest }
+    })
   },
 }))
 

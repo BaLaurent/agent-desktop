@@ -27,6 +27,8 @@ beforeEach(() => {
     isLoading: false,
     error: null,
     activeConversationId: null,
+    messageQueues: {},
+    queuePaused: {},
   })
 })
 
@@ -1221,6 +1223,80 @@ describe('chatStore', () => {
 
       listener()({ type: 'done', conversationId: 1 })
       expect(playCompletionSound).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('message queue', () => {
+    it('addToQueue pushes message to messageQueues for conversation', () => {
+      useChatStore.getState().addToQueue(1, 'test message')
+
+      const state = useChatStore.getState()
+      expect(state.messageQueues[1]).toHaveLength(1)
+      expect(state.messageQueues[1][0].content).toBe('test message')
+      expect(state.messageQueues[1][0].id).toBeDefined()
+    })
+
+    it('addToQueue appends to existing queue', () => {
+      useChatStore.getState().addToQueue(1, 'first')
+      useChatStore.getState().addToQueue(1, 'second')
+
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(2)
+      expect(useChatStore.getState().messageQueues[1][1].content).toBe('second')
+    })
+
+    it('addToQueue keeps separate queues per conversation', () => {
+      useChatStore.getState().addToQueue(1, 'conv1')
+      useChatStore.getState().addToQueue(2, 'conv2')
+
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+      expect(useChatStore.getState().messageQueues[2]).toHaveLength(1)
+    })
+
+    it('removeFromQueue removes by id', () => {
+      useChatStore.getState().addToQueue(1, 'keep')
+      useChatStore.getState().addToQueue(1, 'remove')
+      const id = useChatStore.getState().messageQueues[1][1].id
+      useChatStore.getState().removeFromQueue(1, id)
+
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+      expect(useChatStore.getState().messageQueues[1][0].content).toBe('keep')
+    })
+
+    it('editQueuedMessage updates content in place', () => {
+      useChatStore.getState().addToQueue(1, 'original')
+      const id = useChatStore.getState().messageQueues[1][0].id
+      useChatStore.getState().editQueuedMessage(1, id, 'edited')
+
+      expect(useChatStore.getState().messageQueues[1][0].content).toBe('edited')
+    })
+
+    it('reorderQueue moves item from one index to another', () => {
+      useChatStore.getState().addToQueue(1, 'A')
+      useChatStore.getState().addToQueue(1, 'B')
+      useChatStore.getState().addToQueue(1, 'C')
+      useChatStore.getState().reorderQueue(1, 2, 0) // move C to front
+
+      const q = useChatStore.getState().messageQueues[1]
+      expect(q.map((m) => m.content)).toEqual(['C', 'A', 'B'])
+    })
+
+    it('clearQueue removes all messages for conversation', () => {
+      useChatStore.getState().addToQueue(1, 'a')
+      useChatStore.getState().addToQueue(1, 'b')
+      useChatStore.getState().clearQueue(1)
+
+      expect(useChatStore.getState().messageQueues[1]).toBeUndefined()
+    })
+
+    it('pauseQueue sets queuePaused for conversation', () => {
+      useChatStore.getState().pauseQueue(1)
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('resumeQueue sets queuePaused false', () => {
+      useChatStore.getState().pauseQueue(1)
+      useChatStore.getState().resumeQueue(1)
+      expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
     })
   })
 })
