@@ -136,8 +136,13 @@ if (!gotLock) {
     const autoStartRow = db.prepare("SELECT value FROM settings WHERE key = 'server_autoStart'").get() as { value: string } | undefined
     if (autoStartRow?.value === 'true') {
       const portRow = db.prepare("SELECT value FROM settings WHERE key = 'server_port'").get() as { value: string } | undefined
+      const shortCodeRow = db.prepare("SELECT value FROM settings WHERE key = 'server_shortCode'").get() as { value: string } | undefined
+      const accessModeRow = db.prepare("SELECT value FROM settings WHERE key = 'server_accessMode'").get() as { value: string } | undefined
       const port = parseInt(portRow?.value || '3484', 10) || 3484
-      startServer(port).catch(err => console.error('[webServer] Auto-start failed:', err.message))
+      startServer(port, {
+        shortCode: shortCodeRow?.value || undefined,
+        accessMode: accessModeRow?.value === 'all' ? 'all' : 'lan',
+      }).catch(err => console.error('[webServer] Auto-start failed:', err.message))
     }
 
     if (app.isPackaged) {

@@ -178,7 +178,7 @@ const api: AgentAPI = {
     },
   },
   server: {
-    start: (port?: number) => withTimeout(ipcRenderer.invoke('server:start', port)),
+    start: (port?: number, options?: { shortCode?: string; accessMode?: string }) => withTimeout(ipcRenderer.invoke('server:start', port, options)),
     stop: () => withTimeout(ipcRenderer.invoke('server:stop')),
     getStatus: () => withTimeout(ipcRenderer.invoke('server:getStatus')),
   },

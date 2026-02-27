@@ -72,6 +72,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'server_enabled',
   'server_port',
   'server_autoStart',
+  'server_shortCode',
+  'server_accessMode',
   // Retry settings (global only, not cascadable)
   'retry_enabled',
   'retry_maxAttempts',

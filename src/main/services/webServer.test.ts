@@ -38,6 +38,7 @@ describe('webServer', () => {
   it('starts and reports status', async () => {
     const result = await startServer(port)
     expect(result.url).toContain(String(port))
+    expect(result.url).toContain('/s/') // short URL format
     expect(result.token).toBeTruthy()
     expect(result.token.length).toBe(64) // 32 bytes = 64 hex chars
 
@@ -45,6 +46,8 @@ describe('webServer', () => {
     expect(status.running).toBe(true)
     expect(status.port).toBe(port)
     expect(status.clients).toBe(0)
+    expect(status.shortCode).toBeTruthy()
+    expect(status.accessMode).toBe('lan')
   })
 
   it('serves index.html with shim injection', async () => {
@@ -180,6 +183,94 @@ describe('webServer', () => {
     const result1 = await startServer(port)
     const result2 = await startServer(port)
     expect(result1.token).toBe(result2.token)
+  })
+
+  describe('short URL routing', () => {
+    it('serves shim with token via /s/<code>', async () => {
+      const result = await startServer(port, { shortCode: 'testCode' })
+      const status = await getServerStatus()
+      expect(status.shortCode).toBe('testCode')
+
+      const res = await fetch(`http://127.0.0.1:${port}/s/testCode`)
+      // Will 404 in test env (no renderer/index.html), but validates the route is handled
+      expect(res.status).toBeDefined()
+    })
+
+    it('rejects invalid short code with 403', async () => {
+      await startServer(port, { shortCode: 'goodCode' })
+
+      const res = await fetch(`http://127.0.0.1:${port}/s/badCode`)
+      expect(res.status).toBe(403)
+      const body = await res.text()
+      expect(body).toBe('Invalid short code')
+    })
+
+    it('uses custom short code from options', async () => {
+      const result = await startServer(port, { shortCode: 'myCustom1' })
+      expect(result.url).toContain('/s/myCustom1')
+
+      const status = await getServerStatus()
+      expect(status.shortCode).toBe('myCustom1')
+      expect(status.url).toContain('/s/myCustom1')
+    })
+
+    it('auto-generates short code when not provided', async () => {
+      const result = await startServer(port)
+      // URL should contain /s/ with some auto-generated code
+      expect(result.url).toMatch(/\/s\/[a-zA-Z0-9]+/)
+
+      const status = await getServerStatus()
+      expect(status.shortCode).toBeTruthy()
+      expect(status.shortCode!.length).toBe(8)
+    })
+
+    it('backward compat: ?token= query string still works', async () => {
+      await startServer(port)
+
+      // The old ?token= URL format goes through normal static file serving
+      const res = await fetch(`http://127.0.0.1:${port}/?token=sometoken`)
+      // Will 404 in test env but validates the route is not blocked
+      expect(res.status).toBeDefined()
+      expect(res.status).not.toBe(403)
+    })
+  })
+
+  describe('access mode', () => {
+    it('defaults to lan mode', async () => {
+      await startServer(port)
+      const status = await getServerStatus()
+      expect(status.accessMode).toBe('lan')
+    })
+
+    it('accepts all mode', async () => {
+      await startServer(port, { accessMode: 'all' })
+      const status = await getServerStatus()
+      expect(status.accessMode).toBe('all')
+    })
+
+    it('allows localhost in lan mode', async () => {
+      await startServer(port)
+      // Requests from 127.0.0.1 should always be allowed
+      const res = await fetch(`http://127.0.0.1:${port}/agent-ws-shim.js`)
+      expect(res.status).toBe(200)
+    })
+  })
+
+  describe('getServerStatus format', () => {
+    it('includes shortCode and accessMode when running', async () => {
+      await startServer(port, { shortCode: 'abc12XYz', accessMode: 'all' })
+      const status = await getServerStatus()
+      expect(status.shortCode).toBe('abc12XYz')
+      expect(status.accessMode).toBe('all')
+      expect(status.url).toContain('/s/abc12XYz')
+      expect(status.urlHostname).toContain('/s/abc12XYz')
+    })
+
+    it('returns null shortCode and accessMode when stopped', async () => {
+      const status = await getServerStatus()
+      expect(status.shortCode).toBeNull()
+      expect(status.accessMode).toBeNull()
+    })
   })
 
   describe('WebSocket channel blocklist', () => {

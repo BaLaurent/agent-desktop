@@ -18,6 +18,8 @@ const mockGetStatus = vi.fn().mockResolvedValue({
   lanIp: null,
   hostname: null,
   token: null,
+  shortCode: null,
+  accessMode: null,
   clients: 0,
   firewallWarning: null,
 })
@@ -62,7 +64,7 @@ describe('WebServerSettings', () => {
     expect(screen.getByText(/serves the same interface/i)).toBeDefined()
   })
 
-  it('calls server.start with port when enabling', async () => {
+  it('calls server.start with port and options when enabling', async () => {
     render(<WebServerSettings />)
 
     const toggle = screen.getByRole('switch', { name: 'Enable web server' })
@@ -70,9 +72,10 @@ describe('WebServerSettings', () => {
       fireEvent.click(toggle)
     })
 
-    expect(mockStart).toHaveBeenCalledWith(3484)
+    expect(mockStart).toHaveBeenCalledWith(3484, { shortCode: undefined, accessMode: 'lan' })
     expect(mockSetSetting).toHaveBeenCalledWith('server_enabled', 'true')
     expect(mockSetSetting).toHaveBeenCalledWith('server_port', '3484')
+    expect(mockSetSetting).toHaveBeenCalledWith('server_accessMode', 'lan')
   })
 
   it('calls server.stop when disabling', async () => {
@@ -104,15 +107,49 @@ describe('WebServerSettings', () => {
     expect(portInput).toBeDisabled()
   })
 
+  it('renders access mode select', () => {
+    render(<WebServerSettings />)
+    expect(screen.getByText('Network access')).toBeDefined()
+    expect(screen.getByRole('combobox', { name: 'Network access mode' })).toBeDefined()
+  })
+
+  it('renders custom short code input', () => {
+    render(<WebServerSettings />)
+    expect(screen.getByText('Custom short code')).toBeDefined()
+    expect(screen.getByRole('textbox', { name: 'Custom short code' })).toBeDefined()
+  })
+
+  it('access mode select is disabled when server is running', () => {
+    vi.mocked(useSettingsStore).mockReturnValue({
+      settings: { server_enabled: 'true', server_port: '3484', server_autoStart: 'false', server_accessMode: 'lan', server_shortCode: '' },
+      setSetting: mockSetSetting,
+    } as any)
+
+    render(<WebServerSettings />)
+    expect(screen.getByRole('combobox', { name: 'Network access mode' })).toBeDisabled()
+  })
+
+  it('short code input is disabled when server is running', () => {
+    vi.mocked(useSettingsStore).mockReturnValue({
+      settings: { server_enabled: 'true', server_port: '3484', server_autoStart: 'false', server_accessMode: 'lan', server_shortCode: '' },
+      setSetting: mockSetSetting,
+    } as any)
+
+    render(<WebServerSettings />)
+    expect(screen.getByRole('textbox', { name: 'Custom short code' })).toBeDisabled()
+  })
+
   it('shows status section when server is running', async () => {
     mockGetStatus.mockResolvedValue({
       running: true,
       port: 3484,
-      url: 'http://192.168.1.10:3484?token=abc',
+      url: 'http://192.168.1.10:3484/s/abc12345',
       urlHostname: null,
       lanIp: '192.168.1.10',
       hostname: null,
       token: 'abc123',
+      shortCode: 'abc12345',
+      accessMode: 'lan',
       clients: 2,
       firewallWarning: null,
     })
@@ -135,11 +172,13 @@ describe('WebServerSettings', () => {
     mockGetStatus.mockResolvedValue({
       running: true,
       port: 3484,
-      url: 'http://192.168.1.10:3484?token=abc',
+      url: 'http://192.168.1.10:3484/s/abc12345',
       urlHostname: null,
       lanIp: '192.168.1.10',
       hostname: null,
       token: 'abc123',
+      shortCode: 'abc12345',
+      accessMode: 'lan',
       clients: 0,
       firewallWarning: 'sudo ufw allow 3484/tcp',
     })

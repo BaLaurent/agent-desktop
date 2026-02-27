@@ -167,9 +167,9 @@ export interface AgentAPI {
     onStatus(callback: (status: UpdateStatus) => void): () => void
   }
   server: {
-    start(port?: number): Promise<{ url: string; token: string }>
+    start(port?: number, options?: { shortCode?: string; accessMode?: string }): Promise<{ url: string; token: string }>
     stop(): Promise<void>
-    getStatus(): Promise<{ running: boolean; port: number | null; url: string | null; urlHostname: string | null; lanIp: string | null; hostname: string | null; token: string | null; clients: number; firewallWarning: string | null }>
+    getStatus(): Promise<{ running: boolean; port: number | null; url: string | null; urlHostname: string | null; lanIp: string | null; hostname: string | null; token: string | null; shortCode: string | null; accessMode: string | null; clients: number; firewallWarning: string | null }>
   }
   jupyter: {
     startKernel(filePath: string, kernelName?: string): Promise<{ status: string }>

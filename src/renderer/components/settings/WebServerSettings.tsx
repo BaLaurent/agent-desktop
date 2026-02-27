@@ -9,6 +9,8 @@ interface ServerStatus {
   lanIp: string | null
   hostname: string | null
   token: string | null
+  shortCode: string | null
+  accessMode: string | null
   clients: number
   firewallWarning: string | null
 }
@@ -36,8 +38,10 @@ function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () =
 
 export function WebServerSettings() {
   const { settings, setSetting } = useSettingsStore()
-  const [status, setStatus] = useState<ServerStatus>({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, clients: 0, firewallWarning: null })
+  const [status, setStatus] = useState<ServerStatus>({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, shortCode: null, accessMode: null, clients: 0, firewallWarning: null })
   const [portInput, setPortInput] = useState(settings.server_port || '3484')
+  const [shortCodeInput, setShortCodeInput] = useState(settings.server_shortCode || '')
+  const [accessMode, setAccessMode] = useState<'lan' | 'all'>((settings.server_accessMode as 'lan' | 'all') || 'lan')
   const [showToken, setShowToken] = useState(false)
   const [qrSvg, setQrSvg] = useState<string>('')
 
@@ -82,20 +86,28 @@ export function WebServerSettings() {
       await setSetting('server_enabled', 'false')
     } else {
       const port = parseInt(portInput, 10) || 3484
+      const code = shortCodeInput.trim() || undefined
       try {
-        await window.agent.server.start(port)
+        await window.agent.server.start(port, { shortCode: code, accessMode })
       } catch (err) {
         console.error('[webServer] Start failed:', err)
         return
       }
       await setSetting('server_enabled', 'true')
       await setSetting('server_port', String(port))
+      if (code) await setSetting('server_shortCode', code)
+      await setSetting('server_accessMode', accessMode)
     }
     fetchStatus()
   }
 
   const handleAutoStartToggle = async () => {
     await setSetting('server_autoStart', autoStart ? 'false' : 'true')
+  }
+
+  const handleAccessModeChange = async (mode: 'lan' | 'all') => {
+    setAccessMode(mode)
+    await setSetting('server_accessMode', mode)
   }
 
   const copyToken = () => {
@@ -147,6 +159,60 @@ export function WebServerSettings() {
         />
         <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
           Default: 3484
+        </span>
+      </div>
+
+      {/* Access mode */}
+      <div>
+        <label className="text-sm font-medium block mb-1" style={{ color: 'var(--color-text)' }}>
+          Network access
+        </label>
+        <select
+          value={accessMode}
+          onChange={(e) => handleAccessModeChange(e.target.value as 'lan' | 'all')}
+          disabled={isEnabled}
+          className="w-48 mobile:w-full px-3 py-1.5 rounded text-sm mobile:text-base border"
+          style={{
+            backgroundColor: 'var(--color-base)',
+            color: 'var(--color-text)',
+            borderColor: 'var(--color-text-muted)',
+            opacity: isEnabled ? 0.5 : 1,
+          }}
+          aria-label="Network access mode"
+        >
+          <option value="lan">LAN only (recommended)</option>
+          <option value="all">Everyone</option>
+        </select>
+        <div className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+          {accessMode === 'lan' ? 'Only devices on your local network can connect.' : 'Any device can connect — use with caution.'}
+        </div>
+      </div>
+
+      {/* Custom short code */}
+      <div>
+        <label className="text-sm font-medium block mb-1" style={{ color: 'var(--color-text)' }}>
+          Custom short code
+        </label>
+        <input
+          type="text"
+          value={shortCodeInput}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^a-zA-Z0-9]/g, '')
+            setShortCodeInput(v.slice(0, 32))
+          }}
+          disabled={isEnabled}
+          placeholder="Auto-generated"
+          className="w-48 mobile:w-full px-3 py-1.5 rounded text-sm mobile:text-base border"
+          style={{
+            backgroundColor: 'var(--color-base)',
+            color: 'var(--color-text)',
+            borderColor: 'var(--color-text-muted)',
+            opacity: isEnabled ? 0.5 : 1,
+          }}
+          aria-label="Custom short code"
+        />
+        <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
+          4-32 alphanumeric chars (leave empty to auto-generate)
         </span>
       </div>
 

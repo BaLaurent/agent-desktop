@@ -14,6 +14,8 @@ let httpServer: http.Server | null = null
 let wss: WebSocketServer | null = null
 let serverToken: string | null = null
 let serverPort: number | null = null
+let serverShortCode: string | null = null
+let serverAccessMode: 'lan' | 'all' = 'lan'
 const authenticatedClients = new Set<WebSocket>()
 
 // ─── MIME types ──────────────────────────────────────
@@ -43,7 +45,7 @@ function generateShim(token: string): string {
   window.__AGENT_WEB_MODE__ = true;
   document.documentElement.classList.add('mobile');
 
-  var token = new URLSearchParams(window.location.search).get('token') || sessionStorage.getItem('agent_token') || '';
+  var token = window.__AGENT_TOKEN__ || new URLSearchParams(window.location.search).get('token') || sessionStorage.getItem('agent_token') || '';
   if (token) sessionStorage.setItem('agent_token', token);
 
   var ws = null;
@@ -307,7 +309,7 @@ function generateShim(token: string): string {
     server: {
       start: noopAsync,
       stop: noopAsync,
-      getStatus: function() { return Promise.resolve({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, clients: 0, firewallWarning: null }); },
+      getStatus: function() { return Promise.resolve({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, shortCode: null, accessMode: null, clients: 0, firewallWarning: null }); },
     },
     window: {
       minimize: noop,
@@ -334,6 +336,32 @@ function isPrivateIp(addr: string): boolean {
   return addr.startsWith('192.168.') ||
     addr.startsWith('10.') ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(addr)
+}
+
+const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+
+function generateShortCode(length = 8): string {
+  const bytes = crypto.randomBytes(length)
+  let code = ''
+  for (let i = 0; i < length; i++) {
+    code += BASE62[bytes[i] % 62]
+  }
+  return code
+}
+
+function stripMappedIpv6(addr: string): string {
+  return addr.startsWith('::ffff:') ? addr.slice(7) : addr
+}
+
+function isAllowedRemote(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false
+  const addr = stripMappedIpv6(remoteAddress)
+  // Localhost always allowed
+  if (addr === '127.0.0.1' || addr === '::1' || addr === 'localhost') return true
+  // In 'all' mode, everything is allowed
+  if (serverAccessMode === 'all') return true
+  // In 'lan' mode, only private IPs
+  return isPrivateIp(addr)
 }
 
 function getLanIp(): string {
@@ -501,21 +529,38 @@ function broadcastEvent(channel: string, ...args: unknown[]): void {
 
 // ─── Server lifecycle ───────────────────────────────
 
-export function startServer(port: number): Promise<{ url: string; token: string }> {
+export interface ServerStartOptions {
+  shortCode?: string
+  accessMode?: 'lan' | 'all'
+}
+
+export function startServer(port: number, options?: ServerStartOptions): Promise<{ url: string; token: string }> {
   return new Promise((resolve, reject) => {
     if (httpServer) {
       const ip = getLanIp()
-      resolve({ url: `http://${ip}:${serverPort}?token=${serverToken}`, token: serverToken! })
+      const url = serverShortCode
+        ? `http://${ip}:${serverPort}/s/${serverShortCode}`
+        : `http://${ip}:${serverPort}?token=${serverToken}`
+      resolve({ url, token: serverToken! })
       return
     }
 
     serverToken = crypto.randomBytes(32).toString('hex')
     serverPort = port
+    serverShortCode = options?.shortCode || generateShortCode()
+    serverAccessMode = options?.accessMode === 'all' ? 'all' : 'lan'
     const shimScript = generateShim(serverToken)
 
     const devUrl = process.env.ELECTRON_RENDERER_URL
 
     httpServer = http.createServer((req, res) => {
+      // Network access check
+      if (!isAllowedRemote(req.socket.remoteAddress)) {
+        res.writeHead(403)
+        res.end('Forbidden: LAN access only')
+        return
+      }
+
       // CORS headers for dev mode
       res.setHeader('Access-Control-Allow-Origin', '*')
       res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -536,6 +581,24 @@ export function startServer(port: number): Promise<{ url: string; token: string 
         return
       }
 
+      // Short URL route: /s/<code>
+      const shortMatch = url.pathname.match(/^\/s\/([a-zA-Z0-9]+)$/)
+      if (shortMatch) {
+        if (shortMatch[1] !== serverShortCode) {
+          res.writeHead(403)
+          res.end('Invalid short code')
+          return
+        }
+        // Serve index.html with token injected via window.__AGENT_TOKEN__
+        const tokenScript = `<script>window.__AGENT_TOKEN__=${JSON.stringify(serverToken)};</script>`
+        if (devUrl) {
+          proxyToDevWithTokenInjection(devUrl, req, res, shimScript, tokenScript)
+        } else {
+          serveStaticFileWithTokenInjection('/', res, shimScript, tokenScript)
+        }
+        return
+      }
+
       if (devUrl) {
         // Dev mode: proxy to electron-vite dev server
         proxyToDev(devUrl, url.pathname, req, res, shimScript)
@@ -548,6 +611,12 @@ export function startServer(port: number): Promise<{ url: string; token: string 
     wss = new WebSocketServer({ noServer: true, maxPayload: 10 * 1024 * 1024 })
 
     httpServer.on('upgrade', (req, socket, head) => {
+      // Network access check for WebSocket
+      if (!isAllowedRemote(req.socket.remoteAddress)) {
+        socket.destroy()
+        return
+      }
+
       const url = new URL(req.url || '/', `http://localhost:${port}`)
       if (url.pathname === '/ws') {
         wss!.handleUpgrade(req, socket, head, (wsClient) => {
@@ -580,9 +649,9 @@ export function startServer(port: number): Promise<{ url: string; token: string 
 
     httpServer.listen(port, '0.0.0.0', () => {
       const ip = getLanIp()
-      const fullUrl = `http://${ip}:${port}?token=${serverToken}`
-      console.log(`[webServer] Listening on ${fullUrl}`)
-      resolve({ url: fullUrl, token: serverToken! })
+      const shortUrl = `http://${ip}:${port}/s/${serverShortCode}`
+      console.log(`[webServer] Listening on ${shortUrl}`)
+      resolve({ url: shortUrl, token: serverToken! })
     })
   })
 }
@@ -610,6 +679,7 @@ export async function stopServer(): Promise<void> {
         httpServer = null
         serverToken = null
         serverPort = null
+        serverShortCode = null
         resolve()
       })
     })
@@ -624,22 +694,32 @@ export async function getServerStatus(): Promise<{
   lanIp: string | null
   hostname: string | null
   token: string | null
+  shortCode: string | null
+  accessMode: string | null
   clients: number
   firewallWarning: string | null
 }> {
   if (!httpServer || !serverToken) {
-    return { running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, clients: 0, firewallWarning: null }
+    return { running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, shortCode: null, accessMode: null, clients: 0, firewallWarning: null }
   }
   const ip = getLanIp()
   const host = getHostname()
+  const shortUrl = serverShortCode
+    ? `http://${ip}:${serverPort}/s/${serverShortCode}`
+    : `http://${ip}:${serverPort}?token=${serverToken}`
+  const shortUrlHostname = serverShortCode
+    ? `http://${host}:${serverPort}/s/${serverShortCode}`
+    : `http://${host}:${serverPort}?token=${serverToken}`
   return {
     running: true,
     port: serverPort,
-    url: `http://${ip}:${serverPort}?token=${serverToken}`,
-    urlHostname: `http://${host}:${serverPort}?token=${serverToken}`,
+    url: shortUrl,
+    urlHostname: shortUrlHostname,
     lanIp: ip,
     hostname: host,
     token: serverToken,
+    shortCode: serverShortCode,
+    accessMode: serverAccessMode,
     clients: authenticatedClients.size,
     firewallWarning: await detectFirewallBlock(serverPort!),
   }
@@ -717,6 +797,62 @@ async function detectFirewallBlockUncached(port: number): Promise<string | null>
   return null
 }
 
+// ─── Short URL serving (index.html with token injection) ─────
+
+// Inject <base href="/"> so relative asset paths resolve from root (not /s/)
+const BASE_TAG = '<base href="/">'
+
+function serveStaticFileWithTokenInjection(
+  _reqPath: string,
+  res: http.ServerResponse,
+  shimScript: string,
+  tokenScript: string,
+): void {
+  const rendererDir = getRendererDir()
+  const filePath = path.join(rendererDir, 'index.html')
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404)
+      res.end('Not found')
+      return
+    }
+    let html = data.toString('utf-8')
+    html = html.replace('<head>', `<head>${BASE_TAG}`)
+    html = html.replace('</head>', `${tokenScript}<script>${shimScript}</script>\n</head>`)
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end(html)
+  })
+}
+
+function proxyToDevWithTokenInjection(
+  devUrl: string,
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+  shimScript: string,
+  tokenScript: string,
+): void {
+  const target = new URL('/', devUrl)
+  const proto = target.protocol === 'https:' ? require('https') : require('http')
+
+  proto.get(target.href, (proxyRes: http.IncomingMessage) => {
+    const chunks: Buffer[] = []
+    proxyRes.on('data', (chunk: Buffer) => chunks.push(chunk))
+    proxyRes.on('end', () => {
+      const body = Buffer.concat(chunks)
+      let html = body.toString('utf-8')
+      html = html.replace('<head>', `<head>${BASE_TAG}`)
+      html = html.replace('</head>', `${tokenScript}<script>${shimScript}</script>\n</head>`)
+      res.writeHead(proxyRes.statusCode || 200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(html)
+    })
+  }).on('error', (err: Error) => {
+    console.error('[webServer] Dev proxy error:', err.message)
+    res.writeHead(502)
+    res.end('Dev server not reachable')
+  })
+}
+
 // ─── Dev proxy ──────────────────────────────────────
 
 function proxyToDev(
@@ -757,9 +893,9 @@ function proxyToDev(
 // ─── IPC handlers ───────────────────────────────────
 
 export function registerHandlers(ipcMain: IpcMain): void {
-  ipcMain.handle('server:start', async (_event, port?: number) => {
+  ipcMain.handle('server:start', async (_event, port?: number, options?: ServerStartOptions) => {
     const p = typeof port === 'number' && port > 0 ? port : 3484
-    return startServer(p)
+    return startServer(p, options)
   })
 
   ipcMain.handle('server:stop', async () => {
