@@ -22,6 +22,7 @@ registerPreviewScheme()
 // Enrich PATH/HOME for AppImage and non-standard environments — before GPU flags
 // (enrichEnvironment discovers WAYLAND_DISPLAY which affects Ozone platform choice)
 import { enrichEnvironment } from './utils/env'
+import { killExistingInstances } from './utils/singleInstance'
 enrichEnvironment()
 
 // GPU flags — Linux only (Ozone/EGL/VAAPI are not available on macOS)
@@ -35,6 +36,11 @@ if (process.platform === 'linux') {
   }
   app.commandLine.appendSwitch('use-gl', 'egl')
   app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecodeLinuxGL')
+}
+
+// Kill existing instances — new instance wins, old ones are terminated
+if (process.platform === 'linux') {
+  killExistingInstances()
 }
 
 let mainWindow: BrowserWindow | null = null
