@@ -20,6 +20,7 @@ let busName = ''
 let sessionPath: string | null = null
 let messageHandler: ((msg: Message) => void) | null = null
 let hyprlandBinds: string[] = []
+let activeMatchRules: string[] = []
 
 // FIFO-based shortcut activation (Hyprland only)
 let fifoPath: string | null = null
@@ -112,6 +113,9 @@ function getFifoPath(): string {
  * Uses O_RDWR to prevent EOF when writers disconnect.
  */
 function createShortcutPipe(onActivated: (shortcutId: string) => void): boolean {
+  // Clean up any existing pipe (fd/stream) before creating a new one
+  destroyShortcutPipe()
+
   const pipePath = getFifoPath()
   const lastActivation = new Map<string, number>()
 
@@ -230,6 +234,7 @@ function waitForResponse(token: string): Promise<{ response: number; results: Re
     msgBus.on('message', handler)
 
     // Register signal match rule so the bus actually delivers the signal to us
+    const matchRule = `type='signal',interface='org.freedesktop.portal.Request',member='Response',path='${expectedPath}'`
     try {
       await msgBus.call(
         new dbus.Message({
@@ -239,9 +244,10 @@ function waitForResponse(token: string): Promise<{ response: number; results: Re
           interface: 'org.freedesktop.DBus',
           member: 'AddMatch',
           signature: 's',
-          body: [`type='signal',interface='org.freedesktop.portal.Request',member='Response',path='${expectedPath}'`],
+          body: [matchRule],
         })
       )
+      activeMatchRules.push(matchRule)
     } catch {
       clearTimeout(timeout)
       msgBus.removeListener('message', handler)
@@ -398,7 +404,7 @@ async function tryRegisterPortal(
   if (!createResp || createResp.response !== 0) {
     console.warn('[waylandShortcuts] CreateSession failed, response:', createResp?.response)
     logToFile(`CreateSession FAILED: response=${createResp?.response ?? 'null (timeout)'}`)
-    cleanupBus()
+    await cleanupBus()
     return false
   }
 
@@ -406,7 +412,7 @@ async function tryRegisterPortal(
   if (!sessionPath) {
     console.warn('[waylandShortcuts] CreateSession returned no session handle')
     logToFile('CreateSession returned no session handle')
-    cleanupBus()
+    await cleanupBus()
     return false
   }
   console.log('[waylandShortcuts] Session:', sessionPath)
@@ -429,13 +435,14 @@ async function tryRegisterPortal(
   if (!bindResp || bindResp.response !== 0) {
     console.warn('[waylandShortcuts] BindShortcuts failed, response:', bindResp?.response)
     logToFile(`BindShortcuts FAILED: response=${bindResp?.response ?? 'null (timeout)'}`)
-    cleanupBus()
+    await cleanupBus()
     return false
   }
   console.log('[waylandShortcuts] Bound', shortcuts.length, 'shortcuts')
   logToFile(`BindShortcuts OK: ${shortcuts.length} shortcuts`)
 
   // 3. Listen for Activated signal via raw bus messages
+  const activatedRule = `type='signal',interface='org.freedesktop.portal.GlobalShortcuts',member='Activated'`
   await bus.call(
     new dbus.Message({
       type: MessageType.METHOD_CALL,
@@ -444,9 +451,10 @@ async function tryRegisterPortal(
       interface: 'org.freedesktop.DBus',
       member: 'AddMatch',
       signature: 's',
-      body: [`type='signal',interface='org.freedesktop.portal.GlobalShortcuts',member='Activated'`],
+      body: [activatedRule],
     })
   )
+  activeMatchRules.push(activatedRule)
 
   messageHandler = (msg: Message) => {
     if (
@@ -469,12 +477,48 @@ async function tryRegisterPortal(
   return true
 }
 
-function cleanupBus(): void {
+async function cleanupBus(): Promise<void> {
   if (messageHandler && bus) {
     bus.removeListener('message', messageHandler)
     messageHandler = null
   }
+
+  // Close portal session (best effort — bus may already be dead)
+  if (sessionPath && bus) {
+    try {
+      await bus.call(
+        new dbus.Message({
+          type: MessageType.METHOD_CALL,
+          destination: 'org.freedesktop.portal.Desktop',
+          path: sessionPath,
+          interface: 'org.freedesktop.portal.Session',
+          member: 'Close',
+        })
+      )
+    } catch { /* best effort */ }
+  }
   sessionPath = null
+
+  // RemoveMatch for each tracked rule (best effort)
+  if (bus) {
+    for (const rule of activeMatchRules) {
+      try {
+        await bus.call(
+          new dbus.Message({
+            type: MessageType.METHOD_CALL,
+            destination: 'org.freedesktop.DBus',
+            path: '/org/freedesktop/DBus',
+            interface: 'org.freedesktop.DBus',
+            member: 'RemoveMatch',
+            signature: 's',
+            body: [rule],
+          })
+        )
+      } catch { /* best effort */ }
+    }
+  }
+  activeMatchRules = []
+
   if (bus) {
     try {
       bus.disconnect()
@@ -559,5 +603,5 @@ export async function rebindWaylandShortcuts(
 export async function unregisterWaylandShortcuts(): Promise<void> {
   await removeHyprlandBinds()
   destroyShortcutPipe()
-  cleanupBus()
+  await cleanupBus()
 }

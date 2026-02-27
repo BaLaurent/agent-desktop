@@ -38,6 +38,7 @@ if (process.platform === 'linux') {
 }
 
 let mainWindow: BrowserWindow | null = null
+let isShuttingDown = false
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow
@@ -157,14 +158,25 @@ if (!gotLock) {
     app.quit()
   })
 
-  app.on('before-quit', () => {
+  app.on('before-quit', (e) => {
+    if (isShuttingDown) return
+    e.preventDefault()
+    isShuttingDown = true
+
+    // Sync cleanup
     shutdownAllKernels()
     stopScheduler()
     stopBridge()
-    stopServer().catch(() => {})
-    unregisterGlobalShortcuts()
+    unregisterGlobalShortcuts() // async but fire-and-forget OK
     stopAutoUpdater()
+    stopTts()
     closeDatabase() // flush() + close() — ensures all pending writes are persisted
+
+    // Async cleanup with timeout safety (3s max)
+    Promise.race([
+      stopServer(),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]).finally(() => app.exit())
   })
 
   app.on('window-all-closed', () => {

@@ -244,7 +244,10 @@ async function detectJupyter(): Promise<{ found: boolean; pythonPath: string | n
 // ─── Cleanup ──────────────────────────────────────────
 
 export function shutdownAllKernels(): void {
-  for (const [filePath] of kernels) {
+  for (const [filePath, kernel] of kernels) {
+    // Send SIGTERM immediately as safety net — if the graceful shutdown
+    // message (via stdin) doesn't reach the kernel, this ensures it dies
+    try { kernel.proc.kill('SIGTERM') } catch { /* already dead */ }
     shutdownKernel(filePath)
   }
 }
