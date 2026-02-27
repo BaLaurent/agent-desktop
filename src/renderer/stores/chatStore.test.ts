@@ -1337,6 +1337,46 @@ describe('chatStore', () => {
       expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
     })
 
+    it('stopGeneration pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+      })
+      mockAgent.messages.stop.mockResolvedValueOnce(undefined)
+
+      await useChatStore.getState().stopGeneration()
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('regenerateLastResponse pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messages: [{ id: 1, role: 'assistant', content: 'hi', conversation_id: 1, created_at: '', updated_at: '' }],
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+      })
+      mockAgent.messages.regenerate.mockResolvedValueOnce({})
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+
+      await useChatStore.getState().regenerateLastResponse(1)
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
+    it('editMessage pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messages: [{ id: 10, role: 'user', content: 'orig', conversation_id: 1, created_at: '', updated_at: '' }],
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+      })
+      mockAgent.messages.edit.mockResolvedValueOnce({})
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+
+      await useChatStore.getState().editMessage(10, 'edited')
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
+
     it('stream error pauses the queue', async () => {
       useChatStore.setState({
         activeConversationId: 1,

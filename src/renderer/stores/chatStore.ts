@@ -195,7 +195,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   stopGeneration: async () => {
     const convId = get().activeConversationId
-    if (convId) await window.agent.messages.stop(convId)
+    if (convId) {
+      set({ queuePaused: { ...get().queuePaused, [convId]: true } })
+      await window.agent.messages.stop(convId)
+    }
   },
 
   regenerateLastResponse: async (conversationId: number) => {
@@ -210,6 +213,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingContent: '',
       streamBuffers: { ...get().streamBuffers, [conversationId]: [] },
       error: null,
+      queuePaused: { ...get().queuePaused, [conversationId]: true },
     }))
 
     await streamOperation(
@@ -237,6 +241,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingContent: '',
         streamBuffers: convId != null ? { ...s.streamBuffers, [convId]: [] } : s.streamBuffers,
         error: null,
+        queuePaused: convId != null ? { ...s.queuePaused, [convId]: true } : s.queuePaused,
       }
     })
 
