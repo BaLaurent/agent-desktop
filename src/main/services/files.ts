@@ -4,6 +4,7 @@ import { promises as fsp } from 'fs'
 import { join, extname, dirname, basename } from 'path'
 import os from 'os'
 import { shell, app } from 'electron'
+import { spawn } from 'child_process'
 import type { FileNode } from '../../shared/types'
 import { validateString, validatePathSafe, validatePositiveInt } from '../utils/validate'
 import { expandTilde } from '../utils/paths'
@@ -208,6 +209,17 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     const resolved = expandTilde(filePath)
     validatePathSafe(resolved)
     shell.showItemInFolder(resolved)
+  })
+
+  ipcMain.handle('files:openTerminalHere', async (_event, filePath: string) => {
+    validateString(filePath, 'filePath')
+    const resolved = expandTilde(filePath)
+    validatePathSafe(resolved)
+    const stats = await fsp.stat(resolved)
+    const dir = stats.isDirectory() ? resolved : dirname(resolved)
+    const term = process.env.TERMINAL || 'xterm'
+    const args = term.includes('xdg-terminal-exec') ? [`--dir=${dir}`] : []
+    spawn(term, args, { cwd: dir, detached: true, stdio: 'ignore' }).unref()
   })
 
   ipcMain.handle('files:openWithDefault', async (_event, filePath: string) => {

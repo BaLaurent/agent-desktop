@@ -58,6 +58,7 @@ const api: AgentAPI = {
     writeFile: (filePath: string, content: string) => withTimeout(ipcRenderer.invoke('files:writeFile', filePath, content)),
     savePastedFile: (data: Uint8Array, mimeType: string) => withTimeout(ipcRenderer.invoke('files:savePastedFile', data, mimeType)),
     revealInFileManager: (filePath: string) => withTimeout(ipcRenderer.invoke('files:revealInFileManager', filePath)),
+    openTerminalHere: (filePath: string) => withTimeout(ipcRenderer.invoke('files:openTerminalHere', filePath)),
     openWithDefault: (filePath: string) => withTimeout(ipcRenderer.invoke('files:openWithDefault', filePath)),
     trash: (filePath: string) => withTimeout(ipcRenderer.invoke('files:trash', filePath)),
     rename: (filePath: string, newName: string) => withTimeout(ipcRenderer.invoke('files:rename', filePath, newName)),

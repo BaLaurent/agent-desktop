@@ -1,11 +1,12 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 
-const { mockShell } = vi.hoisted(() => ({
+const { mockShell, mockSpawn } = vi.hoisted(() => ({
   mockShell: {
     showItemInFolder: vi.fn(),
     openPath: vi.fn().mockResolvedValue(''),
     trashItem: vi.fn().mockResolvedValue(undefined),
   },
+  mockSpawn: vi.fn(() => ({ unref: vi.fn() })),
 }))
 
 vi.mock('electron', () => ({
@@ -14,6 +15,10 @@ vi.mock('electron', () => ({
     commandLine: { appendSwitch: vi.fn() },
   },
   shell: mockShell,
+}))
+
+vi.mock('child_process', () => ({
+  spawn: mockSpawn,
 }))
 
 vi.mock('os', async () => {
@@ -115,6 +120,7 @@ describe('files IPC handlers', () => {
     mockShell.showItemInFolder.mockClear()
     mockShell.openPath.mockClear().mockResolvedValue('')
     mockShell.trashItem.mockClear().mockResolvedValue(undefined)
+    mockSpawn.mockClear().mockReturnValue({ unref: vi.fn() })
 
     testDir = join(tmpdir(), `agent-files-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     mkdirSync(testDir, { recursive: true })
@@ -438,6 +444,36 @@ describe('files IPC handlers', () => {
 
     it('rejects dangerous paths', async () => {
       await expect(ipc.invoke('files:revealInFileManager', '/proc/self')).rejects.toThrow('protected directory')
+    })
+  })
+
+  describe('files:openTerminalHere', () => {
+    it('spawns terminal in directory for a file', async () => {
+      const filePath = join(testDir, 'term.txt')
+      writeFileSync(filePath, 'hi')
+
+      await ipc.invoke('files:openTerminalHere', filePath)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: testDir, detached: true, stdio: 'ignore' }),
+      )
+    })
+
+    it('spawns terminal in the directory itself for a directory', async () => {
+      const subDir = join(testDir, 'subdir')
+      mkdirSync(subDir, { recursive: true })
+
+      await ipc.invoke('files:openTerminalHere', subDir)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: subDir, detached: true, stdio: 'ignore' }),
+      )
+    })
+
+    it('rejects dangerous paths', async () => {
+      await expect(ipc.invoke('files:openTerminalHere', '/proc/self')).rejects.toThrow('protected directory')
     })
   })
 

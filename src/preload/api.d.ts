@@ -62,6 +62,7 @@ export interface AgentAPI {
     writeFile(filePath: string, content: string): Promise<void>
     savePastedFile(data: Uint8Array, mimeType: string): Promise<string>
     revealInFileManager(filePath: string): Promise<void>
+    openTerminalHere(filePath: string): Promise<void>
     openWithDefault(filePath: string): Promise<void>
     trash(filePath: string): Promise<void>
     rename(filePath: string, newName: string): Promise<string>

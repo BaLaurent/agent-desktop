@@ -128,6 +128,11 @@ function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreate
     onClose()
   }
 
+  const handleOpenTerminal = async () => {
+    try { await window.agent.files.openTerminalHere(node.path) } catch { /* ignore */ }
+    onClose()
+  }
+
   const handleOpen = async () => {
     try { await window.agent.files.openWithDefault(node.path) } catch { /* ignore */ }
     onClose()
@@ -162,6 +167,7 @@ function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreate
       <ContextMenuItem onClick={handleReveal}>
         {node.isDirectory ? 'Open in File Manager' : 'Reveal in File Manager'}
       </ContextMenuItem>
+      <ContextMenuItem onClick={handleOpenTerminal}>Open in Terminal</ContextMenuItem>
       {node.isDirectory && onCreateFile && onCreateFolder && (
         <>
           <ContextMenuDivider />
