@@ -297,6 +297,18 @@ if (typeof window !== 'undefined' && window.agent?.events?.onConversationTitleUp
   })
 }
 
+// Listen for conversation updated (edit/regenerate/stream finished) — bump updated_at so sort order stays correct
+if (typeof window !== 'undefined' && window.agent?.events?.onConversationUpdated) {
+  window.agent.events.onConversationUpdated((conversationId: number) => {
+    const now = new Date().toISOString()
+    useConversationsStore.setState((s) => ({
+      conversations: s.conversations
+        .map((c) => c.id === conversationId ? { ...c, updated_at: now } : c)
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    }))
+  })
+}
+
 // Listen for conversation list refresh (e.g. Quick Chat conversation created externally)
 if (typeof window !== 'undefined' && window.agent?.events?.onConversationsRefresh) {
   window.agent.events.onConversationsRefresh(() => {

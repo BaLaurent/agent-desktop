@@ -726,6 +726,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     // Clear SDK session — history has diverged from the SDK's internal state
     clearConversationSdkSessionId(db, conversationId)
 
+    // Bump updated_at so conversation sorts to top immediately (matches messages:send behavior)
+    updateConversationTimestamp(db, conversationId)
+
     // Re-send: build history (now without last assistant), stream new response
     return streamAndSave(db, conversationId)
   })
@@ -754,6 +757,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       ).run(msg.conversation_id, msg.id)
       db.prepare('UPDATE conversations SET sdk_session_id = NULL WHERE id = ?').run(msg.conversation_id)
     })()
+
+    // Bump updated_at so conversation sorts to top immediately (matches messages:send behavior)
+    updateConversationTimestamp(db, msg.conversation_id)
 
     // Re-send with updated history
     return streamAndSave(db, msg.conversation_id)
