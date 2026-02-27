@@ -264,6 +264,41 @@ describe('messages integration', () => {
     )
   })
 
+  it('messages:regenerate updates conversation updated_at', async () => {
+    const oldTimestamp = '2024-01-01T00:00:00.000Z'
+    db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(oldTimestamp, convId)
+
+    const now = new Date().toISOString()
+    db.prepare(
+      "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Hi', '[]', ?, ?)"
+    ).run(convId, now, now)
+    db.prepare(
+      "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'assistant', 'Old', '[]', ?, ?)"
+    ).run(convId, now, now)
+
+    await ipc.invoke('messages:regenerate', convId)
+
+    const conv = db.prepare('SELECT updated_at FROM conversations WHERE id = ?').get(convId) as { updated_at: string }
+    expect(conv.updated_at > oldTimestamp).toBe(true)
+  })
+
+  it('messages:edit updates conversation updated_at', async () => {
+    const oldTimestamp = '2024-01-01T00:00:00.000Z'
+    db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(oldTimestamp, convId)
+
+    db.prepare(
+      "INSERT INTO messages (conversation_id, role, content, attachments, created_at, updated_at) VALUES (?, 'user', 'Original', '[]', ?, ?)"
+    ).run(convId, oldTimestamp, oldTimestamp)
+    const userMsg = db
+      .prepare("SELECT id FROM messages WHERE conversation_id = ? AND content = 'Original'")
+      .get(convId) as { id: number }
+
+    await ipc.invoke('messages:edit', userMsg.id, 'Edited')
+
+    const conv = db.prepare('SELECT updated_at FROM conversations WHERE id = ?').get(convId) as { updated_at: string }
+    expect(conv.updated_at > oldTimestamp).toBe(true)
+  })
+
   it('messages:stop calls abortStream', async () => {
     await ipc.invoke('messages:stop')
     expect(abortStream).toHaveBeenCalled()

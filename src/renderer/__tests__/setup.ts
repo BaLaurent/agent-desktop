@@ -3,7 +3,9 @@ import '@testing-library/jest-dom'
 
 // Captured stream listener callback — set when chatStore module registers its onStream handler
 export let capturedStreamListener: ((chunk: unknown) => void) | null = null
-// Captured conversation-updated listener — set when chatStore module registers its onConversationUpdated handler
+// Captured conversation-updated listeners — set when modules register their onConversationUpdated handlers
+export const capturedConversationUpdatedListeners: Array<(conversationId: number) => void> = []
+// Legacy single-listener alias (points to last registered)
 export let capturedConversationUpdatedListener: ((conversationId: number) => void) | null = null
 // Captured TTS state-change listener — set when ttsStore module registers its onStateChange handler
 export let capturedTtsStateListener: ((state: { speaking: boolean; messageId?: number }) => void) | null = null
@@ -135,6 +137,7 @@ export const mockAgent = {
     onDeeplinkNavigate: vi.fn().mockReturnValue(() => {}),
     onConversationTitleUpdated: vi.fn().mockReturnValue(() => {}),
     onConversationUpdated: vi.fn().mockImplementation((cb: (id: number) => void) => {
+      capturedConversationUpdatedListeners.push(cb)
       capturedConversationUpdatedListener = cb
       return () => {}
     }),

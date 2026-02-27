@@ -1,4 +1,4 @@
-import { mockAgent } from '../__tests__/setup'
+import { mockAgent, capturedConversationUpdatedListeners } from '../__tests__/setup'
 import { useConversationsStore } from './conversationsStore'
 import type { Conversation, Folder } from '../../shared/types'
 
@@ -306,6 +306,23 @@ describe('conversationsStore', () => {
       expect(state.folders).toHaveLength(0)
       expect(state.conversations).toHaveLength(1)
       expect(state.conversations[0].id).toBe(2)
+    })
+
+    it('onConversationUpdated bumps updated_at and re-sorts', () => {
+      const old = '2024-01-01T00:00:00.000Z'
+      const newer = '2024-06-01T00:00:00.000Z'
+      const c1 = makeConversation({ id: 1, updated_at: old })
+      const c2 = makeConversation({ id: 2, updated_at: newer })
+      // c2 is first (newer), c1 is second (older)
+      useConversationsStore.setState({ conversations: [c2, c1] })
+
+      // Trigger all registered listeners with conversation 1
+      for (const listener of capturedConversationUpdatedListeners) listener(1)
+
+      const state = useConversationsStore.getState()
+      // Conversation 1 should now be first (most recent updated_at)
+      expect(state.conversations[0].id).toBe(1)
+      expect(state.conversations[0].updated_at > newer).toBe(true)
     })
 
     it('rolls back on IPC error', async () => {
