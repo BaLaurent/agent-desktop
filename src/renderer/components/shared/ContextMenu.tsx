@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, type ReactNode, type CSSProperties } from 'react'
+import { useState, useRef, useCallback, useEffect, type ReactNode, type CSSProperties } from 'react'
 import { useClickOutside } from '../../hooks/useClickOutside'
 
 interface ContextMenuProps {
@@ -37,6 +37,23 @@ export function ContextMenu({
 
   useClickOutside(ref, onClose)
 
+  useEffect(() => {
+    const firstItem = ref.current?.querySelector<HTMLElement>('[role="menuitem"]')
+    firstItem?.focus()
+  }, [])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const items = Array.from(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+    if (items.length === 0) return
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement)
+    const nextIndex = e.key === 'ArrowDown'
+      ? (currentIndex + 1) % items.length
+      : (currentIndex - 1 + items.length) % items.length
+    items[nextIndex].focus()
+  }, [])
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
@@ -70,6 +87,7 @@ export function ContextMenu({
       }}
       role={role}
       aria-label={ariaLabel}
+      onKeyDown={handleKeyDown}
     >
       {draggable && (
         <div

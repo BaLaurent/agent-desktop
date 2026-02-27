@@ -91,6 +91,93 @@ describe('ContextMenu', () => {
     expect(screen.queryByTestId('drag-handle')).not.toBeInTheDocument()
   })
 
+  it('focuses first menuitem on mount', () => {
+    render(
+      <ContextMenu position={{ x: 0, y: 0 }} onClose={vi.fn()}>
+        <ContextMenuItem onClick={vi.fn()}>First</ContextMenuItem>
+        <ContextMenuItem onClick={vi.fn()}>Second</ContextMenuItem>
+      </ContextMenu>
+    )
+    const items = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(items[0])
+  })
+
+  it('moves focus down with ArrowDown and wraps around', () => {
+    render(
+      <ContextMenu position={{ x: 0, y: 0 }} onClose={vi.fn()}>
+        <ContextMenuItem onClick={vi.fn()}>First</ContextMenuItem>
+        <ContextMenuItem onClick={vi.fn()}>Second</ContextMenuItem>
+        <ContextMenuItem onClick={vi.fn()}>Third</ContextMenuItem>
+      </ContextMenu>
+    )
+    const menu = screen.getByRole('menu')
+    const items = screen.getAllByRole('menuitem')
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[1])
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[2])
+
+    // wraps to first
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[0])
+  })
+
+  it('moves focus up with ArrowUp and wraps around', () => {
+    render(
+      <ContextMenu position={{ x: 0, y: 0 }} onClose={vi.fn()}>
+        <ContextMenuItem onClick={vi.fn()}>First</ContextMenuItem>
+        <ContextMenuItem onClick={vi.fn()}>Second</ContextMenuItem>
+        <ContextMenuItem onClick={vi.fn()}>Third</ContextMenuItem>
+      </ContextMenu>
+    )
+    const menu = screen.getByRole('menu')
+    const items = screen.getAllByRole('menuitem')
+
+    // from first, ArrowUp wraps to last
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(items[2])
+
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(items[1])
+  })
+
+  it('navigates to item then activates it via click (Enter triggers click natively)', () => {
+    const onClick = vi.fn()
+    render(
+      <ContextMenu position={{ x: 0, y: 0 }} onClose={vi.fn()}>
+        <ContextMenuItem onClick={vi.fn()}>First</ContextMenuItem>
+        <ContextMenuItem onClick={onClick}>Second</ContextMenuItem>
+      </ContextMenu>
+    )
+    const menu = screen.getByRole('menu')
+    const items = screen.getAllByRole('menuitem')
+
+    // ArrowDown moves focus to second item
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[1])
+
+    // click on focused item (native Enter→click behavior not simulated in jsdom)
+    fireEvent.click(items[1])
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips dividers during keyboard navigation', () => {
+    render(
+      <ContextMenu position={{ x: 0, y: 0 }} onClose={vi.fn()}>
+        <ContextMenuItem onClick={vi.fn()}>First</ContextMenuItem>
+        <ContextMenuDivider />
+        <ContextMenuItem onClick={vi.fn()}>Second</ContextMenuItem>
+      </ContextMenu>
+    )
+    const menu = screen.getByRole('menu')
+    const items = screen.getAllByRole('menuitem')
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[1])
+  })
+
   it('moves menu on drag', () => {
     render(
       <ContextMenu position={{ x: 100, y: 100 }} onClose={vi.fn()}>
