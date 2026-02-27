@@ -31,6 +31,10 @@ I build this project primarily for my own use — the features I add are the one
 - **OAuth** — use your existing Claude subscription via `claude login`
 - **API key** — bring your own Anthropic API key with custom base URL and model selection
 
+### AI Backend
+- **Claude Agent SDK** (default) — full-featured backend with session resume, tools, and MCP support
+- **PI Coding Agent** *(experimental)* — alternative backend via the PI Coding Agent SDK; selectable per-conversation, per-folder, or globally in settings. Not yet fully integration-tested — expect rough edges
+
 ### File Explorer & Viewers
 - Built-in file explorer with context menu (open, rename, duplicate, move to trash, open in terminal)
 - Code viewer (Monaco), HTML sandbox, Markdown preview, Mermaid diagrams, SVG renderer
@@ -172,7 +176,7 @@ npm run test:renderer # renderer tests only
 | State | Zustand |
 | Styling | Tailwind CSS, CSS custom properties |
 | Database | SQLite (sql.js, WASM) |
-| AI | @anthropic-ai/claude-agent-sdk |
+| AI | @anthropic-ai/claude-agent-sdk, PI Coding Agent SDK *(experimental)* |
 | MCP | @modelcontextprotocol/sdk |
 | Markdown | react-markdown, remark-gfm |
 | Diagrams | Mermaid |
