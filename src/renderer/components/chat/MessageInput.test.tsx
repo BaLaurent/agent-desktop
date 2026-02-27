@@ -74,4 +74,67 @@ describe('MessageInput', () => {
     expect(textarea.value).toBe('hello\tworld')
     expect(textarea.selectionStart).toBe(6)
   })
+
+  it('routes send to onQueue when isStreaming is true', () => {
+    const onSend = vi.fn()
+    const onQueue = vi.fn()
+    render(
+      <MessageInput
+        onSend={onSend}
+        onQueue={onQueue}
+        disabled={false}
+        isStreaming={true}
+        hasQueuedMessages={false}
+      />
+    )
+
+    const textarea = screen.getByLabelText('Message input')
+    fireEvent.change(textarea, { target: { value: 'queued message' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+    expect(onQueue).toHaveBeenCalledWith('queued message')
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('routes send to onQueue when hasQueuedMessages is true', () => {
+    const onSend = vi.fn()
+    const onQueue = vi.fn()
+    render(
+      <MessageInput
+        onSend={onSend}
+        onQueue={onQueue}
+        disabled={false}
+        isStreaming={false}
+        hasQueuedMessages={true}
+      />
+    )
+
+    const textarea = screen.getByLabelText('Message input')
+    fireEvent.change(textarea, { target: { value: 'test message' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+    expect(onQueue).toHaveBeenCalledWith('test message')
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('routes to onSend when not streaming and no queue', () => {
+    const onSend = vi.fn()
+    const onQueue = vi.fn()
+    render(
+      <MessageInput
+        onSend={onSend}
+        onQueue={onQueue}
+        disabled={false}
+        isStreaming={false}
+        hasQueuedMessages={false}
+      />
+    )
+
+    const textarea = screen.getByLabelText('Message input')
+    fireEvent.change(textarea, { target: { value: 'direct message' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+    expect(onSend).toHaveBeenCalledWith('direct message')
+    expect(onQueue).not.toHaveBeenCalled()
+  })
 })
