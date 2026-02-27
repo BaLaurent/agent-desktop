@@ -1390,5 +1390,38 @@ describe('chatStore', () => {
 
       expect(useChatStore.getState().queuePaused[1]).toBe(true)
     })
+
+    it('resumeQueue sends next queued message if not streaming', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        streamBuffers: {},  // NOT streaming
+        messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
+        queuePaused: { 1: true },
+      })
+
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'reply' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+
+      await useChatStore.getState().resumeQueue(1)
+
+      expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
+      // Queue should have been drained
+      expect(useChatStore.getState().messageQueues[1] || []).toHaveLength(0)
+    })
+
+    it('resumeQueue does not send if currently streaming', () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        streamBuffers: { 1: [] },  // currently streaming
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queuePaused: { 1: true },
+      })
+
+      useChatStore.getState().resumeQueue(1)
+
+      // Queue should remain — drain will happen after current stream via streamOperation
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+      expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
+    })
   })
 })

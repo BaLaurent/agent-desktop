@@ -356,10 +356,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   resumeQueue: (conversationId) => {
-    set((s) => {
-      const { [conversationId]: _, ...rest } = s.queuePaused
-      return { queuePaused: rest }
-    })
+    const { [conversationId]: _, ...rest } = get().queuePaused
+    set({ queuePaused: rest })
+
+    // If not currently streaming, drain immediately
+    const isConvStreaming = conversationId in get().streamBuffers
+    const queue = get().messageQueues[conversationId]
+    if (!isConvStreaming && queue?.length) {
+      const [next, ...remaining] = queue
+      set({
+        messageQueues: remaining.length
+          ? { ...get().messageQueues, [conversationId]: remaining }
+          : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+      })
+      get().sendMessage(conversationId, next.content, next.attachments)
+    }
   },
 }))
 
