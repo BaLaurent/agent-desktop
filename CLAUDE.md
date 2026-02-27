@@ -22,6 +22,7 @@
 - **Hyprland uses FIFO not D-Bus** — `dbus-next` signal delivery broken in Electron's event loop
 - **Session detection** — `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` (both can be set under XWayland)
 - **SDK session resume** — `sdk_session_id` on conversations; normal messages use `resume`, regenerate/edit/compact/clear reset to full history fallback; one-shot queries use `persistSession: false`
+- **CWD whitelist** — `hooks_cwdWhitelist` (JSON `CwdWhitelistEntry[]`) replaces `writableKnowledgePaths`; CWD auto-included as readwrite, knowledge paths auto-merged
 
 ## Conventions & Cascade
 - **CSS**: `@import` before `@tailwind` directives
@@ -30,6 +31,7 @@
 - **Theme naming**: `base`/`body`/`contrast` (not `bg`/`text`/`text-contrast`) — avoids Tailwind collisions like `bg-bg`
 - **Tinting**: `color-mix(in srgb, ...)` — Tailwind opacity modifiers don't work with raw CSS var values
 - **Settings cascade**: Conversation > Folder > Global; `null`/`{}` = inherited
+- **`hooks_cwdWhitelist` cascade**: replace semantics (most specific level wins); empty whitelist = backward compat (reads unrestricted, writes restricted to CWD)
 - **NOT cascaded** (per-conversation only): `cwd`, `kb_enabled`, `cleared_at`
 - **NOT cascaded** (global only): `tts_summaryModel` — model selection for TTS summary generation; UI provides Haiku/Sonnet/Opus presets + Custom free text; backend defaults to Haiku if unset
 - **Folder color**: nullable TEXT `#rrggbb` validated server-side; `null` = no tint; applied via `color-mix` like theme tinting
@@ -87,6 +89,7 @@
 - **Compact summary injection**: `buildMessageHistory` prepends `compact_summary` as `[Previous conversation summary]` with role `assistant`
 - **Hook system messages**: `hook_response` output is JSON-parsed for `systemMessage` field — sent as `system_message` stream chunk with `hookName`/`hookEvent` metadata; non-JSON output silently ignored
 - **UserPromptSubmit hooks**: SDK does not yield `hook_response` for this event — executed app-side via `hookRunner.ts`; system messages saved as `<hook-system-message>content</hook-system-message>` tags prepended to assistant content; extracted and rendered with accent-styled boxes + `MarkdownRenderer` (not plain text)
+- **CWD whitelist read restriction**: only enforced when whitelist is non-empty; covers Read, Glob, Grep, Bash read commands (cat, head, tail, less, find, ls, tree, file, stat, wc, diff, strings, xxd)
 
 ## Quick Chat & TTS Gotchas
 - **Shortcut re-toggle**: voice sends stop-recording, text hides; only creates new window if hidden/destroyed

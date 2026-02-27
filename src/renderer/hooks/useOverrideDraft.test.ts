@@ -105,4 +105,50 @@ describe('useOverrideDraft', () => {
     act(() => result.current.toggleOverride('ai_model'))
     expect(result.current.draft.ai_model).toBe('')
   })
+
+  it('toggleCwdWhitelistOverride enables with fallback', () => {
+    const fallbackWithWhitelist = { ...fallback, hooks_cwdWhitelist: '[{"path":"/home/user","access":"readwrite"}]' }
+    const { result } = renderHook(() => useOverrideDraft({}, fallbackWithWhitelist))
+    expect(result.current.cwdWhitelistOverridden).toBe(false)
+    act(() => result.current.toggleCwdWhitelistOverride())
+    expect(result.current.cwdWhitelistOverridden).toBe(true)
+    expect(result.current.cwdWhitelistDraft).toEqual([{ path: '/home/user', access: 'readwrite' }])
+  })
+
+  it('toggleCwdWhitelistOverride disables when already present', () => {
+    const { result } = renderHook(() =>
+      useOverrideDraft({ hooks_cwdWhitelist: '[{"path":"/tmp","access":"read"}]' }, fallback),
+    )
+    expect(result.current.cwdWhitelistOverridden).toBe(true)
+    act(() => result.current.toggleCwdWhitelistOverride())
+    expect(result.current.cwdWhitelistOverridden).toBe(false)
+    expect(result.current.draft.hooks_cwdWhitelist).toBeUndefined()
+  })
+
+  it('setCwdWhitelist updates whitelist entries', () => {
+    const { result } = renderHook(() => useOverrideDraft({}, fallback))
+    const entries = [{ path: '/opt/data', access: 'read' as const }]
+    act(() => result.current.setCwdWhitelist(entries))
+    expect(result.current.cwdWhitelistDraft).toEqual(entries)
+    expect(result.current.draft.hooks_cwdWhitelist).toBe(JSON.stringify(entries))
+  })
+
+  it('cwdWhitelistInherited derives from fallback', () => {
+    const fallbackWithWhitelist = { ...fallback, hooks_cwdWhitelist: '[{"path":"/etc","access":"read"}]' }
+    const { result } = renderHook(() => useOverrideDraft({}, fallbackWithWhitelist))
+    expect(result.current.cwdWhitelistInherited).toEqual([{ path: '/etc', access: 'read' }])
+  })
+
+  it('cleanDraft includes hooks_cwdWhitelist', () => {
+    const overrides = { hooks_cwdWhitelist: '[{"path":"/var","access":"readwrite"}]' }
+    const { result } = renderHook(() => useOverrideDraft(overrides, fallback))
+    const cleaned = result.current.cleanDraft()
+    expect(cleaned).toEqual(overrides)
+  })
+
+  it('toggleCwdWhitelistOverride uses empty array when no fallback', () => {
+    const { result } = renderHook(() => useOverrideDraft({}, {}))
+    act(() => result.current.toggleCwdWhitelistOverride())
+    expect(result.current.draft.hooks_cwdWhitelist).toBe('[]')
+  })
 })
