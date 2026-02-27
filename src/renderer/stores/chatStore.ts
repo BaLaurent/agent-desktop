@@ -90,6 +90,11 @@ function shouldShowDesktopNotification(mode: string): boolean {
   }
 }
 
+function randomQueueDelay(): Promise<void> {
+  const ms = 1000 + Math.random() * 4000 // 1–5 seconds
+  return new Promise((r) => setTimeout(r, ms))
+}
+
 function cleanupStreamBuffer(
   state: { streamBuffers: Record<number, StreamPart[]>; activeConversationId: number | null },
   conversationId: number
@@ -121,13 +126,19 @@ async function streamOperation(
     // Drain queue: send next queued message if not paused
     const queue = get().messageQueues[conversationId]
     if (queue?.length && !get().queuePaused[conversationId]) {
-      const [next, ...rest] = queue
-      set({
-        messageQueues: rest.length
-          ? { ...get().messageQueues, [conversationId]: rest }
-          : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
-      })
-      await get().sendMessage(conversationId, next.content, next.attachments)
+      const next = queue[0]
+      await randomQueueDelay()
+      // Re-check pause after delay — user may have paused while waiting
+      if (!get().queuePaused[conversationId]) {
+        const fresh = get().messageQueues[conversationId] || []
+        const rest = fresh.slice(1)
+        set({
+          messageQueues: rest.length
+            ? { ...get().messageQueues, [conversationId]: rest }
+            : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+        })
+        await get().sendMessage(conversationId, next.content, next.attachments)
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : errorLabel
@@ -363,13 +374,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const isConvStreaming = conversationId in get().streamBuffers
     const queue = get().messageQueues[conversationId]
     if (!isConvStreaming && queue?.length) {
-      const [next, ...remaining] = queue
-      set({
-        messageQueues: remaining.length
-          ? { ...get().messageQueues, [conversationId]: remaining }
-          : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+      const next = queue[0]
+      randomQueueDelay().then(() => {
+        // Re-check pause after delay — user may have paused while waiting
+        if (!get().queuePaused[conversationId]) {
+          const fresh = get().messageQueues[conversationId] || []
+          const rest = fresh.slice(1)
+          set({
+            messageQueues: rest.length
+              ? { ...get().messageQueues, [conversationId]: rest }
+              : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+          })
+          get().sendMessage(conversationId, next.content, next.attachments)
+        }
       })
-      get().sendMessage(conversationId, next.content, next.attachments)
     }
   },
 }))

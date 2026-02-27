@@ -1392,21 +1392,30 @@ describe('chatStore', () => {
     })
 
     it('resumeQueue sends next queued message if not streaming', async () => {
-      useChatStore.setState({
-        activeConversationId: 1,
-        streamBuffers: {},  // NOT streaming
-        messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
-        queuePaused: { 1: true },
-      })
+      vi.useFakeTimers()
+      try {
+        useChatStore.setState({
+          activeConversationId: 1,
+          streamBuffers: {},  // NOT streaming
+          messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
+          queuePaused: { 1: true },
+        })
 
-      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'reply' })
-      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
+        mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'reply' })
+        mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, messages: [] })
 
-      await useChatStore.getState().resumeQueue(1)
+        useChatStore.getState().resumeQueue(1)
 
-      expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
-      // Queue should have been drained
-      expect(useChatStore.getState().messageQueues[1] || []).toHaveLength(0)
+        expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
+
+        // Advance past the random delay (max 5s)
+        await vi.advanceTimersByTimeAsync(5000)
+
+        // Queue should have been drained
+        expect(useChatStore.getState().messageQueues[1] || []).toHaveLength(0)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('resumeQueue does not send if currently streaming', () => {
