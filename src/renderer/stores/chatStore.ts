@@ -117,10 +117,25 @@ async function streamOperation(
       await get().loadMessages(conversationId)
     }
     set(cleanupStreamBuffer(get(), conversationId))
+
+    // Drain queue: send next queued message if not paused
+    const queue = get().messageQueues[conversationId]
+    if (queue?.length && !get().queuePaused[conversationId]) {
+      const [next, ...rest] = queue
+      set({
+        messageQueues: rest.length
+          ? { ...get().messageQueues, [conversationId]: rest }
+          : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+      })
+      await get().sendMessage(conversationId, next.content, next.attachments)
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : errorLabel
     const cleanup = cleanupStreamBuffer(get(), conversationId)
-    set(get().activeConversationId === conversationId ? { error: msg, ...cleanup } : cleanup)
+    set(get().activeConversationId === conversationId
+      ? { error: msg, ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
+      : { ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
+    )
   }
 }
 

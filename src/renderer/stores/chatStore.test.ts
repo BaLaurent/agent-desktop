@@ -1298,5 +1298,57 @@ describe('chatStore', () => {
       useChatStore.getState().resumeQueue(1)
       expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
     })
+
+    it('streamOperation drains queue after stream completes', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        streamBuffers: { 1: [] },
+        messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
+        queuePaused: {},
+      })
+
+      // First send resolves (the initial message)
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'done' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      // Second send resolves (the queued message drained)
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 3, role: 'assistant', content: 'queued reply' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      await useChatStore.getState().sendMessage(1, 'first msg')
+
+      // Queue should be drained
+      expect(useChatStore.getState().messageQueues[1] || []).toHaveLength(0)
+    })
+
+    it('streamOperation does NOT drain queue when paused', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queuePaused: { 1: true },
+      })
+
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'done' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      await useChatStore.getState().sendMessage(1, 'first')
+
+      // Queue should remain since paused
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+    })
+
+    it('stream error pauses the queue', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queuePaused: {},
+      })
+
+      mockAgent.messages.send.mockRejectedValueOnce(new Error('stream failed'))
+
+      await useChatStore.getState().sendMessage(1, 'first')
+
+      expect(useChatStore.getState().queuePaused[1]).toBe(true)
+    })
   })
 })
