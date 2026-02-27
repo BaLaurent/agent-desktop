@@ -15,6 +15,7 @@ export function AISettings() {
   }, [loadSettings])
 
   const sdkBackend = settings['ai_sdkBackend'] ?? 'claude-agent-sdk'
+  const isClaudeBackend = sdkBackend !== 'pi'
   const apiKey = settings['ai_apiKey'] ?? ''
   const baseUrl = settings['ai_baseUrl'] ?? ''
   const customModel = settings['ai_customModel'] ?? ''
@@ -88,43 +89,45 @@ export function AISettings() {
         </select>
       </div>
 
-      {/* API Key */}
-      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
-        <div className="flex flex-col gap-0.5 pr-4">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            API Key
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Anthropic API key. Bypasses OAuth when set.
-          </span>
+      {/* API Key (Claude only) */}
+      {isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              API Key
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Anthropic API key. Bypasses OAuth when set.
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              type={showApiKey ? 'text' : 'password'}
+              value={apiKey}
+              onChange={(e) => handleApiKeyChange(e.target.value)}
+              placeholder="sk-ant-..."
+              className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono mobile:text-base"
+              style={{
+                backgroundColor: 'var(--color-bg)',
+                color: 'var(--color-text)',
+              }}
+              aria-label="API key"
+            />
+            <button
+              onClick={() => setShowApiKey((v) => !v)}
+              className="px-2 py-1.5 rounded text-xs transition-opacity hover:opacity-70 mobile:px-4 mobile:py-3 mobile:text-sm"
+              style={{ color: 'var(--color-text-muted)' }}
+              aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+              title={showApiKey ? 'Hide' : 'Show'}
+            >
+              {showApiKey ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <input
-            type={showApiKey ? 'text' : 'password'}
-            value={apiKey}
-            onChange={(e) => handleApiKeyChange(e.target.value)}
-            placeholder="sk-ant-..."
-            className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono mobile:text-base"
-            style={{
-              backgroundColor: 'var(--color-bg)',
-              color: 'var(--color-text)',
-            }}
-            aria-label="API key"
-          />
-          <button
-            onClick={() => setShowApiKey((v) => !v)}
-            className="px-2 py-1.5 rounded text-xs transition-opacity hover:opacity-70 mobile:px-4 mobile:py-3 mobile:text-sm"
-            style={{ color: 'var(--color-text-muted)' }}
-            aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
-            title={showApiKey ? 'Hide' : 'Show'}
-          >
-            {showApiKey ? 'Hide' : 'Show'}
-          </button>
-        </div>
-      </div>
+      )}
 
-      {/* Base URL (only when API key is set) */}
-      {apiKey && (
+      {/* Base URL (only when API key is set, Claude only) */}
+      {isClaudeBackend && apiKey && (
         <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
           <div className="flex flex-col gap-0.5 pr-4">
             <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
@@ -257,124 +260,132 @@ export function AISettings() {
         />
       </div>
 
-      {/* Max Budget USD */}
-      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
-        <div className="flex flex-col gap-0.5 pr-4">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            Max Budget (USD)
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Cost limit per request. 0 = unlimited (0-10).
-          </span>
-        </div>
-        <input
-          type="number"
-          min={0}
-          max={10}
-          step={0.1}
-          value={maxBudgetUsd}
-          onChange={(e) => {
-            const v = Math.max(0, Math.min(10, Number(e.target.value) || 0))
-            setSetting('ai_maxBudgetUsd', String(v))
-          }}
-          className="w-24 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right mobile:text-base"
-          style={{
-            backgroundColor: 'var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          aria-label="Maximum budget in USD"
-        />
-      </div>
-
-      {/* Permission Mode */}
-      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
-        <div className="flex flex-col gap-0.5 pr-4">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            Permission Mode
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Controls how the SDK handles tool permission prompts.
-          </span>
-        </div>
-        <select
-          value={permissionMode}
-          onChange={(e) => setSetting('ai_permissionMode', e.target.value)}
-          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
-          style={{
-            backgroundColor: 'var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          aria-label="Select permission mode"
-        >
-          <option value="bypassPermissions">Bypass Permissions</option>
-          <option value="acceptEdits">Accept Edits</option>
-          <option value="default">Default</option>
-          <option value="dontAsk">Don't Ask</option>
-          <option value="plan">Plan Only</option>
-        </select>
-      </div>
-
-      {/* Setting Sources */}
-      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
-        <div className="flex flex-col gap-0.5 pr-4">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            Setting Sources
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Load Claude Code configuration from filesystem (settings.json, CLAUDE.md, skills, commands, hooks).
-          </span>
-        </div>
-        <select
-          value={skills}
-          onChange={(e) => setSetting('ai_skills', e.target.value)}
-          className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
-          style={{
-            backgroundColor: 'var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-          aria-label="Select setting sources"
-        >
-          {SETTING_SOURCES_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Skills Toggle */}
-      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
-        <div className="flex flex-col gap-0.5 pr-4">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)', opacity: skills === 'off' ? 0.5 : 1 }}>
-            Skills
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)', opacity: skills === 'off' ? 0.5 : 1 }}>
-            Allow the AI to invoke discovered skills.
-          </span>
-        </div>
-        <button
-          onClick={() => setSetting('ai_skillsEnabled', skillsEnabled === 'true' ? 'false' : 'true')}
-          disabled={skills === 'off'}
-          className="relative w-10 h-5 rounded-full transition-colors"
-          style={{
-            backgroundColor: skillsEnabled === 'true' && skills !== 'off' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-            opacity: skills === 'off' ? 0.3 : (skillsEnabled === 'true' ? 1 : 0.4),
-          }}
-          role="switch"
-          aria-checked={skillsEnabled === 'true' && skills !== 'off'}
-          aria-label="Toggle skills"
-        >
-          <span
-            className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-            style={{
-              left: skillsEnabled === 'true' && skills !== 'off' ? '1.25rem' : '0.125rem',
+      {/* Max Budget USD (Claude only) */}
+      {isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Max Budget (USD)
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Cost limit per request. 0 = unlimited (0-10).
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={0.1}
+            value={maxBudgetUsd}
+            onChange={(e) => {
+              const v = Math.max(0, Math.min(10, Number(e.target.value) || 0))
+              setSetting('ai_maxBudgetUsd', String(v))
             }}
+            className="w-24 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none text-right mobile:text-base"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+            }}
+            aria-label="Maximum budget in USD"
           />
-        </button>
-      </div>
+        </div>
+      )}
 
-      {/* Per-Skill List */}
-      {skills !== 'off' && skillsEnabled === 'true' && discoveredSkills.length > 0 && (
+      {/* Permission Mode (Claude only) */}
+      {isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Permission Mode
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Controls how the SDK handles tool permission prompts.
+            </span>
+          </div>
+          <select
+            value={permissionMode}
+            onChange={(e) => setSetting('ai_permissionMode', e.target.value)}
+            className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+            }}
+            aria-label="Select permission mode"
+          >
+            <option value="bypassPermissions">Bypass Permissions</option>
+            <option value="acceptEdits">Accept Edits</option>
+            <option value="default">Default</option>
+            <option value="dontAsk">Don't Ask</option>
+            <option value="plan">Plan Only</option>
+          </select>
+        </div>
+      )}
+
+      {/* Setting Sources (Claude only) */}
+      {isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Setting Sources
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Load Claude Code configuration from filesystem (settings.json, CLAUDE.md, skills, commands, hooks).
+            </span>
+          </div>
+          <select
+            value={skills}
+            onChange={(e) => setSetting('ai_skills', e.target.value)}
+            className="px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base mobile:py-2"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+            }}
+            aria-label="Select setting sources"
+          >
+            {SETTING_SOURCES_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Skills Toggle (Claude only) */}
+      {isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)', opacity: skills === 'off' ? 0.5 : 1 }}>
+              Skills
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)', opacity: skills === 'off' ? 0.5 : 1 }}>
+              Allow the AI to invoke discovered skills.
+            </span>
+          </div>
+          <button
+            onClick={() => setSetting('ai_skillsEnabled', skillsEnabled === 'true' ? 'false' : 'true')}
+            disabled={skills === 'off'}
+            className="relative w-10 h-5 rounded-full transition-colors"
+            style={{
+              backgroundColor: skillsEnabled === 'true' && skills !== 'off' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              opacity: skills === 'off' ? 0.3 : (skillsEnabled === 'true' ? 1 : 0.4),
+            }}
+            role="switch"
+            aria-checked={skillsEnabled === 'true' && skills !== 'off'}
+            aria-label="Toggle skills"
+          >
+            <span
+              className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+              style={{
+                left: skillsEnabled === 'true' && skills !== 'off' ? '1.25rem' : '0.125rem',
+              }}
+            />
+          </button>
+        </div>
+      )}
+
+      {/* Per-Skill List (Claude only) */}
+      {isClaudeBackend && skills !== 'off' && skillsEnabled === 'true' && discoveredSkills.length > 0 && (
         <div className="py-3 border-b border-[var(--color-text-muted)]/10">
           <span className="text-xs font-medium mb-2 block" style={{ color: 'var(--color-text-muted)' }}>
             Discovered Skills
@@ -412,72 +423,74 @@ export function AISettings() {
         </div>
       )}
 
-      {/* CWD Restriction Hook */}
-      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
-        <div className="flex flex-col gap-0.5 pr-4">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-            CWD Write Restriction
-          </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Prompt before writing files outside the conversation working directory.
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {confirmDisable && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-warning">
-                Allows writing anywhere.
-              </span>
-              <button
-                onClick={() => {
-                  setSetting('hooks_cwdRestriction', 'false')
+      {/* CWD Restriction Hook (Claude only) */}
+      {isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              CWD Write Restriction
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Prompt before writing files outside the conversation working directory.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {confirmDisable && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-warning">
+                  Allows writing anywhere.
+                </span>
+                <button
+                  onClick={() => {
+                    setSetting('hooks_cwdRestriction', 'false')
+                    setConfirmDisable(false)
+                  }}
+                  className="px-2 py-0.5 rounded text-xs font-medium bg-warning text-base mobile:px-4 mobile:py-3 mobile:text-sm"
+                  aria-label="Confirm disable CWD restriction"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setConfirmDisable(false)}
+                  className="px-2 py-0.5 rounded text-xs mobile:px-4 mobile:py-3 mobile:text-sm"
+                  style={{ color: 'var(--color-text-muted)' }}
+                  aria-label="Cancel disable CWD restriction"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => {
+                if (cwdRestriction === 'true') {
+                  setConfirmDisable(true)
+                } else {
+                  setSetting('hooks_cwdRestriction', 'true')
                   setConfirmDisable(false)
-                }}
-                className="px-2 py-0.5 rounded text-xs font-medium bg-warning text-base mobile:px-4 mobile:py-3 mobile:text-sm"
-                aria-label="Confirm disable CWD restriction"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setConfirmDisable(false)}
-                className="px-2 py-0.5 rounded text-xs mobile:px-4 mobile:py-3 mobile:text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-                aria-label="Cancel disable CWD restriction"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-          <button
-            onClick={() => {
-              if (cwdRestriction === 'true') {
-                setConfirmDisable(true)
-              } else {
-                setSetting('hooks_cwdRestriction', 'true')
-                setConfirmDisable(false)
-              }
-            }}
-            className="relative w-10 h-5 rounded-full transition-colors"
-            style={{
-              backgroundColor: cwdRestriction === 'true' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              opacity: cwdRestriction === 'true' ? 1 : 0.4,
-            }}
-            role="switch"
-            aria-checked={cwdRestriction === 'true'}
-            aria-label="Toggle CWD write restriction"
-          >
-            <span
-              className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-              style={{
-                left: cwdRestriction === 'true' ? '1.25rem' : '0.125rem',
+                }
               }}
-            />
-          </button>
+              className="relative w-10 h-5 rounded-full transition-colors"
+              style={{
+                backgroundColor: cwdRestriction === 'true' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                opacity: cwdRestriction === 'true' ? 1 : 0.4,
+              }}
+              role="switch"
+              aria-checked={cwdRestriction === 'true'}
+              aria-label="Toggle CWD write restriction"
+            >
+              <span
+                className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+                style={{
+                  left: cwdRestriction === 'true' ? '1.25rem' : '0.125rem',
+                }}
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* CWD Whitelist */}
-      {cwdRestriction === 'true' && (
+      {/* CWD Whitelist (Claude only) */}
+      {isClaudeBackend && cwdRestriction === 'true' && (
         <div className="py-3 border-b border-[var(--color-text-muted)]/10">
           <div className="flex flex-col gap-0.5 mb-2">
             <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>

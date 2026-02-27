@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { SETTING_DEFS, type McpServerName } from '../../../shared/constants'
 import { Checkbox } from '../ui/Checkbox'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
@@ -24,6 +24,84 @@ interface OverrideFormFieldsProps {
   onCwdWhitelistChange?: (entries: CwdWhitelistEntry[]) => void
 }
 
+// ─── Field Grouping ─────────────────────────────────────────
+
+const FIELD_GROUPS = [
+  { label: 'Model', keys: ['ai_sdkBackend', 'ai_model'] },
+  { label: 'Limits', keys: ['ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd'] },
+  { label: 'Behavior', keys: ['ai_permissionMode', 'ai_skills', 'ai_skillsEnabled', 'hooks_sharedAcrossBackends'] },
+  { label: 'Prompts & Files', keys: ['ai_defaultSystemPrompt', 'files_excludePatterns'] },
+  { label: 'Voice', keys: ['tts_responseMode', 'tts_summaryPrompt'] },
+]
+
+const DEF_MAP = new Map(SETTING_DEFS.map(d => [d.key, d]))
+
+// ─── Shared Sub-components ──────────────────────────────────
+
+function ToggleButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      className={`text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 transition-opacity
+        ${active ? 'bg-primary text-contrast' : 'bg-base text-muted opacity-30 group-hover:opacity-80 focus:opacity-80'}`}
+    >
+      {active ? 'Override' : 'Inherited'}
+    </button>
+  )
+}
+
+function FieldCard({ label, active, onToggle, wide, extra, children }: {
+  label: string
+  active: boolean
+  onToggle: () => void
+  wide?: boolean
+  extra?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={`group flex flex-col gap-1 rounded-md px-3 py-2 ${wide ? 'col-span-2' : ''}`}
+      style={{ backgroundColor: 'var(--color-bg)' }}
+    >
+      <div className="flex items-center justify-between gap-1">
+        <span
+          className="text-[11px] font-medium truncate"
+          style={{ color: active ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+        >
+          {label}
+        </span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {extra}
+          <ToggleButton active={active} onClick={onToggle} />
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function InheritedText({ value, source }: { value: string; source: string }) {
+  return (
+    <span className="text-[11px] truncate block" style={{ color: 'var(--color-text-muted)' }}>
+      {value || '(default)'}
+      <span className="opacity-40 ml-1">from {source}</span>
+    </span>
+  )
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <span
+      className="text-[10px] font-semibold uppercase tracking-widest"
+      style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}
+    >
+      {label}
+    </span>
+  )
+}
+
+// ─── Main Component ─────────────────────────────────────────
+
 export function OverrideFormFields({
   draft,
   inheritedValues,
@@ -44,225 +122,218 @@ export function OverrideFormFields({
 }: OverrideFormFieldsProps) {
   const [promptEditorKey, setPromptEditorKey] = useState<string | null>(null)
 
-  return (
-    <>
-      {SETTING_DEFS.map((def) => {
-        const active = draft[def.key] !== undefined
-        const inherited = inheritedValues[def.key] || ''
-        const source = inheritedSources?.[def.key] || 'Global'
+  const effectiveBackend = draft['ai_sdkBackend'] ?? inheritedValues['ai_sdkBackend'] ?? 'claude-agent-sdk'
+  const isClaudeBackend = effectiveBackend !== 'pi'
 
-        return (
-          <div key={def.key} className="flex flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                {def.label}
-              </label>
-              <div className="flex items-center gap-1">
-                {active && def.type === 'textarea' && (
-                  <button
-                    onClick={() => setPromptEditorKey(def.key)}
-                    className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-80"
-                    style={{ color: 'var(--color-text-muted)' }}
-                    aria-label={`Expand ${def.label} editor`}
-                  >
-                    Expand ↗
-                  </button>
-                )}
-                <button
-                  onClick={() => onToggleOverride(def.key)}
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${active ? 'bg-primary text-contrast' : 'bg-base text-muted'}`}
-                >
-                  {active ? 'Override' : 'Inherited'}
-                </button>
-              </div>
-            </div>
-            {active ? (
-              def.type === 'select' ? (
-                <select
-                  value={draft[def.key] || ''}
-                  onChange={(e) => onDraftChange(def.key, e.target.value)}
-                  className="w-full px-2 py-1 rounded text-xs border outline-none"
-                  style={{
-                    backgroundColor: 'var(--color-bg)',
-                    color: 'var(--color-text)',
-                    borderColor: 'var(--color-primary)',
-                  }}
-                >
-                  {def.options!.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              ) : def.type === 'textarea' ? (
-                <>
-                  <textarea
-                    value={draft[def.key] || ''}
-                    onChange={(e) => onDraftChange(def.key, e.target.value)}
-                    rows={3}
-                    placeholder="Enter system prompt..."
-                    className="w-full px-2 py-1 rounded text-xs border outline-none resize-y"
-                    style={{
-                      backgroundColor: 'var(--color-bg)',
-                      color: 'var(--color-text)',
-                      borderColor: 'var(--color-primary)',
-                    }}
-                  />
-                  {promptEditorKey === def.key && (
-                    <SystemPromptEditorModal
-                      value={draft[def.key] || ''}
-                      onChange={(v) => onDraftChange(def.key, v)}
-                      onClose={() => setPromptEditorKey(null)}
-                    />
-                  )}
-                </>
-              ) : (
-                <input
-                  type="number"
-                  min={def.min}
-                  max={def.max}
-                  step={def.step}
-                  value={draft[def.key] || ''}
-                  onChange={(e) => onDraftChange(def.key, e.target.value)}
-                  className="w-full px-2 py-1 rounded text-xs border outline-none"
-                  style={{
-                    backgroundColor: 'var(--color-bg)',
-                    color: 'var(--color-text)',
-                    borderColor: 'var(--color-primary)',
-                  }}
-                />
-              )
-            ) : (
-              <div className="text-[11px] px-2 py-1 rounded" style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg)' }}>
-                {inherited || '(default)'} <span className="opacity-60">from {source}</span>
-              </div>
-            )}
-          </div>
-        )
-      })}
+  const inputStyle = {
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text)',
+    borderColor: 'var(--color-primary)',
+  }
 
-      {/* MCP Servers section */}
-      {mcpServers.length > 0 && (
-        <div className="flex flex-col gap-1 pt-1 border-t" style={{ borderColor: 'var(--color-bg)' }}>
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-              MCP Servers
-            </label>
-            <button
-              onClick={onToggleMcpOverride}
-              className={`text-[10px] px-1.5 py-0.5 rounded ${isMcpOverridden ? 'bg-primary text-contrast' : 'bg-base text-muted'}`}
-            >
-              {isMcpOverridden ? 'Override' : 'Inherited'}
-            </button>
-          </div>
-          {isMcpOverridden ? (
-            <div
-              className="flex flex-col gap-0.5 rounded px-2 py-1 max-h-[120px] overflow-y-auto"
-              style={{ backgroundColor: 'var(--color-bg)' }}
-              role="group"
-              aria-label="MCP server toggles"
-            >
-              {mcpServers.map((server) => {
-                const serverActive = !mcpDisabledDraft.includes(server.name)
-                return (
-                  <button
-                    key={server.name}
-                    onClick={() => onToggleMcpServer(server.name)}
-                    className="flex items-center gap-2 py-0.5 text-xs text-left hover:opacity-80 transition-opacity"
-                    style={{ color: 'var(--color-text)' }}
-                    role="checkbox"
-                    aria-checked={serverActive}
-                  >
-                    <Checkbox checked={serverActive} />
-                    <span style={{ opacity: serverActive ? 1 : 0.5 }}>{server.name}</span>
-                  </button>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="text-[11px] px-2 py-1 rounded" style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg)' }}>
-              {mcpDisabledInherited.length > 0
-                ? `${mcpServers.length - mcpDisabledInherited.length}/${mcpServers.length} enabled`
-                : `All ${mcpServers.length} enabled`
-              } <span className="opacity-60">from {inheritedSources?.['ai_mcpDisabled'] || 'Global'}</span>
-            </div>
-          )}
-        </div>
-      )}
+  const renderField = (key: string) => {
+    const def = DEF_MAP.get(key)
+    if (!def) return null
+    if (def.claudeOnly && !isClaudeBackend) return null
 
-      {/* CWD Restriction toggle */}
-      <div className="flex flex-col gap-1 pt-1 border-t" style={{ borderColor: 'var(--color-bg)' }}>
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-            CWD Write Restriction
-          </label>
-          <button
-            onClick={() => onToggleOverride('hooks_cwdRestriction')}
-            className={`text-[10px] px-1.5 py-0.5 rounded ${draft['hooks_cwdRestriction'] !== undefined ? 'bg-primary text-contrast' : 'bg-base text-muted'}`}
-          >
-            {draft['hooks_cwdRestriction'] !== undefined ? 'Override' : 'Inherited'}
-          </button>
-        </div>
-        {draft['hooks_cwdRestriction'] !== undefined ? (
-          <button
-            onClick={() => onDraftChange('hooks_cwdRestriction', draft['hooks_cwdRestriction'] === 'true' ? 'false' : 'true')}
-            className="flex items-center gap-2 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            role="switch"
-            aria-checked={draft['hooks_cwdRestriction'] === 'true'}
-          >
-            <span
-              className="relative w-8 h-4 rounded-full transition-colors flex-shrink-0"
-              style={{
-                backgroundColor: draft['hooks_cwdRestriction'] === 'true' ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                opacity: draft['hooks_cwdRestriction'] === 'true' ? 1 : 0.4,
-              }}
-            >
-              <span
-                className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform"
-                style={{ left: draft['hooks_cwdRestriction'] === 'true' ? '1rem' : '0.125rem' }}
+    const active = draft[def.key] !== undefined
+    const inherited = inheritedValues[def.key] || ''
+    const source = inheritedSources?.[def.key] || 'Global'
+    const isTextarea = def.type === 'textarea'
+
+    const expandButton = active && isTextarea ? (
+      <button
+        onClick={() => setPromptEditorKey(def.key)}
+        className="text-[9px] hover:opacity-80"
+        style={{ color: 'var(--color-text-muted)' }}
+      >
+        Expand ↗
+      </button>
+    ) : undefined
+
+    return (
+      <FieldCard
+        key={def.key}
+        label={def.label}
+        active={active}
+        onToggle={() => onToggleOverride(def.key)}
+        wide={isTextarea}
+        extra={expandButton}
+      >
+        {active ? (
+          isTextarea ? (
+            <>
+              <textarea
+                value={draft[def.key] || ''}
+                onChange={(e) => onDraftChange(def.key, e.target.value)}
+                rows={3}
+                placeholder={`Enter ${def.label.toLowerCase()}...`}
+                className="w-full px-2 py-1 rounded text-xs border outline-none resize-y"
+                style={inputStyle}
               />
-            </span>
-            <span style={{ opacity: 0.8 }}>
-              {draft['hooks_cwdRestriction'] === 'true' ? 'Enabled' : 'Disabled'}
-            </span>
-          </button>
-        ) : (
-          <div className="text-[11px] px-2 py-1 rounded" style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg)' }}>
-            {(inheritedValues['hooks_cwdRestriction'] ?? 'true') === 'true' ? 'Enabled' : 'Disabled'} <span className="opacity-60">from {inheritedSources?.['hooks_cwdRestriction'] || 'Global'}</span>
-          </div>
-        )}
-      </div>
-
-      {/* CWD Whitelist section */}
-      {onToggleCwdWhitelistOverride && (
-        <div className="flex flex-col gap-1 pt-1 border-t" style={{ borderColor: 'var(--color-bg)' }}>
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-              CWD Whitelist
-            </label>
-            <button
-              onClick={onToggleCwdWhitelistOverride}
-              className={`text-[10px] px-1.5 py-0.5 rounded ${isCwdWhitelistOverridden ? 'bg-primary text-contrast' : 'bg-base text-muted'}`}
+              {promptEditorKey === def.key && (
+                <SystemPromptEditorModal
+                  value={draft[def.key] || ''}
+                  onChange={(v) => onDraftChange(def.key, v)}
+                  onClose={() => setPromptEditorKey(null)}
+                />
+              )}
+            </>
+          ) : def.type === 'select' ? (
+            <select
+              value={draft[def.key] || ''}
+              onChange={(e) => onDraftChange(def.key, e.target.value)}
+              className="w-full px-2 py-1 rounded text-xs border outline-none"
+              style={inputStyle}
             >
-              {isCwdWhitelistOverridden ? 'Override' : 'Inherited'}
-            </button>
-          </div>
-          {isCwdWhitelistOverridden ? (
-            <CwdWhitelistEditor
-              entries={cwdWhitelistDraft ?? []}
-              onChange={onCwdWhitelistChange!}
-            />
+              {def.options!.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           ) : (
-            <div className="text-[11px] px-2 py-1 rounded" style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg)' }}>
-              {(cwdWhitelistInherited ?? []).length > 0
-                ? `${(cwdWhitelistInherited ?? []).length} entries`
-                : 'No entries'
-              } <span className="opacity-60">from {inheritedSources?.['hooks_cwdWhitelist'] || 'Global'}</span>
-            </div>
+            <input
+              type="number"
+              min={def.min}
+              max={def.max}
+              step={def.step}
+              value={draft[def.key] || ''}
+              onChange={(e) => onDraftChange(def.key, e.target.value)}
+              className="w-full px-2 py-1 rounded text-xs border outline-none"
+              style={inputStyle}
+            />
+          )
+        ) : (
+          <InheritedText value={inherited} source={source} />
+        )}
+      </FieldCard>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {FIELD_GROUPS.map(group => (
+        <div key={group.label} className="flex flex-col gap-1.5">
+          <SectionHeader label={group.label} />
+          <div className="grid grid-cols-2 gap-2">
+            {group.keys.map(renderField)}
+          </div>
+        </div>
+      ))}
+
+      {/* Advanced section */}
+      <div className="flex flex-col gap-1.5">
+        <SectionHeader label="Advanced" />
+        <div className="grid grid-cols-2 gap-2">
+          {/* MCP Servers (Claude only) */}
+          {isClaudeBackend && mcpServers.length > 0 && (
+            isMcpOverridden ? (
+              <FieldCard
+                label="MCP Servers"
+                active
+                onToggle={onToggleMcpOverride}
+                wide
+              >
+                <div
+                  className="flex flex-col gap-0.5 rounded px-1 py-1 max-h-[120px] overflow-y-auto"
+                  style={{ backgroundColor: 'var(--color-surface)' }}
+                  role="group"
+                  aria-label="MCP server toggles"
+                >
+                  {mcpServers.map((server) => {
+                    const serverActive = !mcpDisabledDraft.includes(server.name)
+                    return (
+                      <button
+                        key={server.name}
+                        onClick={() => onToggleMcpServer(server.name)}
+                        className="flex items-center gap-2 py-0.5 text-xs text-left hover:opacity-80"
+                        style={{ color: 'var(--color-text)' }}
+                        role="checkbox"
+                        aria-checked={serverActive}
+                      >
+                        <Checkbox checked={serverActive} />
+                        <span style={{ opacity: serverActive ? 1 : 0.5 }}>{server.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </FieldCard>
+            ) : (
+              <FieldCard label="MCP Servers" active={false} onToggle={onToggleMcpOverride}>
+                <InheritedText
+                  value={mcpDisabledInherited.length > 0
+                    ? `${mcpServers.length - mcpDisabledInherited.length}/${mcpServers.length} enabled`
+                    : `All ${mcpServers.length} enabled`}
+                  source={inheritedSources?.['ai_mcpDisabled'] || 'Global'}
+                />
+              </FieldCard>
+            )
+          )}
+
+          {/* CWD Restriction (Claude only) */}
+          {isClaudeBackend && (draft['hooks_cwdRestriction'] !== undefined ? (
+            <FieldCard
+              label="CWD Restriction"
+              active
+              onToggle={() => onToggleOverride('hooks_cwdRestriction')}
+              wide
+            >
+              <button
+                onClick={() => onDraftChange('hooks_cwdRestriction', draft['hooks_cwdRestriction'] === 'true' ? 'false' : 'true')}
+                className="flex items-center gap-2 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
+                role="switch"
+                aria-checked={draft['hooks_cwdRestriction'] === 'true'}
+              >
+                <span
+                  className="relative w-8 h-4 rounded-full transition-colors flex-shrink-0"
+                  style={{
+                    backgroundColor: draft['hooks_cwdRestriction'] === 'true' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                    opacity: draft['hooks_cwdRestriction'] === 'true' ? 1 : 0.4,
+                  }}
+                >
+                  <span
+                    className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform"
+                    style={{ left: draft['hooks_cwdRestriction'] === 'true' ? '1rem' : '0.125rem' }}
+                  />
+                </span>
+                <span style={{ opacity: 0.8 }}>
+                  {draft['hooks_cwdRestriction'] === 'true' ? 'Enabled' : 'Disabled'}
+                </span>
+              </button>
+            </FieldCard>
+          ) : (
+            <FieldCard label="CWD Restriction" active={false} onToggle={() => onToggleOverride('hooks_cwdRestriction')}>
+              <InheritedText
+                value={(inheritedValues['hooks_cwdRestriction'] ?? 'true') === 'true' ? 'Enabled' : 'Disabled'}
+                source={inheritedSources?.['hooks_cwdRestriction'] || 'Global'}
+              />
+            </FieldCard>
+          ))}
+
+          {/* CWD Whitelist (Claude only) */}
+          {isClaudeBackend && onToggleCwdWhitelistOverride && (
+            isCwdWhitelistOverridden ? (
+              <FieldCard
+                label="CWD Whitelist"
+                active
+                onToggle={onToggleCwdWhitelistOverride}
+                wide
+              >
+                <CwdWhitelistEditor entries={cwdWhitelistDraft ?? []} onChange={onCwdWhitelistChange!} />
+              </FieldCard>
+            ) : (
+              <FieldCard label="CWD Whitelist" active={false} onToggle={onToggleCwdWhitelistOverride!}>
+                <InheritedText
+                  value={(cwdWhitelistInherited ?? []).length > 0
+                    ? `${(cwdWhitelistInherited ?? []).length} entries`
+                    : 'No entries'}
+                  source={inheritedSources?.['hooks_cwdWhitelist'] || 'Global'}
+                />
+              </FieldCard>
+            )
           )}
         </div>
-      )}
-    </>
+      </div>
+    </div>
   )
 }
