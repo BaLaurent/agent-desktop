@@ -72,6 +72,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'server_enabled',
   'server_port',
   'server_autoStart',
+  // Retry settings (global only, not cascadable)
+  'retry_enabled',
+  'retry_maxAttempts',
+  'retry_initialDelayMs',
 ])
 
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {

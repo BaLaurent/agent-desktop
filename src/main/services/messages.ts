@@ -20,6 +20,31 @@ import { DEFAULT_MODEL, HAIKU_MODEL } from '../../shared/constants'
 
 const SESSIONS_BASE = join(app.getPath('home'), '.agent-desktop', 'sessions-folder')
 
+// Generation counter per conversation — used to cancel retries when a new message is sent
+const streamGenerations = new Map<number, number>()
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function readRetrySettings(db: Database.Database): { enabled: boolean; maxAttempts: number; initialDelayMs: number } {
+  const rows = db
+    .prepare("SELECT key, value FROM settings WHERE key IN ('retry_enabled', 'retry_maxAttempts', 'retry_initialDelayMs')")
+    .all() as { key: string; value: string }[]
+  const map: Record<string, string> = {}
+  for (const row of rows) map[row.key] = row.value
+  return {
+    enabled: (map['retry_enabled'] ?? 'true') === 'true',
+    maxAttempts: Math.max(1, Math.min(10, Number(map['retry_maxAttempts']) || 3)),
+    initialDelayMs: Math.max(1000, Math.min(30000, Number(map['retry_initialDelayMs']) || 2000)),
+  }
+}
+
+/** Increment the generation counter for a conversation, cancelling any pending retry */
+export function invalidateRetry(conversationId: number): void {
+  streamGenerations.set(conversationId, (streamGenerations.get(conversationId) ?? 0) + 1)
+}
+
 async function uniqueDestPath(dir: string, name: string): Promise<string> {
   let candidate = join(dir, name)
   try { await fsp.access(candidate) } catch { return candidate }
@@ -459,6 +484,10 @@ async function streamAndSave(
 ): Promise<Message | null> {
   stopTts() // Stop any active TTS before new stream
 
+  // Increment generation counter — any pending retry for this conversation is now stale
+  const generation = (streamGenerations.get(conversationId) ?? 0) + 1
+  streamGenerations.set(conversationId, generation)
+
   const sdkSessionId = getConversationSdkSessionId(db, conversationId)
   // Session active : le SDK détient tout le contexte — envoyer uniquement le nouveau prompt.
   // Pas de session (fork, regenerate, clear, etc.) : envoyer l'historique complet comme fallback.
@@ -470,7 +499,7 @@ async function streamAndSave(
   const systemPrompt = await getSystemPrompt(db, conversationId, aiSettings.cwd!)
 
   // Run UserPromptSubmit hooks manually — the SDK subprocess doesn't yield
-  // hook_response for this event through the async iterator
+  // hook_response for this event through the async iterator (ONCE, not per retry)
   let hookSystemContents: string[] = []
   const lastUserMsg = messages[messages.length - 1]
   if (lastUserMsg?.role === 'user') {
@@ -489,39 +518,88 @@ async function streamAndSave(
     }
   }
 
-  try {
-    const { content: responseContent, toolCalls, sessionId: newSessionId } = await streamMessage(
-      messages, systemPrompt, aiSettings, conversationId, sdkSessionId
-    )
-    // Save the SDK session ID for future resume
-    if (newSessionId) {
-      saveConversationSdkSessionId(db, conversationId, newSessionId)
+  const retrySettings = readRetrySettings(db)
+  const maxAttempts = retrySettings.enabled ? retrySettings.maxAttempts : 1
+  const convExtra = { conversationId }
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Check if generation has changed (new message sent or stop clicked)
+    if (streamGenerations.get(conversationId) !== generation) return null
+
+    // On retry: clear SDK session (may be corrupted) and rebuild full history
+    const attemptSessionId = attempt === 1 ? sdkSessionId : null
+    const attemptMessages = attempt === 1
+      ? messages
+      : buildMessageHistory(db, conversationId)
+
+    try {
+      const { content: responseContent, toolCalls, aborted, sessionId: newSessionId, error } = await streamMessage(
+        attemptMessages, systemPrompt, aiSettings, conversationId, attemptSessionId
+      )
+
+      if (aborted) return null
+
+      if (!error && responseContent) {
+        // Save the SDK session ID for future resume
+        if (newSessionId) {
+          saveConversationSdkSessionId(db, conversationId, newSessionId)
+        }
+        const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
+        if (!exists) return null
+        // Prepend hook system messages with a detectable tag so the renderer
+        // can extract them and apply accent styling (same as StreamingIndicator)
+        const finalContent = hookSystemContents.length > 0
+          ? hookSystemContents.map(c => `<hook-system-message>${c}</hook-system-message>`).join('\n') + '\n\n' + responseContent
+          : responseContent
+        const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], toolCalls)
+        updateConversationTimestamp(db, conversationId)
+        notifyConversationUpdated(conversationId)
+        // Fire-and-forget: TTS for AI response
+        speakResponse(responseContent, db, conversationId, aiSettings)
+          .catch(err => console.error('[tts] Response TTS error:', err))
+        return assistantMsg
+      }
+
+      // No error but no content — empty response (e.g. stream ended without output), no retry
+      if (!error) return null
+
+      // Error path: retry with backoff or emit final error
+      // Clear SDK session on error — it may be corrupted
+      if (attemptSessionId) {
+        clearConversationSdkSessionId(db, conversationId)
+      }
+
+      if (attempt < maxAttempts) {
+        const delay = retrySettings.initialDelayMs * Math.pow(2, attempt - 1)
+        console.warn(`[messages] Attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms:`, error)
+        sendChunk('retry', `Retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${maxAttempts})...`, {
+          ...convExtra,
+          retryAttempt: attempt + 1,
+          retryMaxAttempts: maxAttempts,
+          retryDelayMs: delay,
+        })
+        await sleep(delay)
+        // Re-check generation after sleep
+        if (streamGenerations.get(conversationId) !== generation) return null
+        continue
+      }
+
+      // Last attempt failed — emit error to renderer
+      sendChunk('error', error, convExtra)
+      return null
+    } catch (err) {
+      // If resume failed (corrupted/deleted session) on first attempt, retry without session
+      if (attempt === 1 && sdkSessionId) {
+        console.warn('[messages] SDK session resume failed, retrying with full history:', err instanceof Error ? err.message : String(err))
+        clearConversationSdkSessionId(db, conversationId)
+        // Continue to next attempt with cleared session
+        continue
+      }
+      console.error('[messages] Stream error:', err instanceof Error ? err.message : String(err))
+      return null
     }
-    if (responseContent) {
-      const exists = db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
-      if (!exists) return null
-      // Prepend hook system messages with a detectable tag so the renderer
-      // can extract them and apply accent styling (same as StreamingIndicator)
-      const finalContent = hookSystemContents.length > 0
-        ? hookSystemContents.map(c => `<hook-system-message>${c}</hook-system-message>`).join('\n') + '\n\n' + responseContent
-        : responseContent
-      const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], toolCalls)
-      updateConversationTimestamp(db, conversationId)
-      notifyConversationUpdated(conversationId)
-      // Fire-and-forget: TTS for AI response
-      speakResponse(responseContent, db, conversationId, aiSettings)
-        .catch(err => console.error('[tts] Response TTS error:', err))
-      return assistantMsg
-    }
-  } catch (err) {
-    // If resume failed (corrupted/deleted session), retry without session
-    if (sdkSessionId) {
-      console.warn('[messages] SDK session resume failed, retrying with full history:', err instanceof Error ? err.message : String(err))
-      clearConversationSdkSessionId(db, conversationId)
-      return streamAndSave(db, conversationId)
-    }
-    console.error('[messages] Stream error:', err instanceof Error ? err.message : String(err))
   }
+
   return null
 }
 
@@ -702,7 +780,10 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
   })
 
   ipcMain.handle('messages:stop', async (_event, conversationId?: number) => {
-    if (conversationId != null) validatePositiveInt(conversationId, 'conversationId')
+    if (conversationId != null) {
+      validatePositiveInt(conversationId, 'conversationId')
+      invalidateRetry(conversationId)
+    }
     abortStream(conversationId)
   })
 

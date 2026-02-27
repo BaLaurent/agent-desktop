@@ -147,9 +147,11 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
     }
 
     try {
-      const { content, toolCalls } = await streamMessage(
+      const { content, toolCalls, error } = await streamMessage(
         history, systemPrompt, aiSettings, task.conversation_id
       )
+
+      if (error) throw new Error(error)
 
       if (content) {
         // Check conversation still exists (may have been deleted during streaming)

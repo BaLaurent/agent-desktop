@@ -239,6 +239,77 @@ export function GeneralSettings() {
           aria-label="Response timeout in seconds"
         />
       </div>
+
+      {/* Auto-retry settings */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Auto-retry on error
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Automatically retry when a streaming response fails (e.g. SDK crash).
+          </span>
+        </div>
+        <Toggle
+          enabled={getValue('retry_enabled', 'true')}
+          onToggle={() => handleToggle('retry_enabled', 'true')}
+          label="Auto-retry on error"
+        />
+      </div>
+
+      {getValue('retry_enabled', 'true') && (
+        <>
+          <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+            <div className="flex flex-col gap-0.5 pr-4">
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                Max retry attempts
+              </span>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Number of times to retry before giving up (1–10).
+              </span>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              step={1}
+              value={settings.retry_maxAttempts ?? '3'}
+              onChange={(e) => {
+                const val = Math.max(1, Math.min(10, Number(e.target.value) || 3))
+                setSetting('retry_maxAttempts', String(val))
+              }}
+              className="w-24 text-sm rounded px-2 py-1 border border-[var(--color-text-muted)]/20 text-right mobile:text-base"
+              style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)' }}
+              aria-label="Max retry attempts"
+            />
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+            <div className="flex flex-col gap-0.5 pr-4">
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                Initial retry delay
+              </span>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Seconds before first retry. Doubles on each subsequent attempt (1–30).
+              </span>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              step={1}
+              value={Math.round(Number(settings.retry_initialDelayMs ?? '2000') / 1000)}
+              onChange={(e) => {
+                const seconds = Math.max(1, Math.min(30, Number(e.target.value) || 2))
+                setSetting('retry_initialDelayMs', String(seconds * 1000))
+              }}
+              className="w-24 text-sm rounded px-2 py-1 border border-[var(--color-text-muted)]/20 text-right mobile:text-base"
+              style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)' }}
+              aria-label="Initial retry delay in seconds"
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }

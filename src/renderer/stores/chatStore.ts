@@ -561,6 +561,29 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
       break
     }
 
+    case 'retry': {
+      const parts = [...(store.streamBuffers[bufferKey] || [])]
+      parts.push({
+        type: 'retry',
+        message: chunk.content || 'Retrying...',
+        attempt: chunk.retryAttempt || 0,
+        maxAttempts: chunk.retryMaxAttempts || 0,
+      })
+      // Clear error state — no flash between attempts
+      if (isActiveView) {
+        const buffers = { ...store.streamBuffers, [bufferKey]: parts }
+        useChatStore.setState({
+          streamBuffers: buffers,
+          streamParts: parts,
+          streamingContent: getTextFromParts(parts),
+          error: null,
+        })
+      } else {
+        commitParts(parts)
+      }
+      break
+    }
+
     case 'done': {
       const doneSettings = useSettingsStore.getState().settings
       console.log('[notif:done] master toggle notificationSounds =', doneSettings.notificationSounds, '| stopReason =', chunk.stopReason)

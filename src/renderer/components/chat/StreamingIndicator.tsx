@@ -49,6 +49,23 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
               if (part.type === 'mcp_status') {
                 return <McpStatusBlock key={`mcp_${idx}`} servers={part.servers} />
               }
+              if (part.type === 'retry') {
+                return (
+                  <div
+                    key={`retry_${idx}`}
+                    className="my-2 rounded px-3 py-2 text-xs border"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent)',
+                      borderColor: 'color-mix(in srgb, var(--color-warning, #f59e0b) 30%, transparent)',
+                      color: 'var(--color-text-muted)',
+                    }}
+                  >
+                    <span className="font-medium" style={{ color: 'var(--color-warning, #f59e0b)' }}>
+                      {part.message}
+                    </span>
+                  </div>
+                )
+              }
               if (part.type === 'system_message') {
                 return (
                   <div
