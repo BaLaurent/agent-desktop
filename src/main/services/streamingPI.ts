@@ -43,11 +43,27 @@ export async function streamMessagePI(
 
     const thinkingLevel = mapThinkingLevel(aiSettings?.maxThinkingTokens)
 
+    // Build resource loader with extension filtering
+    const disabledPaths = new Set(aiSettings?.piDisabledExtensions || [])
+    const resourceLoader = new pi.DefaultResourceLoader({
+      cwd: aiSettings?.cwd || process.cwd(),
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      ...(aiSettings?.piExtensionsDir ? { additionalExtensionPaths: [aiSettings.piExtensionsDir] } : {}),
+      ...(disabledPaths.size > 0 ? {
+        extensionsOverride: (extensions: Array<{ resolvedPath: string }>) =>
+          extensions.filter((ext) => !disabledPaths.has(ext.resolvedPath)),
+      } : {}),
+    })
+    await resourceLoader.reload()
+
     const { session } = await pi.createAgentSession({
       cwd: aiSettings?.cwd || process.cwd(),
       sessionManager: pi.SessionManager.inMemory(),
       thinkingLevel,
       tools: pi.codingTools,
+      resourceLoader,
     })
 
     // Wire abort: when our abort controller fires, abort the PI session

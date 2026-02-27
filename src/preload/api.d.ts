@@ -25,6 +25,7 @@ import type {
   CreateScheduledTask,
   JupyterOutputChunk,
 } from '../shared/types'
+import type { PIExtensionInfo } from '../shared/constants'
 
 export interface AgentAPI {
   auth: {
@@ -97,6 +98,9 @@ export interface AgentAPI {
     listCollections(): Promise<KnowledgeCollection[]>
     getCollectionFiles(collectionName: string): Promise<{ name: string; path: string; size: number }[]>
     openKnowledgesFolder(): Promise<void>
+  }
+  pi: {
+    listExtensions(): Promise<PIExtensionInfo[]>
   }
   settings: {
     get(): Promise<Record<string, string>>

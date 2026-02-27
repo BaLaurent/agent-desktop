@@ -96,6 +96,9 @@ const api: AgentAPI = {
       withTimeout(ipcRenderer.invoke('kb:getCollectionFiles', collectionName)),
     openKnowledgesFolder: () => withTimeout(ipcRenderer.invoke('kb:openKnowledgesFolder')),
   },
+  pi: {
+    listExtensions: () => withTimeout(ipcRenderer.invoke('pi:listExtensions')),
+  },
   settings: {
     get: () => withTimeout(ipcRenderer.invoke('settings:get')),
     set: (key, value) => withTimeout(ipcRenderer.invoke('settings:set', key, value)),

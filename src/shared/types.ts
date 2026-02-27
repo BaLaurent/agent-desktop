@@ -18,6 +18,7 @@ export interface AIOverrides {
   ai_skills?: string
   ai_skillsEnabled?: string    // 'true' | 'false'
   ai_disabledSkills?: string   // JSON string[] of disabled skill names
+  pi_disabledExtensions?: string  // JSON string[] of disabled extension resolved paths
   hooks_cwdRestriction?: string
   hooks_cwdWhitelist?: string  // JSON CwdWhitelistEntry[]
   files_excludePatterns?: string

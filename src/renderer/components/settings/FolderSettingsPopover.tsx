@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Folder } from '../../../shared/types'
-import type { McpServerName } from '../../../shared/constants'
+import type { McpServerName, PIExtensionInfo } from '../../../shared/constants'
 import { parseOverrides } from '../../utils/resolveAISettings'
 import { useOverrideDraft } from '../../hooks/useOverrideDraft'
 import { OverrideFormFields } from './OverrideFormFields'
@@ -12,6 +12,7 @@ interface FolderSettingsPopoverProps {
   folder: Folder
   globalSettings: Record<string, string>
   mcpServers: McpServerName[]
+  piExtensions?: PIExtensionInfo[]
   onSave: (data: { ai_overrides: string | null; default_cwd: string | null }) => void
   onClose: () => void
 }
@@ -20,6 +21,7 @@ export function FolderSettingsPopover({
   folder,
   globalSettings,
   mcpServers,
+  piExtensions,
   onSave,
   onClose,
 }: FolderSettingsPopoverProps) {
@@ -30,6 +32,8 @@ export function FolderSettingsPopover({
     toggleMcpOverride, toggleMcpServer,
     cwdWhitelistDraft, cwdWhitelistInherited, cwdWhitelistOverridden,
     toggleCwdWhitelistOverride, setCwdWhitelist,
+    piExtDisabledDraft, piExtDisabledInherited, piExtOverridden,
+    togglePiExtOverride, togglePiExtension,
     toggleOverride, setValue, cleanDraft,
   } = useOverrideDraft(parseOverrides(folder.ai_overrides), globalSettings)
 
@@ -111,6 +115,12 @@ export function FolderSettingsPopover({
           isCwdWhitelistOverridden={cwdWhitelistOverridden}
           onToggleCwdWhitelistOverride={toggleCwdWhitelistOverride}
           onCwdWhitelistChange={setCwdWhitelist}
+          piExtensions={piExtensions}
+          piExtDisabledDraft={piExtDisabledDraft}
+          piExtDisabledInherited={piExtDisabledInherited}
+          isPiExtOverridden={piExtOverridden}
+          onTogglePiExtOverride={togglePiExtOverride}
+          onTogglePiExtension={togglePiExtension}
         />
       </div>
     </SettingsPopoverShell>

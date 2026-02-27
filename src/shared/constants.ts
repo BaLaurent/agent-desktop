@@ -84,6 +84,12 @@ export interface SettingDef {
   max?: number
   step?: number
   claudeOnly?: boolean
+  piOnly?: boolean
+}
+
+export interface PIExtensionInfo {
+  name: string   // filename without .ts/.js extension
+  path: string   // resolvedPath from PI SDK Extension
 }
 
 export const SETTING_DEFS: SettingDef[] = [
@@ -118,6 +124,7 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_skills',
   'ai_skillsEnabled',
   'ai_disabledSkills',
+  'pi_disabledExtensions',
   'hooks_cwdWhitelist',
   'settings_sharedAcrossBackends',
   'files_excludePatterns',

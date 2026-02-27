@@ -15,7 +15,7 @@ export function SettingsPopoverShell({ title, onSave, onClose, children }: Setti
   return (
     <div
       ref={popoverRef}
-      className="fixed z-50 rounded-lg shadow-xl text-sm flex flex-col w-[calc(100vw-3rem)] compact:w-full max-h-[80vh] compact:max-h-[80dvh]"
+      className="fixed z-50 rounded-lg shadow-xl text-sm flex flex-col w-[calc(100vw-3rem)] compact:w-full max-h-[90vh] compact:max-h-[90dvh]"
       style={{
         top: '50%',
         left: '50%',

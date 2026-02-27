@@ -1,5 +1,5 @@
 import type { AIOverrides } from '../../../shared/types'
-import type { McpServerName } from '../../../shared/constants'
+import type { McpServerName, PIExtensionInfo } from '../../../shared/constants'
 import { useOverrideDraft } from '../../hooks/useOverrideDraft'
 import { OverrideFormFields } from './OverrideFormFields'
 import { SettingsPopoverShell } from './SettingsPopoverShell'
@@ -12,6 +12,7 @@ interface AIOverridesPopoverProps {
   onClose: () => void
   title: string
   mcpServers?: McpServerName[]
+  piExtensions?: PIExtensionInfo[]
 }
 
 export function AIOverridesPopover({
@@ -22,12 +23,15 @@ export function AIOverridesPopover({
   onClose,
   title,
   mcpServers,
+  piExtensions,
 }: AIOverridesPopoverProps) {
   const {
     draft, mcpDisabledDraft, mcpDisabledInherited, mcpOverridden,
     toggleMcpOverride, toggleMcpServer,
     cwdWhitelistDraft, cwdWhitelistInherited, cwdWhitelistOverridden,
     toggleCwdWhitelistOverride, setCwdWhitelist,
+    piExtDisabledDraft, piExtDisabledInherited, piExtOverridden,
+    togglePiExtOverride, togglePiExtension,
     toggleOverride, setValue, cleanDraft,
   } = useOverrideDraft(overrides, inheritedValues)
 
@@ -50,6 +54,12 @@ export function AIOverridesPopover({
         isCwdWhitelistOverridden={cwdWhitelistOverridden}
         onToggleCwdWhitelistOverride={toggleCwdWhitelistOverride}
         onCwdWhitelistChange={setCwdWhitelist}
+        piExtensions={piExtensions}
+        piExtDisabledDraft={piExtDisabledDraft}
+        piExtDisabledInherited={piExtDisabledInherited}
+        isPiExtOverridden={piExtOverridden}
+        onTogglePiExtOverride={togglePiExtOverride}
+        onTogglePiExtension={togglePiExtension}
       />
     </SettingsPopoverShell>
   )

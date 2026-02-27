@@ -6,6 +6,9 @@ beforeEach(() => {
   ;(window.agent as Record<string, unknown>).commands = {
     list: vi.fn().mockResolvedValue([]),
   }
+  ;(window.agent as Record<string, unknown>).pi = {
+    listExtensions: vi.fn().mockResolvedValue([]),
+  }
 
   useSettingsStore.setState({
     settings: {},
@@ -48,6 +51,26 @@ describe('AISettings — PI backend', () => {
       setSetting: vi.fn().mockResolvedValue(undefined),
       loadSettings: vi.fn().mockResolvedValue(undefined),
     })
+  })
+
+  it('shows PI Extensions Directory when PI is selected', () => {
+    render(<AISettings />)
+    expect(screen.getByLabelText('PI extensions directory')).toBeInTheDocument()
+  })
+
+  it('shows Browse button for extensions directory when PI is selected', () => {
+    render(<AISettings />)
+    expect(screen.getByLabelText('Browse for extensions directory')).toBeInTheDocument()
+  })
+
+  it('hides PI Extensions Directory when Claude is selected', () => {
+    useSettingsStore.setState({
+      settings: { ai_sdkBackend: 'claude-agent-sdk' },
+      setSetting: vi.fn().mockResolvedValue(undefined),
+      loadSettings: vi.fn().mockResolvedValue(undefined),
+    })
+    render(<AISettings />)
+    expect(screen.queryByLabelText('PI extensions directory')).not.toBeInTheDocument()
   })
 
   it('hides API Key when PI is selected', () => {

@@ -112,6 +112,8 @@ export interface AISettings {
   ttsAutoWordLimit?: number
   ttsSummaryPrompt?: string
   ttsSummaryModel?: string
+  piDisabledExtensions?: string[]
+  piExtensionsDir?: string
 }
 
 /**

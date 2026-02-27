@@ -21,13 +21,23 @@ const mockCreateAgentSession = vi.fn().mockResolvedValue({
   extensionsResult: {},
 })
 
-vi.mock('./piSdk', () => ({
-  loadPISdk: vi.fn().mockResolvedValue({
-    createAgentSession: (...args: unknown[]) => mockCreateAgentSession(...args),
-    SessionManager: { inMemory: vi.fn().mockReturnValue({}) },
-    codingTools: [],
-  }),
-}))
+// vi.mock is hoisted — use globalThis to share state between factory and tests
+vi.mock('./piSdk', () => {
+  // Must be defined inside factory — vi.mock is hoisted
+  const _mockReload = vi.fn().mockResolvedValue(undefined)
+  const _mockGetExtensions = vi.fn().mockReturnValue({ extensions: [] })
+  return {
+    loadPISdk: vi.fn().mockResolvedValue({
+      createAgentSession: (...args: unknown[]) => mockCreateAgentSession(...args),
+      SessionManager: { inMemory: vi.fn().mockReturnValue({}) },
+      DefaultResourceLoader: function DefaultResourceLoader(opts: Record<string, unknown>) {
+        ;(globalThis as Record<string, unknown>).__lastResourceLoaderOpts = opts
+        return { reload: _mockReload, getExtensions: _mockGetExtensions }
+      },
+      codingTools: [],
+    }),
+  }
+})
 
 import { streamMessagePI } from './streamingPI'
 
@@ -39,6 +49,8 @@ describe('streamMessagePI', () => {
     mockSession.prompt.mockClear()
     mockSession.abort.mockClear()
     mockSession.dispose.mockClear()
+
+    ;(globalThis as Record<string, unknown>).__lastResourceLoaderOpts = null
 
     // Default: subscribe captures the listener, prompt resolves immediately
     mockSession.subscribe.mockReturnValue(vi.fn()) // returns unsubscribe fn
@@ -420,5 +432,86 @@ describe('streamMessagePI', () => {
     for (const chunk of allChunks) {
       expect((chunk[1] as { conversationId: number }).conversationId).toBe(99)
     }
+  })
+
+  it('passes piExtensionsDir as additionalExtensionPaths to DefaultResourceLoader', async () => {
+    await streamMessagePI(
+      [{ role: 'user', content: 'Hi' }],
+      undefined,
+      { cwd: '/tmp/test', piExtensionsDir: '/custom/extensions' },
+      1
+    )
+
+    expect((globalThis as Record<string, unknown>).__lastResourceLoaderOpts).toEqual(
+      expect.objectContaining({
+        additionalExtensionPaths: ['/custom/extensions'],
+        noSkills: true,
+        noPromptTemplates: true,
+        noThemes: true,
+      })
+    )
+  })
+
+  it('passes resourceLoader to createAgentSession', async () => {
+    await streamMessagePI(
+      [{ role: 'user', content: 'Hi' }],
+      undefined,
+      { cwd: '/tmp/test' },
+      1
+    )
+
+    expect(mockCreateAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceLoader: expect.objectContaining({
+          reload: expect.any(Function),
+          getExtensions: expect.any(Function),
+        }),
+      })
+    )
+  })
+
+  it('does not include additionalExtensionPaths when piExtensionsDir is unset', async () => {
+    await streamMessagePI(
+      [{ role: 'user', content: 'Hi' }],
+      undefined,
+      { cwd: '/tmp/test' },
+      1
+    )
+
+    expect((globalThis as Record<string, unknown>).__lastResourceLoaderOpts).not.toHaveProperty('additionalExtensionPaths')
+  })
+
+  it('passes extensionsOverride callback when piDisabledExtensions is non-empty', async () => {
+    await streamMessagePI(
+      [{ role: 'user', content: 'Hi' }],
+      undefined,
+      { cwd: '/tmp/test', piDisabledExtensions: ['/disabled/ext.ts'] },
+      1
+    )
+
+    const opts = (globalThis as Record<string, unknown>).__lastResourceLoaderOpts as Record<string, unknown>
+    expect(opts).toHaveProperty('extensionsOverride')
+    expect(typeof opts.extensionsOverride).toBe('function')
+
+    // Verify the filter callback works correctly
+    const filter = opts.extensionsOverride as (
+      exts: Array<{ resolvedPath: string }>
+    ) => Array<{ resolvedPath: string }>
+    const filtered = filter([
+      { resolvedPath: '/enabled/ext.ts' },
+      { resolvedPath: '/disabled/ext.ts' },
+    ])
+    expect(filtered).toEqual([{ resolvedPath: '/enabled/ext.ts' }])
+  })
+
+  it('does not include extensionsOverride when piDisabledExtensions is empty', async () => {
+    await streamMessagePI(
+      [{ role: 'user', content: 'Hi' }],
+      undefined,
+      { cwd: '/tmp/test', piDisabledExtensions: [] },
+      1
+    )
+
+    expect((globalThis as Record<string, unknown>).__lastResourceLoaderOpts).not.toHaveProperty('extensionsOverride')
   })
 })

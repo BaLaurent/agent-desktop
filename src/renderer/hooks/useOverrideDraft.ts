@@ -7,6 +7,11 @@ function parseCwdWhitelist(json: string | undefined): CwdWhitelistEntry[] {
   try { const arr = JSON.parse(json); return Array.isArray(arr) ? arr : [] } catch { return [] }
 }
 
+function parseStringList(json: string | undefined): string[] {
+  if (!json) return []
+  try { const arr = JSON.parse(json); return Array.isArray(arr) ? arr : [] } catch { return [] }
+}
+
 export function useOverrideDraft(
   initialOverrides: AIOverrides,
   fallbackValues: Record<string, string>,
@@ -21,6 +26,10 @@ export function useOverrideDraft(
   const cwdWhitelistDraft = useMemo(() => parseCwdWhitelist(draft.hooks_cwdWhitelist), [draft.hooks_cwdWhitelist])
   const cwdWhitelistInherited = useMemo(() => parseCwdWhitelist(fallbackValues['hooks_cwdWhitelist']), [fallbackValues])
   const cwdWhitelistOverridden = draft.hooks_cwdWhitelist !== undefined
+
+  const piExtDisabledDraft = useMemo(() => parseStringList(draft.pi_disabledExtensions), [draft.pi_disabledExtensions])
+  const piExtDisabledInherited = useMemo(() => parseStringList(fallbackValues['pi_disabledExtensions']), [fallbackValues])
+  const piExtOverridden = draft.pi_disabledExtensions !== undefined
 
   const toggleMcpOverride = useCallback(() => {
     setDraft((prev) => {
@@ -62,6 +71,30 @@ export function useOverrideDraft(
     setDraft((prev) => ({ ...prev, hooks_cwdWhitelist: JSON.stringify(entries) }))
   }, [])
 
+  const togglePiExtOverride = useCallback(() => {
+    setDraft((prev) => {
+      const next = { ...prev }
+      if (next.pi_disabledExtensions !== undefined) {
+        delete next.pi_disabledExtensions
+      } else {
+        next.pi_disabledExtensions = fallbackValues['pi_disabledExtensions'] || '[]'
+      }
+      return next
+    })
+  }, [fallbackValues])
+
+  const togglePiExtension = useCallback((path: string) => {
+    setDraft((prev) => {
+      const disabled = new Set(parseStringList(prev.pi_disabledExtensions))
+      if (disabled.has(path)) {
+        disabled.delete(path)
+      } else {
+        disabled.add(path)
+      }
+      return { ...prev, pi_disabledExtensions: disabled.size > 0 ? JSON.stringify([...disabled]) : '[]' }
+    })
+  }, [])
+
   const toggleOverride = useCallback((key: string) => {
     setDraft((prev) => {
       const next = { ...prev }
@@ -82,11 +115,7 @@ export function useOverrideDraft(
     const cleaned: AIOverrides = {}
     for (const [k, v] of Object.entries(draft)) {
       if (v !== undefined && v !== '') {
-        if (k === 'ai_mcpDisabled' || k === 'hooks_cwdWhitelist') {
-          cleaned[k as keyof AIOverrides] = v
-        } else {
-          cleaned[k as keyof AIOverrides] = v
-        }
+        cleaned[k as keyof AIOverrides] = v
       }
     }
     return Object.keys(cleaned).length > 0 ? cleaned : {}
@@ -104,6 +133,11 @@ export function useOverrideDraft(
     cwdWhitelistOverridden,
     toggleCwdWhitelistOverride,
     setCwdWhitelist,
+    piExtDisabledDraft,
+    piExtDisabledInherited,
+    piExtOverridden,
+    togglePiExtOverride,
+    togglePiExtension,
     toggleOverride,
     setValue,
     cleanDraft,

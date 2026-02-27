@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useAuthStore } from '../../stores/authStore'
-import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS, SDK_BACKEND_OPTIONS, CONFIG_SHARING_OPTIONS } from '../../../shared/constants'
+import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS, SDK_BACKEND_OPTIONS, CONFIG_SHARING_OPTIONS, type PIExtensionInfo } from '../../../shared/constants'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 import { CwdWhitelistEditor } from './CwdWhitelistEditor'
 import type { CwdWhitelistEntry } from '../../../shared/types'
@@ -49,6 +49,13 @@ export function AISettings() {
   const [confirmDisable, setConfirmDisable] = useState(false)
   const [showPromptEditor, setShowPromptEditor] = useState(false)
 
+  // PI Extensions state
+  const piExtensionsDir = settings['pi_extensionsDir'] ?? ''
+  const piDisabledExtensions: string[] = (() => {
+    try { const arr = JSON.parse(settings['pi_disabledExtensions'] || '[]'); return Array.isArray(arr) ? arr : [] } catch { return [] }
+  })()
+  const [piExtensions, setPiExtensions] = useState<PIExtensionInfo[]>([])
+
   useEffect(() => {
     if (skills === 'off') {
       setDiscoveredSkills([])
@@ -58,6 +65,16 @@ export function AISettings() {
       setDiscoveredSkills(cmds.filter(c => c.source === 'skill'))
     }).catch(() => setDiscoveredSkills([]))
   }, [skills])
+
+  useEffect(() => {
+    if (isClaudeBackend) {
+      setPiExtensions([])
+      return
+    }
+    window.agent.pi.listExtensions()
+      .then(setPiExtensions)
+      .catch(() => setPiExtensions([]))
+  }, [isClaudeBackend, piExtensionsDir])
 
   return (
     <div className="flex flex-col gap-1">
@@ -88,6 +105,82 @@ export function AISettings() {
           ))}
         </select>
       </div>
+
+      {/* PI Extensions Directory (PI only) */}
+      {!isClaudeBackend && (
+        <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 pr-4">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Extensions Directory
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Additional directory for PI extensions (.ts files). Added to default paths.
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={piExtensionsDir}
+              onChange={(e) => setSetting('pi_extensionsDir', e.target.value)}
+              placeholder="~/.pi/agent/extensions/"
+              className="w-56 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none font-mono mobile:text-base"
+              style={{
+                backgroundColor: 'var(--color-bg)',
+                color: 'var(--color-text)',
+              }}
+              aria-label="PI extensions directory"
+            />
+            <button
+              onClick={async () => {
+                const selected = await window.agent.system.selectFolder()
+                if (selected) setSetting('pi_extensionsDir', selected)
+              }}
+              className="px-2 py-1.5 rounded text-xs transition-opacity hover:opacity-70 mobile:px-4 mobile:py-3 mobile:text-sm mobile:hidden"
+              style={{ color: 'var(--color-text-muted)' }}
+              aria-label="Browse for extensions directory"
+            >
+              Browse
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Discovered PI Extensions (PI only) */}
+      {!isClaudeBackend && piExtensions.length > 0 && (
+        <div className="py-3 border-b border-[var(--color-text-muted)]/10">
+          <span className="text-xs font-medium mb-2 block" style={{ color: 'var(--color-text-muted)' }}>
+            Discovered Extensions
+          </span>
+          <div className="flex flex-col gap-1 max-h-[120px] overflow-y-auto">
+            {piExtensions.map((ext) => {
+              const isDisabled = piDisabledExtensions.includes(ext.path)
+              return (
+                <label
+                  key={ext.path}
+                  className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer hover:opacity-80"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!isDisabled}
+                    onChange={() => {
+                      const newDisabled = isDisabled
+                        ? piDisabledExtensions.filter(p => p !== ext.path)
+                        : [...piDisabledExtensions, ext.path]
+                      setSetting('pi_disabledExtensions', JSON.stringify(newDisabled))
+                    }}
+                    className="rounded"
+                  />
+                  <span className="flex-shrink-0">{ext.name}</span>
+                  <span className="text-xs truncate min-w-0" style={{ color: 'var(--color-text-muted)' }}>
+                    {ext.path.split('/').slice(-3).join('/')}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* API Key (Claude only) */}
       {isClaudeBackend && (

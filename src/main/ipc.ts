@@ -29,6 +29,7 @@ import { registerHandlers as ttsHandlers } from './services/tts'
 import { registerHandlers as updaterHandlers } from './services/updater'
 import { registerHandlers as jupyterHandlers } from './services/jupyter'
 import { registerHandlers as webServerHandlers } from './services/webServer'
+import { registerHandlers as piExtensionsHandlers } from './services/piExtensions'
 
 const serviceModules = [
   authHandlers,
@@ -49,6 +50,7 @@ const serviceModules = [
   quickChatHandlers,
   schedulerHandlers,
   ttsHandlers,
+  piExtensionsHandlers,
 ]
 
 /**

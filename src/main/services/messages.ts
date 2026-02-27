@@ -293,7 +293,7 @@ function filterMcpServers(
 }
 
 export function getAISettings(db: Database.Database, conversationId: number): AISettings {
-  const keys = ['ai_sdkBackend', 'ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'hooks_cwdWhitelist', 'settings_sharedAcrossBackends', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel']
+  const keys = ['ai_sdkBackend', 'ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'hooks_cwdWhitelist', 'settings_sharedAcrossBackends', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'pi_disabledExtensions', 'pi_extensionsDir', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel']
   const rows = db
     .prepare(`SELECT key, value FROM settings WHERE key IN (${keys.map(() => '?').join(',')})`)
     .all(...keys) as { key: string; value: string }[]
@@ -308,6 +308,7 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
   const globalBaseUrl = map['ai_baseUrl'] || undefined
   const globalCustomModel = map['ai_customModel'] || undefined
   const globalModel = map['ai_model'] || undefined
+  const globalPiExtensionsDir = map['pi_extensionsDir'] || undefined
 
   // Cascade: folder overrides → conversation overrides
   const convRow = db
@@ -418,6 +419,8 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     ttsAutoWordLimit: map['tts_autoWordLimit'] ? Number(map['tts_autoWordLimit']) : undefined,
     ttsSummaryPrompt: map['tts_summaryPrompt'] || undefined,
     ttsSummaryModel: map['tts_summaryModel'] || undefined,
+    piDisabledExtensions: safeJsonParse<string[]>(map['pi_disabledExtensions'] || '[]', []),
+    piExtensionsDir: globalPiExtensionsDir,
   }
 }
 

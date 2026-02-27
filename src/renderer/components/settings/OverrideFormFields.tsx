@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { SETTING_DEFS, type McpServerName } from '../../../shared/constants'
+import { SETTING_DEFS, type McpServerName, type PIExtensionInfo } from '../../../shared/constants'
 import { Checkbox } from '../ui/Checkbox'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
 import { CwdWhitelistEditor } from './CwdWhitelistEditor'
@@ -22,6 +22,12 @@ interface OverrideFormFieldsProps {
   isCwdWhitelistOverridden?: boolean
   onToggleCwdWhitelistOverride?: () => void
   onCwdWhitelistChange?: (entries: CwdWhitelistEntry[]) => void
+  piExtensions?: PIExtensionInfo[]
+  piExtDisabledDraft?: string[]
+  piExtDisabledInherited?: string[]
+  isPiExtOverridden?: boolean
+  onTogglePiExtOverride?: () => void
+  onTogglePiExtension?: (path: string) => void
 }
 
 // ─── Field Grouping ─────────────────────────────────────────
@@ -60,8 +66,11 @@ function FieldCard({ label, active, onToggle, wide, extra, children }: {
 }) {
   return (
     <div
-      className={`group flex flex-col gap-1 rounded-md px-3 py-2 ${wide ? 'col-span-2' : ''}`}
+      className={`group flex flex-col gap-1 rounded-md px-3 py-2 transition-opacity
+        ${wide ? 'col-span-3' : ''}
+        ${!active ? 'cursor-pointer hover:opacity-80' : ''}`}
       style={{ backgroundColor: 'var(--color-bg)' }}
+      onClick={!active ? onToggle : undefined}
     >
       <div className="flex items-center justify-between gap-1">
         <span
@@ -72,7 +81,7 @@ function FieldCard({ label, active, onToggle, wide, extra, children }: {
         </span>
         <div className="flex items-center gap-1 flex-shrink-0">
           {extra}
-          <ToggleButton active={active} onClick={onToggle} />
+          {active && <ToggleButton active onClick={onToggle} />}
         </div>
       </div>
       {children}
@@ -119,6 +128,12 @@ export function OverrideFormFields({
   isCwdWhitelistOverridden,
   onToggleCwdWhitelistOverride,
   onCwdWhitelistChange,
+  piExtensions,
+  piExtDisabledDraft,
+  piExtDisabledInherited,
+  isPiExtOverridden,
+  onTogglePiExtOverride,
+  onTogglePiExtension,
 }: OverrideFormFieldsProps) {
   const [promptEditorKey, setPromptEditorKey] = useState<string | null>(null)
 
@@ -135,6 +150,7 @@ export function OverrideFormFields({
     const def = DEF_MAP.get(key)
     if (!def) return null
     if (def.claudeOnly && !isClaudeBackend) return null
+    if (def.piOnly && isClaudeBackend) return null
 
     const active = draft[def.key] !== undefined
     const inherited = inheritedValues[def.key] || ''
@@ -214,7 +230,7 @@ export function OverrideFormFields({
       {FIELD_GROUPS.map(group => (
         <div key={group.label} className="flex flex-col gap-1.5">
           <SectionHeader label={group.label} />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {group.keys.map(renderField)}
           </div>
         </div>
@@ -223,7 +239,7 @@ export function OverrideFormFields({
       {/* Advanced section */}
       <div className="flex flex-col gap-1.5">
         <SectionHeader label="Advanced" />
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {/* MCP Servers (Claude only) */}
           {isClaudeBackend && mcpServers.length > 0 && (
             isMcpOverridden ? (
@@ -328,6 +344,51 @@ export function OverrideFormFields({
                     ? `${(cwdWhitelistInherited ?? []).length} entries`
                     : 'No entries'}
                   source={inheritedSources?.['hooks_cwdWhitelist'] || 'Global'}
+                />
+              </FieldCard>
+            )
+          )}
+
+          {/* PI Extensions (PI only) */}
+          {!isClaudeBackend && onTogglePiExtOverride && piExtensions && piExtensions.length > 0 && (
+            isPiExtOverridden ? (
+              <FieldCard
+                label="PI Extensions"
+                active
+                onToggle={onTogglePiExtOverride}
+                wide
+              >
+                <div
+                  className="flex flex-col gap-0.5 rounded px-1 py-1 max-h-[120px] overflow-y-auto"
+                  style={{ backgroundColor: 'var(--color-surface)' }}
+                  role="group"
+                  aria-label="PI extension toggles"
+                >
+                  {piExtensions.map((ext) => {
+                    const extActive = !(piExtDisabledDraft || []).includes(ext.path)
+                    return (
+                      <button
+                        key={ext.path}
+                        onClick={() => onTogglePiExtension?.(ext.path)}
+                        className="flex items-center gap-2 py-0.5 text-xs text-left hover:opacity-80"
+                        style={{ color: 'var(--color-text)' }}
+                        role="checkbox"
+                        aria-checked={extActive}
+                      >
+                        <Checkbox checked={extActive} />
+                        <span style={{ opacity: extActive ? 1 : 0.5 }}>{ext.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </FieldCard>
+            ) : (
+              <FieldCard label="PI Extensions" active={false} onToggle={onTogglePiExtOverride}>
+                <InheritedText
+                  value={(piExtDisabledInherited || []).length > 0
+                    ? `${piExtensions.length - (piExtDisabledInherited || []).length}/${piExtensions.length} enabled`
+                    : `All ${piExtensions.length} enabled`}
+                  source={inheritedSources?.['pi_disabledExtensions'] || 'Global'}
                 />
               </FieldCard>
             )

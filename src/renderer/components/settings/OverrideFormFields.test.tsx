@@ -115,3 +115,71 @@ describe('OverrideFormFields — PI backend (overridden in draft)', () => {
     expect(screen.getByText('CWD Restriction')).toBeInTheDocument()
   })
 })
+
+describe('OverrideFormFields — PI Extensions section', () => {
+  const piExtensions = [
+    { name: 'code-review', path: '/home/user/.pi/extensions/code-review.ts' },
+    { name: 'test-runner', path: '/tmp/.pi/extensions/test-runner.ts' },
+  ]
+
+  it('shows PI Extensions when PI backend + extensions provided', () => {
+    render(<OverrideFormFields
+      {...defaultProps}
+      inheritedValues={{ ai_sdkBackend: 'pi' }}
+      piExtensions={piExtensions}
+      piExtDisabledDraft={[]}
+      piExtDisabledInherited={[]}
+      isPiExtOverridden={false}
+      onTogglePiExtOverride={vi.fn()}
+      onTogglePiExtension={vi.fn()}
+    />)
+
+    expect(screen.getByText('PI Extensions')).toBeInTheDocument()
+  })
+
+  it('hides PI Extensions when Claude backend', () => {
+    render(<OverrideFormFields
+      {...defaultProps}
+      inheritedValues={{ ai_sdkBackend: 'claude-agent-sdk' }}
+      piExtensions={piExtensions}
+      piExtDisabledDraft={[]}
+      piExtDisabledInherited={[]}
+      isPiExtOverridden={false}
+      onTogglePiExtOverride={vi.fn()}
+      onTogglePiExtension={vi.fn()}
+    />)
+
+    expect(screen.queryByText('PI Extensions')).not.toBeInTheDocument()
+  })
+
+  it('hides PI Extensions when no extensions discovered', () => {
+    render(<OverrideFormFields
+      {...defaultProps}
+      inheritedValues={{ ai_sdkBackend: 'pi' }}
+      piExtensions={[]}
+      piExtDisabledDraft={[]}
+      piExtDisabledInherited={[]}
+      isPiExtOverridden={false}
+      onTogglePiExtOverride={vi.fn()}
+      onTogglePiExtension={vi.fn()}
+    />)
+
+    expect(screen.queryByText('PI Extensions')).not.toBeInTheDocument()
+  })
+
+  it('shows extension checkboxes when PI Extensions is overridden', () => {
+    render(<OverrideFormFields
+      {...defaultProps}
+      inheritedValues={{ ai_sdkBackend: 'pi' }}
+      piExtensions={piExtensions}
+      piExtDisabledDraft={[]}
+      piExtDisabledInherited={[]}
+      isPiExtOverridden={true}
+      onTogglePiExtOverride={vi.fn()}
+      onTogglePiExtension={vi.fn()}
+    />)
+
+    expect(screen.getByText('code-review')).toBeInTheDocument()
+    expect(screen.getByText('test-runner')).toBeInTheDocument()
+  })
+})
