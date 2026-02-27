@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ToolUseBlock } from './ToolUseBlock'
+import { TaskGroupBlock } from './TaskGroupBlock'
+import { groupStreamParts } from '../../utils/groupStreamParts'
 import type { ToolCall, StreamPart, AskUserQuestion } from '../../../shared/types'
 
 interface ToolCallsSectionProps {
@@ -61,14 +63,26 @@ function toolCallToStreamPart(tc: ToolCall): Extract<StreamPart, { type: 'tool' 
 }
 
 export function ToolCallsSection({ toolCallsJson }: ToolCallsSectionProps) {
-  const [expanded, setExpanded] = useState(false)
   const toolCalls = parseToolCalls(toolCallsJson)
+
+  // Separate AskUserQuestion calls (rendered inline) from regular tools
+  const askUserCalls = useMemo(() => toolCalls.filter((tc) => tc.name === 'AskUserQuestion'), [toolCalls])
+  const regularCalls = useMemo(() => toolCalls.filter((tc) => tc.name !== 'AskUserQuestion'), [toolCalls])
+
+  // Auto-expand when sub-agents (Task tools) have output to show
+  const hasTaskOutput = useMemo(
+    () => regularCalls.some((tc) => tc.name === 'Task' && tc.output),
+    [regularCalls],
+  )
+  const [expanded, setExpanded] = useState(hasTaskOutput)
 
   if (toolCalls.length === 0) return null
 
-  // Separate AskUserQuestion calls (rendered inline) from regular tools
-  const askUserCalls = toolCalls.filter((tc) => tc.name === 'AskUserQuestion')
-  const regularCalls = toolCalls.filter((tc) => tc.name !== 'AskUserQuestion')
+  // Group tool calls for rendering
+  const grouped = useMemo(
+    () => groupStreamParts(regularCalls.map(toolCallToStreamPart)),
+    [regularCalls],
+  )
 
   return (
     <>
@@ -98,9 +112,16 @@ export function ToolCallsSection({ toolCallsJson }: ToolCallsSectionProps) {
 
           {expanded && (
             <div className="px-2 pb-2">
-              {regularCalls.map((tc) => (
-                <ToolUseBlock key={tc.id} tool={toolCallToStreamPart(tc)} />
-              ))}
+              {grouped.map((g, idx) => {
+                if (g.kind === 'task_group') {
+                  return <TaskGroupBlock key={`tg_${idx}`} tasks={g.tasks} />
+                }
+                const part = g.part
+                if (part.type === 'tool') {
+                  return <ToolUseBlock key={part.id} tool={part} />
+                }
+                return null
+              })}
             </div>
           )}
         </div>

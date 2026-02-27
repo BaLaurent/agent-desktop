@@ -1,8 +1,10 @@
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ToolUseBlock } from './ToolUseBlock'
+import { TaskGroupBlock } from './TaskGroupBlock'
 import { ToolApprovalBlock } from './ToolApprovalBlock'
 import { AskUserBlock } from './AskUserBlock'
 import { McpStatusBlock } from './McpStatusBlock'
+import { groupStreamParts } from '../../utils/groupStreamParts'
 import type { StreamPart } from '../../../shared/types'
 
 interface StreamingIndicatorProps {
@@ -30,7 +32,11 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
         {/* Stream parts or typing indicator */}
         {hasContent ? (
           <div className="text-sm">
-            {streamParts.map((part, idx) => {
+            {groupStreamParts(streamParts).map((grouped, idx) => {
+              if (grouped.kind === 'task_group') {
+                return <TaskGroupBlock key={`tg_${idx}`} tasks={grouped.tasks} />
+              }
+              const part = grouped.part
               if (part.type === 'text') {
                 return <MarkdownRenderer key={`text_${idx}`} content={part.content} />
               }

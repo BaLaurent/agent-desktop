@@ -122,4 +122,35 @@ describe('ToolCallsSection', () => {
     // Should still render the header without crashing
     expect(screen.getByText('Agent asked a question')).toBeInTheDocument()
   })
+
+  // ── Auto-expand for sub-agent (Task) output ──────────────
+
+  it('auto-expands when Task tools with output are present', () => {
+    const withTasks = JSON.stringify([
+      { id: 't1', name: 'Task', input: '{"description":"Write tests"}', output: 'Tests written successfully.', status: 'done' },
+      { id: 't2', name: 'Task', input: '{"description":"Write API"}', output: 'API implemented.', status: 'done' },
+    ])
+    render(<ToolCallsSection toolCallsJson={withTasks} />)
+
+    // Should be expanded by default — Task descriptions visible without clicking
+    expect(screen.getByText('Write tests')).toBeInTheDocument()
+    expect(screen.getByText('Write API')).toBeInTheDocument()
+  })
+
+  it('stays collapsed when only non-Task tools are present', () => {
+    render(<ToolCallsSection toolCallsJson={sampleToolCalls} />)
+
+    // Collapsed by default — individual tool names not visible
+    expect(screen.queryByText('Bash')).not.toBeInTheDocument()
+  })
+
+  it('stays collapsed when Task tools have no output', () => {
+    const tasksNoOutput = JSON.stringify([
+      { id: 't1', name: 'Task', input: '{"description":"Do stuff"}', output: '', status: 'done' },
+    ])
+    render(<ToolCallsSection toolCallsJson={tasksNoOutput} />)
+
+    // No output → collapsed
+    expect(screen.queryByText(/Task/)).not.toBeInTheDocument()
+  })
 })
