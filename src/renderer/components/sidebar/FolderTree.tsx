@@ -62,6 +62,7 @@ export function SidebarTree() {
     moveToFolder,
     moveSelectedToFolder,
     createConversation,
+    reorderFolders,
     selectedIds,
     clearSelection,
   } = useConversationsStore()
@@ -72,6 +73,11 @@ export function SidebarTree() {
   const [menuFolderId, setMenuFolderId] = useState<number | null>(null)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null)
+  const [draggingFolderId, setDraggingFolderId] = useState<number | null>(null)
+  const [folderDropIndicator, setFolderDropIndicator] = useState<{
+    targetId: number
+    position: 'before' | 'after' | 'inside'
+  } | null>(null)
   const [overrideFolderId, setOverrideFolderId] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
   const [colorPickerTarget, setColorPickerTarget] = useState<number | null>(null)
@@ -310,6 +316,83 @@ export function SidebarTree() {
     return colors
   }, [globalSettings.heatmap_enabled, globalSettings.heatmap_mode, globalSettings.heatmap_min, globalSettings.heatmap_max, folders, conversations])
 
+  const isDescendant = useCallback((folderId: number, ancestorId: number): boolean => {
+    let current = folders.find((f) => f.id === folderId)
+    while (current) {
+      if (current.parent_id === ancestorId) return true
+      current = folders.find((f) => f.id === current!.parent_id)
+    }
+    return false
+  }, [folders])
+
+  const handleFolderDragStart = useCallback((e: React.DragEvent, folderId: number) => {
+    e.stopPropagation()
+    setDraggingFolderId(folderId)
+    e.dataTransfer.setData('application/x-folder-id', String(folderId))
+    e.dataTransfer.effectAllowed = 'move'
+  }, [])
+
+  const handleFolderDragEnd = useCallback(() => {
+    setDraggingFolderId(null)
+    setFolderDropIndicator(null)
+  }, [])
+
+  const handleFolderDragOver = useCallback((e: React.DragEvent, targetFolder: Folder) => {
+    if (!e.dataTransfer.types.includes('application/x-folder-id')) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+
+    if (draggingFolderId === null || draggingFolderId === targetFolder.id) return
+    if (isDescendant(targetFolder.id, draggingFolderId)) return
+
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = (e.clientY - rect.top) / rect.height
+    let position: 'before' | 'after' | 'inside'
+    if (y < 0.25) position = 'before'
+    else if (y > 0.75) position = 'after'
+    else position = 'inside'
+
+    setFolderDropIndicator({ targetId: targetFolder.id, position })
+  }, [draggingFolderId, isDescendant])
+
+  const handleFolderDropOnFolder = useCallback(async (e: React.DragEvent, targetFolder: Folder) => {
+    const raw = e.dataTransfer.getData('application/x-folder-id')
+    if (!raw) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedId = parseInt(raw, 10)
+    if (isNaN(draggedId) || draggedId === targetFolder.id) return
+    if (isDescendant(targetFolder.id, draggedId)) return
+
+    const indicator = folderDropIndicator
+    setDraggingFolderId(null)
+    setFolderDropIndicator(null)
+    if (!indicator || indicator.targetId !== targetFolder.id) return
+
+    if (indicator.position === 'inside') {
+      await updateFolder(draggedId, { parent_id: targetFolder.id })
+    } else {
+      // Reorder: move to same parent as target, insert before/after
+      const newParentId = targetFolder.parent_id
+      const draggedFolder = folders.find((f) => f.id === draggedId)
+      // Update parent if needed
+      if (draggedFolder && draggedFolder.parent_id !== newParentId) {
+        await updateFolder(draggedId, { parent_id: newParentId })
+      }
+      // Compute new sibling order
+      const siblings = folders
+        .filter((f) => f.parent_id === newParentId && f.id !== draggedId)
+        .sort((a, b) => a.position - b.position)
+      const targetIndex = siblings.findIndex((f) => f.id === targetFolder.id)
+      const insertIndex = indicator.position === 'before' ? targetIndex : targetIndex + 1
+      const newOrder = [...siblings]
+      newOrder.splice(insertIndex, 0, { id: draggedId } as Folder)
+      await reorderFolders(newOrder.map((f) => f.id))
+    }
+  }, [folderDropIndicator, folders, isDescendant, updateFolder, reorderFolders])
+
   const buildTree = (parentId: number | null): Folder[] => {
     return folders.filter((f) => f.parent_id === parentId)
   }
@@ -317,6 +400,8 @@ export function SidebarTree() {
   const handleDrop = (e: React.DragEvent, folderId: number | null) => {
     e.preventDefault()
     setDragOverFolderId(null)
+    // Ignore folder drags — those are handled by handleFolderDropOnFolder
+    if (e.dataTransfer.types.includes('application/x-folder-id')) return
     const raw = e.dataTransfer.getData('text/plain')
 
     // Try parsing as JSON array (multi-select drag)
@@ -351,7 +436,10 @@ export function SidebarTree() {
 
   const handleFolderDragEnter = (e: React.DragEvent, folderId: number) => {
     e.preventDefault()
-    setDragOverFolderId(folderId)
+    // Only highlight for conversation drags, not folder drags
+    if (!e.dataTransfer.types.includes('application/x-folder-id')) {
+      setDragOverFolderId(folderId)
+    }
   }
 
   const handleFolderDragLeave = (e: React.DragEvent) => {
@@ -366,17 +454,25 @@ export function SidebarTree() {
     const count = getConversationCount(folder.id)
     const folderConversations = conversations.filter((c) => c.folder_id === folder.id)
     const isDragOver = dragOverFolderId === folder.id
+    const isBeingDragged = draggingFolderId === folder.id
+    const dropIndicator = folderDropIndicator?.targetId === folder.id ? folderDropIndicator.position : null
     const manualColor = (colorPickerTarget === folder.id && colorPickerLive) ? colorPickerLive : folder.color
     const effectiveColor = manualColor || (heatmapColors?.get(folder.id) ?? null)
+    const isDraggableFolder = !isMobile
+
+    const dropClass = dropIndicator === 'before' ? ' folder-drop-before'
+      : dropIndicator === 'after' ? ' folder-drop-after'
+      : dropIndicator === 'inside' ? ' sidebar-drop-active'
+      : ''
 
     return (
       <div key={folder.id}>
         <div
-          className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${!isDragOver && !effectiveColor ? ' hover:bg-[var(--color-bg)]' : ''}`}
+          className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${dropClass}${isBeingDragged ? ' sidebar-dragging' : ''}${!isDragOver && !dropIndicator && !effectiveColor ? ' hover:bg-[var(--color-bg)]' : ''}`}
           style={{
-            paddingLeft: `${depth * 16 + 8}px`,
+            paddingLeft: `${depth * 16 + (isDraggableFolder ? 0 : 8)}px`,
             color: 'var(--color-text)',
-            ...(effectiveColor ? {
+            ...(effectiveColor && !dropClass ? {
               borderLeft: `3px solid ${effectiveColor}`,
               backgroundColor: `color-mix(in srgb, ${effectiveColor} 15%, transparent)`,
             } : {}),
@@ -384,10 +480,27 @@ export function SidebarTree() {
           onClick={() => toggleExpand(folder.id)}
           onContextMenu={!isMobile ? (e) => handleContextMenu(e, folder.id) : undefined}
           {...(!isMobile ? {
-            onDrop: (e: React.DragEvent) => handleDrop(e, folder.id),
-            onDragOver: handleDragOver,
+            onDrop: (e: React.DragEvent) => {
+              if (e.dataTransfer.types.includes('application/x-folder-id')) {
+                handleFolderDropOnFolder(e, folder)
+              } else {
+                handleDrop(e, folder.id)
+              }
+            },
+            onDragOver: (e: React.DragEvent) => {
+              if (e.dataTransfer.types.includes('application/x-folder-id')) {
+                handleFolderDragOver(e, folder)
+              } else {
+                handleDragOver(e)
+              }
+            },
             onDragEnter: (e: React.DragEvent) => handleFolderDragEnter(e, folder.id),
-            onDragLeave: handleFolderDragLeave,
+            onDragLeave: (e: React.DragEvent) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setDragOverFolderId(null)
+                setFolderDropIndicator(null)
+              }
+            },
           } : {})}
           onTouchStart={(e) => handleFolderTouchStart(e, folder.id)}
           onTouchEnd={handleFolderTouchEnd}
@@ -396,6 +509,27 @@ export function SidebarTree() {
           aria-expanded={isExpanded}
           aria-label={`Folder: ${folder.name}`}
         >
+          {/* Drag grip handle — non-default folders only, desktop only */}
+          {isDraggableFolder && (
+            <span
+              className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab flex-shrink-0"
+              style={{ color: 'var(--color-text-muted)' }}
+              draggable
+              onDragStart={(e) => handleFolderDragStart(e, folder.id)}
+              onDragEnd={handleFolderDragEnd}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Drag folder ${folder.name}`}
+            >
+              <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+                <circle cx="3" cy="2" r="1.2" />
+                <circle cx="7" cy="2" r="1.2" />
+                <circle cx="3" cy="7" r="1.2" />
+                <circle cx="7" cy="7" r="1.2" />
+                <circle cx="3" cy="12" r="1.2" />
+                <circle cx="7" cy="12" r="1.2" />
+              </svg>
+            </span>
+          )}
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
             {children.length > 0 || count > 0 ? (isExpanded ? '\u25BE' : '\u25B8') : '\u2022'}
           </span>

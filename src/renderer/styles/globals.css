@@ -106,6 +106,14 @@
   opacity: 0.4;
 }
 
+.folder-drop-before {
+  box-shadow: 0 -2px 0 0 var(--color-primary);
+}
+
+.folder-drop-after {
+  box-shadow: 0 2px 0 0 var(--color-primary);
+}
+
 .explorer-dragging {
   opacity: 0.4;
 }

@@ -275,6 +275,11 @@ export async function streamMessage(
 
     // Always set canUseTool — AskUserQuestion needs interactive handling in all modes
     queryOptions.canUseTool = async (toolName: string, input: Record<string, unknown>) => {
+      // Force Task tools to foreground — background agents can't survive between messages
+      if (toolName === 'Task' && input.run_in_background) {
+        input = { ...input, run_in_background: false }
+      }
+
       // AskUserQuestion: always interactive, regardless of permission mode
       if (toolName === 'AskUserQuestion') {
         const requestId = randomUUID()

@@ -650,6 +650,102 @@ describe('streamMessage — stopReason in done chunk', () => {
   })
 })
 
+describe('streamMessage — canUseTool forces Task background to foreground', () => {
+  beforeEach(() => {
+    mockSendFn.mockClear()
+    mockQueryFn.mockClear()
+  })
+
+  it('strips run_in_background from Task tool input in bypass mode', async () => {
+    let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
+
+    mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
+      capturedCanUseTool = args.options.canUseTool as typeof capturedCanUseTool
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: vi.fn().mockResolvedValue({ done: true }),
+        }),
+      }
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(capturedCanUseTool).toBeDefined()
+    const result = await capturedCanUseTool!('Task', {
+      prompt: 'do something',
+      run_in_background: true,
+      subagent_type: 'general-purpose',
+    }) as { behavior: string; updatedInput: Record<string, unknown> }
+
+    expect(result.behavior).toBe('allow')
+    expect(result.updatedInput.run_in_background).toBe(false)
+    expect(result.updatedInput.prompt).toBe('do something')
+  })
+
+  it('does not modify Task input when run_in_background is absent', async () => {
+    let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
+
+    mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
+      capturedCanUseTool = args.options.canUseTool as typeof capturedCanUseTool
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: vi.fn().mockResolvedValue({ done: true }),
+        }),
+      }
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(capturedCanUseTool).toBeDefined()
+    const result = await capturedCanUseTool!('Task', {
+      prompt: 'do something',
+      subagent_type: 'general-purpose',
+    }) as { behavior: string; updatedInput: Record<string, unknown> }
+
+    expect(result.behavior).toBe('allow')
+    expect(result.updatedInput.run_in_background).toBeUndefined()
+  })
+
+  it('does not affect non-Task tools with run_in_background', async () => {
+    let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
+
+    mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
+      capturedCanUseTool = args.options.canUseTool as typeof capturedCanUseTool
+      return {
+        [Symbol.asyncIterator]: () => ({
+          next: vi.fn().mockResolvedValue({ done: true }),
+        }),
+      }
+    })
+
+    await streamMessage(
+      [{ role: 'user', content: 'test' }],
+      'system',
+      { permissionMode: 'bypassPermissions' },
+      1
+    )
+
+    expect(capturedCanUseTool).toBeDefined()
+    const result = await capturedCanUseTool!('Bash', {
+      command: 'echo hello',
+      run_in_background: true,
+    }) as { behavior: string; updatedInput: Record<string, unknown> }
+
+    expect(result.behavior).toBe('allow')
+    expect(result.updatedInput.run_in_background).toBe(true)
+  })
+})
+
 describe('streamMessage — system init (MCP status)', () => {
   beforeEach(() => {
     mockSendFn.mockClear()
