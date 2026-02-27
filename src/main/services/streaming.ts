@@ -178,7 +178,7 @@ export async function streamMessage(
   conversationId?: number,
   sdkSessionId?: string | null,
   persistSession?: boolean
-): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null; error: string | null }> {
+): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
   // Ensure the macOS OAuth token is fresh — skip when using API key auth
   if (!aiSettings?.apiKey) {
     await ensureFreshMacOSToken()
@@ -201,7 +201,6 @@ export async function streamMessage(
   let fullContent = ''
   let aborted = false
   let capturedSessionId: string | null = null
-  let capturedError: string | null = null
 
   const convExtra = conversationId != null ? { conversationId } : {}
 
@@ -553,8 +552,9 @@ export async function streamMessage(
       aborted = true
       sendChunk('done', undefined, { ...convExtra, stopReason: 'aborted' })
     } else {
-      capturedError = err instanceof Error ? err.message : 'Unknown streaming error'
+      const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
       console.error('[streaming] Error:', err)
+      sendChunk('error', errorMsg, convExtra)
     }
   } finally {
     // Only delete if this is still our controller (another stream may have replaced it)
@@ -566,7 +566,7 @@ export async function streamMessage(
     restoreEnv?.()
   }
 
-  return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted, sessionId: capturedSessionId, error: capturedError }
+  return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted, sessionId: capturedSessionId }
 }
 
 export function notifyConversationUpdated(conversationId: number): void {

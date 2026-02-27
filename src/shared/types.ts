@@ -300,7 +300,7 @@ export type UpdateStatus =
 // ─── IPC / Runtime Types ──────────────────────────────────────
 
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_input' | 'tool_result' | 'tool_approval' | 'ask_user' | 'mcp_status' | 'system_message' | 'retry' | 'error' | 'done'
+  type: 'text' | 'tool_start' | 'tool_input' | 'tool_result' | 'tool_approval' | 'ask_user' | 'mcp_status' | 'system_message' | 'error' | 'done'
   content?: string
   toolName?: string
   toolId?: string
@@ -314,9 +314,6 @@ export interface StreamChunk {
   resultSubtype?: string
   hookName?: string
   hookEvent?: string
-  retryAttempt?: number
-  retryMaxAttempts?: number
-  retryDelayMs?: number
 }
 
 export type StreamPart =
@@ -326,7 +323,6 @@ export type StreamPart =
   | { type: 'ask_user'; requestId: string; questions: AskUserQuestion[] }
   | { type: 'mcp_status'; servers: McpConnectionStatus[] }
   | { type: 'system_message'; content: string; hookName?: string; hookEvent?: string }
-  | { type: 'retry'; message: string; attempt: number; maxAttempts: number }
 
 export interface Attachment {
   name: string
