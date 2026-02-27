@@ -3,6 +3,8 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { useAuthStore } from '../../stores/authStore'
 import { MODEL_OPTIONS, DEFAULT_MODEL, SETTING_SOURCES_OPTIONS, SKILLS_TOGGLE_OPTIONS } from '../../../shared/constants'
 import { SystemPromptEditorModal } from './SystemPromptEditorModal'
+import { CwdWhitelistEditor } from './CwdWhitelistEditor'
+import type { CwdWhitelistEntry } from '../../../shared/types'
 
 export function AISettings() {
   const { settings, loadSettings, setSetting } = useSettingsStore()
@@ -31,6 +33,10 @@ export function AISettings() {
   const permissionMode = settings['ai_permissionMode'] ?? 'bypassPermissions'
   const skills = settings['ai_skills'] ?? 'off'
   const cwdRestriction = settings['hooks_cwdRestriction'] ?? 'true'
+  const cwdWhitelistRaw = settings['hooks_cwdWhitelist'] ?? '[]'
+  const cwdWhitelist: CwdWhitelistEntry[] = (() => {
+    try { return JSON.parse(cwdWhitelistRaw) } catch { return [] }
+  })()
   const defaultSystemPrompt = settings['ai_defaultSystemPrompt'] ?? ''
   const skillsEnabled = settings['ai_skillsEnabled'] ?? 'true'
   const disabledSkills: string[] = (() => {
@@ -439,6 +445,24 @@ export function AISettings() {
           </button>
         </div>
       </div>
+
+      {/* CWD Whitelist */}
+      {cwdRestriction === 'true' && (
+        <div className="py-3 border-b border-[var(--color-text-muted)]/10">
+          <div className="flex flex-col gap-0.5 mb-2">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              Allowed Directories
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Additional directories accessible beyond the conversation CWD. Read-only entries allow reading but not writing.
+            </span>
+          </div>
+          <CwdWhitelistEditor
+            entries={cwdWhitelist}
+            onChange={(entries) => setSetting('hooks_cwdWhitelist', JSON.stringify(entries))}
+          />
+        </div>
+      )}
 
       {/* Default System Prompt */}
       <div className="flex flex-col gap-2 py-3">

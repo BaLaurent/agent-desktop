@@ -5,7 +5,7 @@ import { loadAgentSDK } from './anthropic'
 import { buildCwdRestrictionHooks } from './cwdHooks'
 import { findBinaryInPath, ensureFreshMacOSToken } from '../utils/env'
 import { broadcast } from '../utils/broadcast'
-import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall } from '../../shared/types'
+import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall, CwdWhitelistEntry } from '../../shared/types'
 
 // Per-conversation abort controllers: Map<conversationId, AbortController>
 // Allows aborting a specific stream without affecting others
@@ -98,7 +98,7 @@ export interface AISettings {
   permissionMode?: string
   mcpServers?: Record<string, { command: string; args: string[]; env?: Record<string, string> } | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> }>
   cwdRestrictionEnabled?: boolean
-  writableKnowledgePaths?: string[]
+  cwdWhitelist?: CwdWhitelistEntry[]
   skills?: 'off' | 'user' | 'project' | 'local'
   skillsEnabled?: boolean
   disabledSkills?: string[]
@@ -351,7 +351,7 @@ export async function streamMessage(
     // CWD restriction hooks: runs independently of permission mode (even in bypass)
     // Uses the SDK hooks API — PreToolUse hook with 'deny' decision for out-of-CWD writes
     if (aiSettings?.cwdRestrictionEnabled && aiSettings?.cwd) {
-      queryOptions.hooks = buildCwdRestrictionHooks(aiSettings.cwd, aiSettings.writableKnowledgePaths)
+      queryOptions.hooks = buildCwdRestrictionHooks(aiSettings.cwd, aiSettings.cwdWhitelist || [])
     }
 
     if (aiSettings?.tools) {

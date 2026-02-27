@@ -569,4 +569,45 @@ describe('Messages Service', () => {
       expect(history[0].content).not.toContain('[')
     })
   })
+
+  describe('getAISettings whitelist cascade', () => {
+    it('returns empty cwdWhitelist by default', () => {
+      const settings = getAISettings(db, convId)
+      expect(settings.cwdWhitelist).toEqual([])
+    })
+
+    it('reads cwdWhitelist from global settings', () => {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('hooks_cwdWhitelist', ?)").run(
+        JSON.stringify([{ path: '/tmp/shared', access: 'read' }])
+      )
+      const settings = getAISettings(db, convId)
+      expect(settings.cwdWhitelist).toEqual([{ path: '/tmp/shared', access: 'read' }])
+    })
+
+    it('conversation whitelist overrides folder whitelist (replace semantics)', () => {
+      const folder = db.prepare("INSERT INTO folders (name) VALUES ('WL Folder')").run()
+      const folderId = folder.lastInsertRowid as number
+      db.prepare('UPDATE folders SET ai_overrides = ? WHERE id = ?').run(
+        JSON.stringify({ hooks_cwdWhitelist: JSON.stringify([{ path: '/data/folder', access: 'readwrite' }]) }),
+        folderId
+      )
+      db.prepare('UPDATE conversations SET folder_id = ?, ai_overrides = ? WHERE id = ?').run(
+        folderId,
+        JSON.stringify({ hooks_cwdWhitelist: JSON.stringify([{ path: '/data/conv', access: 'read' }]) }),
+        convId
+      )
+      const settings = getAISettings(db, convId)
+      // Conversation replaces folder's whitelist entirely
+      expect(settings.cwdWhitelist).toEqual(
+        expect.arrayContaining([{ path: '/data/conv', access: 'read' }])
+      )
+      expect(settings.cwdWhitelist?.find(e => e.path === '/data/folder')).toBeUndefined()
+    })
+
+    it('empty whitelist preserves backward compat (no writableKnowledgePaths)', () => {
+      const settings = getAISettings(db, convId)
+      expect(settings.cwdWhitelist).toEqual([])
+      expect((settings as any).writableKnowledgePaths).toBeUndefined()
+    })
+  })
 })

@@ -10,7 +10,7 @@ import { loadAgentSDK } from './anthropic'
 import { getMainWindow } from '../index'
 import { broadcast } from '../utils/broadcast'
 import type { AISettings } from './streaming'
-import type { Message, Attachment, ToolCall, ToolApprovalResponse, AskUserResponse, KnowledgeSelection } from '../../shared/types'
+import type { Message, Attachment, ToolCall, ToolApprovalResponse, AskUserResponse, KnowledgeSelection, CwdWhitelistEntry } from '../../shared/types'
 import { validateString, validatePositiveInt, validatePathSafe } from '../utils/validate'
 import { getSchedulerMcpConfig } from './schedulerBridge'
 import { speakResponse, stop as stopTts } from './tts'
@@ -268,7 +268,7 @@ function filterMcpServers(
 }
 
 export function getAISettings(db: Database.Database, conversationId: number): AISettings {
-  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel']
+  const keys = ['ai_model', 'ai_maxTurns', 'ai_maxThinkingTokens', 'ai_maxBudgetUsd', 'ai_permissionMode', 'ai_tools', 'hooks_cwdRestriction', 'hooks_cwdWhitelist', 'ai_knowledgeFolders', 'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills', 'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel']
   const rows = db
     .prepare(`SELECT key, value FROM settings WHERE key IN (${keys.map(() => '?').join(',')})`)
     .all(...keys) as { key: string; value: string }[]
@@ -302,6 +302,9 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
       if (v !== undefined && v !== '') map[k] = v
     }
   }
+
+  // Parse CWD whitelist from cascaded settings
+  const cwdWhitelist = safeJsonParse<CwdWhitelistEntry[]>(map['hooks_cwdWhitelist'] || '[]', [])
 
   // Parse tools setting
   const toolsValue = map['ai_tools'] || 'preset:claude_code'
@@ -340,19 +343,18 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     }
   }
 
-  // Compute writable knowledge paths from cascaded overrides
+  // Merge knowledge folder selections into cwdWhitelist
   const kfRaw = map['ai_knowledgeFolders']
   const knowledgeFolders = kfRaw ? safeJsonParse<KnowledgeSelection[]>(kfRaw, []) : []
-  const writableKnowledgePaths: string[] = []
   if (Array.isArray(knowledgeFolders)) {
     const knowledgesDir = getKnowledgesDir()
     for (const sel of knowledgeFolders) {
-      if (sel.access === 'readwrite' && sel.folder && !sel.folder.includes('..') && !sel.folder.includes('/') && !sel.folder.includes('\\')) {
-        const resolved = resolve(join(knowledgesDir, sel.folder))
-        if (resolved.startsWith(knowledgesDir)) {
-          writableKnowledgePaths.push(resolved)
-        }
-      }
+      if (!sel.folder || !sel.folder.length) continue
+      if (sel.folder.includes('..') || sel.folder.includes('/') || sel.folder.includes('\\')) continue
+      const resolved = resolve(join(knowledgesDir, sel.folder))
+      if (!resolved.startsWith(knowledgesDir)) continue
+      const access = sel.access === 'readwrite' ? 'readwrite' : 'read'
+      cwdWhitelist.push({ path: resolved, access })
     }
   }
 
@@ -379,7 +381,7 @@ export function getAISettings(db: Database.Database, conversationId: number): AI
     permissionMode: map['ai_permissionMode'] || 'bypassPermissions',
     mcpServers: filterMcpServers(mcpServers, map['ai_mcpDisabled']),
     cwdRestrictionEnabled: (map['hooks_cwdRestriction'] ?? 'true') === 'true',
-    writableKnowledgePaths,
+    cwdWhitelist,
     skills: (map['ai_skills'] as 'off' | 'user' | 'project' | 'local') || 'off',
     skillsEnabled: (map['ai_skillsEnabled'] ?? 'true') === 'true',
     disabledSkills: safeJsonParse<string[]>(map['ai_disabledSkills'] || '[]', []),

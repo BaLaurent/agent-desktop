@@ -56,6 +56,7 @@ function seedSettings(db: Database.Database): void {
     ['whisper_autoSend', 'false'],
     ['openscad_binaryPath', 'openscad'],
     ['hooks_cwdRestriction', 'true'],
+    ['hooks_cwdWhitelist', '[]'],
     ['ai_skills', 'off'],
     ['ai_skillsEnabled', 'true'],
     ['ai_disabledSkills', '[]'],

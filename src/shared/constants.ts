@@ -102,6 +102,7 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_skills',
   'ai_skillsEnabled',
   'ai_disabledSkills',
+  'hooks_cwdWhitelist',
   'files_excludePatterns',
   'tts_responseMode',
   'tts_summaryPrompt',

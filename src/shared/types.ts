@@ -1,5 +1,10 @@
 // ─── Database Row Types ───────────────────────────────────────
 
+export interface CwdWhitelistEntry {
+  path: string
+  access: 'read' | 'readwrite'
+}
+
 export interface AIOverrides {
   ai_model?: string
   ai_maxTurns?: string
@@ -14,6 +19,7 @@ export interface AIOverrides {
   ai_skillsEnabled?: string    // 'true' | 'false'
   ai_disabledSkills?: string   // JSON string[] of disabled skill names
   hooks_cwdRestriction?: string
+  hooks_cwdWhitelist?: string  // JSON CwdWhitelistEntry[]
   files_excludePatterns?: string
   tts_responseMode?: string    // 'off' | 'full' | 'summary' | 'auto'
   tts_summaryPrompt?: string   // prompt template with {response} placeholder

@@ -1,6 +1,11 @@
 import { useState, useMemo, useCallback } from 'react'
-import type { AIOverrides } from '../../shared/types'
+import type { AIOverrides, CwdWhitelistEntry } from '../../shared/types'
 import { parseMcpDisabledList } from '../utils/mcpUtils'
+
+function parseCwdWhitelist(json: string | undefined): CwdWhitelistEntry[] {
+  if (!json) return []
+  try { const arr = JSON.parse(json); return Array.isArray(arr) ? arr : [] } catch { return [] }
+}
 
 export function useOverrideDraft(
   initialOverrides: AIOverrides,
@@ -12,6 +17,10 @@ export function useOverrideDraft(
   const mcpDisabledInherited = useMemo(() => parseMcpDisabledList(fallbackValues['ai_mcpDisabled']), [fallbackValues])
 
   const mcpOverridden = draft.ai_mcpDisabled !== undefined
+
+  const cwdWhitelistDraft = useMemo(() => parseCwdWhitelist(draft.hooks_cwdWhitelist), [draft.hooks_cwdWhitelist])
+  const cwdWhitelistInherited = useMemo(() => parseCwdWhitelist(fallbackValues['hooks_cwdWhitelist']), [fallbackValues])
+  const cwdWhitelistOverridden = draft.hooks_cwdWhitelist !== undefined
 
   const toggleMcpOverride = useCallback(() => {
     setDraft((prev) => {
@@ -37,6 +46,22 @@ export function useOverrideDraft(
     })
   }, [])
 
+  const toggleCwdWhitelistOverride = useCallback(() => {
+    setDraft((prev) => {
+      const next = { ...prev }
+      if (next.hooks_cwdWhitelist !== undefined) {
+        delete next.hooks_cwdWhitelist
+      } else {
+        next.hooks_cwdWhitelist = fallbackValues['hooks_cwdWhitelist'] || '[]'
+      }
+      return next
+    })
+  }, [fallbackValues])
+
+  const setCwdWhitelist = useCallback((entries: CwdWhitelistEntry[]) => {
+    setDraft((prev) => ({ ...prev, hooks_cwdWhitelist: JSON.stringify(entries) }))
+  }, [])
+
   const toggleOverride = useCallback((key: string) => {
     setDraft((prev) => {
       const next = { ...prev }
@@ -57,8 +82,8 @@ export function useOverrideDraft(
     const cleaned: AIOverrides = {}
     for (const [k, v] of Object.entries(draft)) {
       if (v !== undefined && v !== '') {
-        if (k === 'ai_mcpDisabled') {
-          cleaned[k] = v
+        if (k === 'ai_mcpDisabled' || k === 'hooks_cwdWhitelist') {
+          cleaned[k as keyof AIOverrides] = v
         } else {
           cleaned[k as keyof AIOverrides] = v
         }
@@ -74,6 +99,11 @@ export function useOverrideDraft(
     mcpOverridden,
     toggleMcpOverride,
     toggleMcpServer,
+    cwdWhitelistDraft,
+    cwdWhitelistInherited,
+    cwdWhitelistOverridden,
+    toggleCwdWhitelistOverride,
+    setCwdWhitelist,
     toggleOverride,
     setValue,
     cleanDraft,

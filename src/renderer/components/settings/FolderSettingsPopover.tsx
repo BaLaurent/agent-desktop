@@ -29,7 +29,10 @@ export function FolderSettingsPopover({
 
   const {
     draft, mcpDisabledDraft, mcpDisabledInherited, mcpOverridden,
-    toggleMcpOverride, toggleMcpServer, toggleOverride, setValue, cleanDraft,
+    toggleMcpOverride, toggleMcpServer,
+    cwdWhitelistDraft, cwdWhitelistInherited, cwdWhitelistOverridden,
+    toggleCwdWhitelistOverride, setCwdWhitelist,
+    toggleOverride, setValue, cleanDraft,
   } = useOverrideDraft(parseOverrides(folder.ai_overrides), globalSettings)
 
   const handleBrowseCwd = async () => {
@@ -138,6 +141,11 @@ export function FolderSettingsPopover({
             onToggleOverride={toggleOverride}
             onToggleMcpOverride={toggleMcpOverride}
             onToggleMcpServer={toggleMcpServer}
+            cwdWhitelistDraft={cwdWhitelistDraft}
+            cwdWhitelistInherited={cwdWhitelistInherited}
+            isCwdWhitelistOverridden={cwdWhitelistOverridden}
+            onToggleCwdWhitelistOverride={toggleCwdWhitelistOverride}
+            onCwdWhitelistChange={setCwdWhitelist}
           />
         </div>
       </div>

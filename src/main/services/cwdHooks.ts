@@ -1,5 +1,6 @@
 import { resolve, normalize, sep } from 'path'
 import { expandTilde } from '../utils/paths'
+import type { CwdWhitelistEntry } from '../../shared/types'
 
 /**
  * Checks whether a file path resolves outside the given CWD.
@@ -39,6 +40,41 @@ export function isPathOutsideAllowed(filePath: string, cwd: string, additionalPa
   }
 
   return outsideCwd  // outside all allowed paths
+}
+
+/**
+ * Checks whether a file path is outside CWD and all whitelist entries (both read and readwrite).
+ * Returns null if inside any allowed read dir, resolved path if outside all.
+ */
+export function isPathOutsideReadAllowed(filePath: string, cwd: string, whitelist: CwdWhitelistEntry[]): string | null {
+  const outsideCwd = isPathOutsideCwd(filePath, cwd)
+  if (!outsideCwd) return null
+
+  for (const entry of whitelist) {
+    const outside = isPathOutsideCwd(filePath, entry.path)
+    if (!outside) return null
+  }
+
+  return outsideCwd
+}
+
+/**
+ * Checks whether a file path is outside CWD and all readwrite whitelist entries.
+ * Read-only entries do NOT grant write access.
+ * Returns null if inside any writable dir, resolved path if outside all.
+ */
+export function isPathOutsideWriteAllowed(filePath: string, cwd: string, whitelist: CwdWhitelistEntry[]): string | null {
+  const outsideCwd = isPathOutsideCwd(filePath, cwd)
+  if (!outsideCwd) return null
+
+  for (const entry of whitelist) {
+    if (entry.access === 'readwrite') {
+      const outside = isPathOutsideCwd(filePath, entry.path)
+      if (!outside) return null
+    }
+  }
+
+  return outsideCwd
 }
 
 /**
@@ -112,6 +148,69 @@ export function extractBashWritePaths(command: string): string[] {
   return Array.from(paths)
 }
 
+/**
+ * Best-effort extraction of read-target paths from a Bash command.
+ * Detects common read commands: cat, head, tail, less, find, ls, tree, file, stat, wc, diff, strings, xxd.
+ */
+export function extractBashReadPaths(command: string): string[] {
+  const paths = new Set<string>()
+
+  // Single-target read commands: extract all non-flag arguments
+  const singleTargetCmds = ['cat', 'head', 'tail', 'less', 'file', 'stat', 'wc', 'strings', 'xxd']
+  for (const cmd of singleTargetCmds) {
+    const regex = new RegExp(`\\b${cmd}\\s+(.+?)(?:[;&|]|$)`, 'g')
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(command)) !== null) {
+      const args = splitShellArgs(match[1])
+      for (const arg of args) {
+        if (!arg.startsWith('-')) paths.add(arg)
+      }
+    }
+  }
+
+  // find: first non-flag argument is the search path
+  const findRegex = /\bfind\s+(.+?)(?:[;&|]|$)/g
+  let match: RegExpExecArray | null
+  while ((match = findRegex.exec(command)) !== null) {
+    const args = splitShellArgs(match[1])
+    for (const arg of args) {
+      if (!arg.startsWith('-')) {
+        paths.add(arg)
+        break  // find's first non-flag arg is the path
+      }
+    }
+  }
+
+  // ls: all non-flag arguments
+  const lsRegex = /\bls\s+(.+?)(?:[;&|]|$)/g
+  while ((match = lsRegex.exec(command)) !== null) {
+    const args = splitShellArgs(match[1])
+    for (const arg of args) {
+      if (!arg.startsWith('-')) paths.add(arg)
+    }
+  }
+
+  // tree: all non-flag arguments
+  const treeRegex = /\btree\s+(.+?)(?:[;&|]|$)/g
+  while ((match = treeRegex.exec(command)) !== null) {
+    const args = splitShellArgs(match[1])
+    for (const arg of args) {
+      if (!arg.startsWith('-')) paths.add(arg)
+    }
+  }
+
+  // diff: both non-flag arguments are paths
+  const diffRegex = /\bdiff\s+(.+?)(?:[;&|]|$)/g
+  while ((match = diffRegex.exec(command)) !== null) {
+    const args = splitShellArgs(match[1])
+    for (const arg of args) {
+      if (!arg.startsWith('-')) paths.add(arg)
+    }
+  }
+
+  return Array.from(paths)
+}
+
 /** Naive shell arg splitter — handles simple quoting */
 function splitShellArgs(s: string): string[] {
   const args: string[] = []
@@ -153,6 +252,15 @@ type HookCallback = (
   context: { signal: AbortSignal }
 ) => Promise<HookResult>
 
+/** Normalize legacy string[] to CwdWhitelistEntry[] (all readwrite) */
+function normalizeWhitelist(input?: CwdWhitelistEntry[] | string[]): CwdWhitelistEntry[] | undefined {
+  if (!input || input.length === 0) return undefined
+  if (typeof input[0] === 'string') {
+    return (input as string[]).map(p => ({ path: p, access: 'readwrite' as const }))
+  }
+  return input as CwdWhitelistEntry[]
+}
+
 /**
  * Builds SDK-compatible hooks for CWD restriction.
  * Uses the correct Agent SDK hooks API:
@@ -160,19 +268,65 @@ type HookCallback = (
  *
  * The callback follows the SDK signature: (input, toolUseID, { signal })
  * and returns { hookSpecificOutput: { hookEventName, permissionDecision, ... } }
+ *
+ * When whitelist is provided, read tools (Read, Glob, Grep) are also checked
+ * and Bash read commands are validated against read-allowed directories.
+ *
+ * Accepts either CwdWhitelistEntry[] or legacy string[] (treated as readwrite).
  */
-export function buildCwdRestrictionHooks(cwd: string, additionalWritablePaths?: string[]) {
+export function buildCwdRestrictionHooks(cwd: string, whitelistOrPaths?: CwdWhitelistEntry[] | string[]) {
+  const whitelist = normalizeWhitelist(whitelistOrPaths)
+  const hasWhitelist = whitelist && whitelist.length > 0
+
   const cwdRestrictionHook: HookCallback = async (input, _toolUseId, _context) => {
     const toolName = input.tool_name
     const toolInput = input.tool_input
+
+    // Read tool: check file_path (only when whitelist is non-empty)
+    if (toolName === 'Read' && hasWhitelist) {
+      const filePath = toolInput.file_path as string | undefined
+      if (filePath) {
+        const outside = isPathOutsideReadAllowed(filePath, cwd, whitelist)
+        if (outside) {
+          return makeDenyResult(input.hook_event_name, toolName, outside, cwd, whitelist)
+        }
+      }
+      return {}
+    }
+
+    // Glob: check path (only when whitelist is non-empty)
+    if (toolName === 'Glob' && hasWhitelist) {
+      const globPath = toolInput.path as string | undefined
+      if (globPath) {
+        const outside = isPathOutsideReadAllowed(globPath, cwd, whitelist)
+        if (outside) {
+          return makeDenyResult(input.hook_event_name, toolName, outside, cwd, whitelist)
+        }
+      }
+      return {}
+    }
+
+    // Grep: check path (only when whitelist is non-empty)
+    if (toolName === 'Grep' && hasWhitelist) {
+      const grepPath = toolInput.path as string | undefined
+      if (grepPath) {
+        const outside = isPathOutsideReadAllowed(grepPath, cwd, whitelist)
+        if (outside) {
+          return makeDenyResult(input.hook_event_name, toolName, outside, cwd, whitelist)
+        }
+      }
+      return {}
+    }
 
     // Write / Edit: check file_path
     if (toolName === 'Write' || toolName === 'Edit') {
       const filePath = toolInput.file_path as string | undefined
       if (filePath) {
-        const outside = isPathOutsideAllowed(filePath, cwd, additionalWritablePaths)
+        const outside = hasWhitelist
+          ? isPathOutsideWriteAllowed(filePath, cwd, whitelist)
+          : isPathOutsideAllowed(filePath, cwd)
         if (outside) {
-          return makeDenyResult(input.hook_event_name, toolName, outside, cwd, additionalWritablePaths)
+          return makeDenyResult(input.hook_event_name, toolName, outside, cwd, hasWhitelist ? whitelist : undefined)
         }
       }
       return {}
@@ -182,36 +336,56 @@ export function buildCwdRestrictionHooks(cwd: string, additionalWritablePaths?: 
     if (toolName === 'NotebookEdit') {
       const nbPath = toolInput.notebook_path as string | undefined
       if (nbPath) {
-        const outside = isPathOutsideAllowed(nbPath, cwd, additionalWritablePaths)
+        const outside = hasWhitelist
+          ? isPathOutsideWriteAllowed(nbPath, cwd, whitelist)
+          : isPathOutsideAllowed(nbPath, cwd)
         if (outside) {
-          return makeDenyResult(input.hook_event_name, 'NotebookEdit', outside, cwd, additionalWritablePaths)
+          return makeDenyResult(input.hook_event_name, 'NotebookEdit', outside, cwd, hasWhitelist ? whitelist : undefined)
         }
       }
       return {}
     }
 
-    // Bash: best-effort parse for write targets
+    // Bash: best-effort parse for write targets + read targets (when whitelist exists)
     if (toolName === 'Bash') {
       const command = toolInput.command as string | undefined
       if (command) {
+        // Check write paths
         const writePaths = extractBashWritePaths(command)
         for (const p of writePaths) {
-          const outside = isPathOutsideAllowed(p, cwd, additionalWritablePaths)
+          const outside = hasWhitelist
+            ? isPathOutsideWriteAllowed(p, cwd, whitelist)
+            : isPathOutsideAllowed(p, cwd)
           if (outside) {
-            return makeDenyResult(input.hook_event_name, 'Bash', outside, cwd, additionalWritablePaths)
+            return makeDenyResult(input.hook_event_name, 'Bash', outside, cwd, hasWhitelist ? whitelist : undefined)
+          }
+        }
+
+        // Check read paths (only when whitelist is non-empty)
+        if (hasWhitelist) {
+          const readPaths = extractBashReadPaths(command)
+          for (const p of readPaths) {
+            const outside = isPathOutsideReadAllowed(p, cwd, whitelist)
+            if (outside) {
+              return makeDenyResult(input.hook_event_name, 'Bash', outside, cwd, whitelist)
+            }
           }
         }
       }
       return {}
     }
 
-    // Read-only tools and unknown tools: allow
+    // Unknown tools: allow
     return {}
   }
 
+  const matcher = hasWhitelist
+    ? 'Write|Edit|NotebookEdit|Bash|Read|Glob|Grep'
+    : 'Write|Edit|NotebookEdit|Bash'
+
   return {
     PreToolUse: [
-      { matcher: 'Write|Edit|NotebookEdit|Bash', hooks: [cwdRestrictionHook] },
+      { matcher, hooks: [cwdRestrictionHook] },
     ],
   }
 }
@@ -221,9 +395,15 @@ function makeDenyResult(
   toolName: string,
   resolvedPath: string,
   cwd: string,
-  additionalPaths?: string[]
+  whitelist?: CwdWhitelistEntry[]
 ): HookResult {
-  const allowedDirs = [cwd, ...(additionalPaths || [])].map(d => `"${d}"`).join(', ')
+  let allowedDirs: string
+  if (whitelist && whitelist.length > 0) {
+    const dirs = [`"${cwd}" (readwrite)`, ...whitelist.map(e => `"${e.path}" (${e.access})`)].join(', ')
+    allowedDirs = dirs
+  } else {
+    allowedDirs = `"${cwd}"`
+  }
   return {
     hookSpecificOutput: {
       hookEventName,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { isPathOutsideCwd, isPathOutsideAllowed, extractBashWritePaths, buildCwdRestrictionHooks } from './cwdHooks'
+import { isPathOutsideCwd, isPathOutsideAllowed, extractBashWritePaths, extractBashReadPaths, isPathOutsideReadAllowed, isPathOutsideWriteAllowed, buildCwdRestrictionHooks } from './cwdHooks'
+import type { CwdWhitelistEntry } from '../../shared/types'
 
 describe('isPathOutsideCwd', () => {
   it('returns null for absolute path inside CWD', () => {
@@ -362,6 +363,302 @@ describe('buildCwdRestrictionHooks with additional paths', () => {
 
   it('denies NotebookEdit outside all allowed dirs', async () => {
     const result = await callHookWithPaths('NotebookEdit', { notebook_path: '/tmp/nb.ipynb' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+})
+
+// ─── New tests for whitelist feature ─────────────────────────
+
+describe('extractBashReadPaths', () => {
+  it('extracts cat path', () => {
+    expect(extractBashReadPaths('cat /tmp/file.txt')).toContain('/tmp/file.txt')
+  })
+
+  it('extracts head path with flags', () => {
+    expect(extractBashReadPaths('head -n 10 /tmp/file.txt')).toContain('/tmp/file.txt')
+  })
+
+  it('extracts tail path with flags', () => {
+    expect(extractBashReadPaths('tail -f /tmp/log.txt')).toContain('/tmp/log.txt')
+  })
+
+  it('extracts less path', () => {
+    expect(extractBashReadPaths('less /tmp/readme.md')).toContain('/tmp/readme.md')
+  })
+
+  it('extracts find search path', () => {
+    expect(extractBashReadPaths('find /tmp -name "*.ts"')).toContain('/tmp')
+  })
+
+  it('extracts ls path', () => {
+    expect(extractBashReadPaths('ls -la /tmp/dir')).toContain('/tmp/dir')
+  })
+
+  it('extracts tree path', () => {
+    expect(extractBashReadPaths('tree /tmp/project')).toContain('/tmp/project')
+  })
+
+  it('extracts file path', () => {
+    expect(extractBashReadPaths('file /tmp/binary')).toContain('/tmp/binary')
+  })
+
+  it('extracts stat path', () => {
+    expect(extractBashReadPaths('stat /tmp/file.txt')).toContain('/tmp/file.txt')
+  })
+
+  it('extracts wc path with flags', () => {
+    expect(extractBashReadPaths('wc -l /tmp/file.txt')).toContain('/tmp/file.txt')
+  })
+
+  it('extracts both diff paths', () => {
+    const paths = extractBashReadPaths('diff /tmp/a.txt /tmp/b.txt')
+    expect(paths).toContain('/tmp/a.txt')
+    expect(paths).toContain('/tmp/b.txt')
+  })
+
+  it('extracts strings path', () => {
+    expect(extractBashReadPaths('strings /tmp/binary')).toContain('/tmp/binary')
+  })
+
+  it('extracts xxd path', () => {
+    expect(extractBashReadPaths('xxd /tmp/file')).toContain('/tmp/file')
+  })
+
+  it('extracts path from piped command', () => {
+    const paths = extractBashReadPaths('cat /tmp/file.txt | grep pattern')
+    expect(paths).toContain('/tmp/file.txt')
+  })
+
+  it('extracts quoted path', () => {
+    const paths = extractBashReadPaths('cat "/tmp/my file.txt"')
+    expect(paths).toContain('/tmp/my file.txt')
+  })
+
+  it('returns empty for non-read commands', () => {
+    expect(extractBashReadPaths('echo hello')).toEqual([])
+  })
+})
+
+describe('isPathOutsideReadAllowed', () => {
+  const cwd = '/home/user/project'
+  const whitelist: CwdWhitelistEntry[] = [
+    { path: '/data/readonly', access: 'read' },
+    { path: '/data/writable', access: 'readwrite' },
+  ]
+
+  it('returns null for path inside CWD', () => {
+    expect(isPathOutsideReadAllowed('/home/user/project/src/file.ts', cwd, whitelist)).toBeNull()
+  })
+
+  it('returns null for path inside a read entry', () => {
+    expect(isPathOutsideReadAllowed('/data/readonly/docs/file.md', cwd, whitelist)).toBeNull()
+  })
+
+  it('returns null for path inside a readwrite entry', () => {
+    expect(isPathOutsideReadAllowed('/data/writable/output.txt', cwd, whitelist)).toBeNull()
+  })
+
+  it('returns resolved path when outside all allowed dirs', () => {
+    const result = isPathOutsideReadAllowed('/tmp/evil.txt', cwd, whitelist)
+    expect(result).toBe('/tmp/evil.txt')
+  })
+
+  it('returns resolved path when whitelist is empty (only CWD checked)', () => {
+    const result = isPathOutsideReadAllowed('/tmp/file.txt', cwd, [])
+    expect(result).toBe('/tmp/file.txt')
+  })
+})
+
+describe('isPathOutsideWriteAllowed', () => {
+  const cwd = '/home/user/project'
+  const whitelist: CwdWhitelistEntry[] = [
+    { path: '/data/readonly', access: 'read' },
+    { path: '/data/writable', access: 'readwrite' },
+  ]
+
+  it('returns null for path inside CWD', () => {
+    expect(isPathOutsideWriteAllowed('/home/user/project/src/file.ts', cwd, whitelist)).toBeNull()
+  })
+
+  it('returns null for path inside a readwrite entry', () => {
+    expect(isPathOutsideWriteAllowed('/data/writable/output.txt', cwd, whitelist)).toBeNull()
+  })
+
+  it('returns resolved path for path inside a read-only entry (blocked for write)', () => {
+    const result = isPathOutsideWriteAllowed('/data/readonly/docs/file.md', cwd, whitelist)
+    expect(result).toBe('/data/readonly/docs/file.md')
+  })
+
+  it('returns resolved path when outside all allowed dirs', () => {
+    const result = isPathOutsideWriteAllowed('/tmp/evil.txt', cwd, whitelist)
+    expect(result).toBe('/tmp/evil.txt')
+  })
+})
+
+describe('buildCwdRestrictionHooks with whitelist', () => {
+  const cwd = '/home/user/project'
+  const whitelist: CwdWhitelistEntry[] = [
+    { path: '/data/readonly', access: 'read' },
+    { path: '/data/writable', access: 'readwrite' },
+  ]
+  const abortController = new AbortController()
+  const ctx = { signal: abortController.signal }
+
+  function makeInput(toolName: string, toolInput: Record<string, unknown>) {
+    return {
+      hook_event_name: 'PreToolUse',
+      tool_name: toolName,
+      tool_input: toolInput,
+      session_id: 'test-session',
+      cwd,
+    }
+  }
+
+  async function callHook(toolName: string, toolInput: Record<string, unknown>) {
+    const hooks = buildCwdRestrictionHooks(cwd, whitelist)
+    const callback = hooks.PreToolUse[0].hooks[0]
+    return callback(makeInput(toolName, toolInput), null, ctx)
+  }
+
+  it('matcher includes Read|Glob|Grep', () => {
+    const hooks = buildCwdRestrictionHooks(cwd, whitelist)
+    expect(hooks.PreToolUse[0].matcher).toBe('Write|Edit|NotebookEdit|Bash|Read|Glob|Grep')
+  })
+
+  it('allows Read inside CWD', async () => {
+    const result = await callHook('Read', { file_path: '/home/user/project/src/file.ts' })
+    expect(result).toEqual({})
+  })
+
+  it('allows Read inside read-only entry', async () => {
+    const result = await callHook('Read', { file_path: '/data/readonly/docs/file.md' })
+    expect(result).toEqual({})
+  })
+
+  it('allows Read inside readwrite entry', async () => {
+    const result = await callHook('Read', { file_path: '/data/writable/output.txt' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Read outside all allowed dirs', async () => {
+    const result = await callHook('Read', { file_path: '/tmp/secret.txt' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+    expect(result.hookSpecificOutput!.permissionDecisionReason).toContain('/tmp/secret.txt')
+  })
+
+  it('allows Glob with path inside read entry', async () => {
+    const result = await callHook('Glob', { path: '/data/readonly/docs', pattern: '**/*.md' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Glob with path outside all', async () => {
+    const result = await callHook('Glob', { path: '/tmp/somewhere', pattern: '**/*.ts' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+
+  it('allows Glob with no path (defaults to cwd)', async () => {
+    const result = await callHook('Glob', { pattern: '**/*.ts' })
+    expect(result).toEqual({})
+  })
+
+  it('allows Grep with path inside entry', async () => {
+    const result = await callHook('Grep', { path: '/data/readonly/docs', pattern: 'test' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Grep with path outside all', async () => {
+    const result = await callHook('Grep', { path: '/tmp/somewhere', pattern: 'test' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+
+  it('allows Write inside CWD', async () => {
+    const result = await callHook('Write', { file_path: '/home/user/project/src/file.ts' })
+    expect(result).toEqual({})
+  })
+
+  it('allows Write inside readwrite entry', async () => {
+    const result = await callHook('Write', { file_path: '/data/writable/output.txt' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Write inside read-only entry', async () => {
+    const result = await callHook('Write', { file_path: '/data/readonly/docs/file.md' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+
+  it('denies Write outside all', async () => {
+    const result = await callHook('Write', { file_path: '/tmp/evil.txt' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+
+  it('allows Bash read command inside read entry', async () => {
+    const result = await callHook('Bash', { command: 'cat /data/readonly/docs/file.md' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Bash read command outside all', async () => {
+    const result = await callHook('Bash', { command: 'cat /tmp/secret.txt' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+
+  it('allows Bash write command inside readwrite entry', async () => {
+    const result = await callHook('Bash', { command: 'echo x > /data/writable/out.txt' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Bash write command inside read-only entry', async () => {
+    const result = await callHook('Bash', { command: 'echo x > /data/readonly/out.txt' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+})
+
+describe('buildCwdRestrictionHooks backward compat (empty whitelist)', () => {
+  const cwd = '/home/user/project'
+  const abortController = new AbortController()
+  const ctx = { signal: abortController.signal }
+
+  function makeInput(toolName: string, toolInput: Record<string, unknown>) {
+    return {
+      hook_event_name: 'PreToolUse',
+      tool_name: toolName,
+      tool_input: toolInput,
+      session_id: 'test-session',
+      cwd,
+    }
+  }
+
+  async function callHookEmpty(toolName: string, toolInput: Record<string, unknown>) {
+    const hooks = buildCwdRestrictionHooks(cwd)
+    const callback = hooks.PreToolUse[0].hooks[0]
+    return callback(makeInput(toolName, toolInput), null, ctx)
+  }
+
+  it('allows Read tool outside CWD (no read restriction with empty whitelist)', async () => {
+    const result = await callHookEmpty('Read', { file_path: '/tmp/anything.txt' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Write tool outside CWD (existing behavior)', async () => {
+    const result = await callHookEmpty('Write', { file_path: '/tmp/evil.txt' })
+    expect(result.hookSpecificOutput).toBeDefined()
+    expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
+  })
+
+  it('allows Bash read outside CWD (no read restriction)', async () => {
+    const result = await callHookEmpty('Bash', { command: 'cat /tmp/file.txt' })
+    expect(result).toEqual({})
+  })
+
+  it('denies Bash write outside CWD (existing behavior)', async () => {
+    const result = await callHookEmpty('Bash', { command: 'echo x > /tmp/test.txt' })
     expect(result.hookSpecificOutput).toBeDefined()
     expect(result.hookSpecificOutput!.permissionDecision).toBe('deny')
   })

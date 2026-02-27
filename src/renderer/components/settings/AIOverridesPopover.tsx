@@ -29,7 +29,10 @@ export function AIOverridesPopover({
 
   const {
     draft, mcpDisabledDraft, mcpDisabledInherited, mcpOverridden,
-    toggleMcpOverride, toggleMcpServer, toggleOverride, setValue, cleanDraft,
+    toggleMcpOverride, toggleMcpServer,
+    cwdWhitelistDraft, cwdWhitelistInherited, cwdWhitelistOverridden,
+    toggleCwdWhitelistOverride, setCwdWhitelist,
+    toggleOverride, setValue, cleanDraft,
   } = useOverrideDraft(overrides, inheritedValues)
 
   return (
@@ -74,6 +77,11 @@ export function AIOverridesPopover({
           onToggleOverride={toggleOverride}
           onToggleMcpOverride={toggleMcpOverride}
           onToggleMcpServer={toggleMcpServer}
+          cwdWhitelistDraft={cwdWhitelistDraft}
+          cwdWhitelistInherited={cwdWhitelistInherited}
+          isCwdWhitelistOverridden={cwdWhitelistOverridden}
+          onToggleCwdWhitelistOverride={toggleCwdWhitelistOverride}
+          onCwdWhitelistChange={setCwdWhitelist}
         />
       </div>
 
