@@ -42,8 +42,7 @@ export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }:
   }, [handleSave])
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1 rounded text-sm group"
-         style={{ backgroundColor: 'var(--color-surface)' }}>
+    <div className="flex items-center gap-1 px-2 py-1 rounded text-sm group bg-surface">
       <button
         className="cursor-grab opacity-50 hover:opacity-100 flex-shrink-0"
         onMouseDown={(e) => onDragStart(index, e)}
@@ -55,8 +54,7 @@ export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }:
       {editing ? (
         <input
           ref={inputRef}
-          className="flex-1 bg-transparent border-b outline-none text-body"
-          style={{ borderColor: 'var(--color-primary)' }}
+          className="flex-1 bg-transparent border-b border-primary outline-none text-body"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}

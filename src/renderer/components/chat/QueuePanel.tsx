@@ -49,7 +49,7 @@ export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onCl
   if (messages.length === 0) return null
 
   return (
-    <div className="flex-shrink-0 px-4 py-2 border-t" style={{ borderColor: 'var(--color-surface)' }}>
+    <div className="flex-shrink-0 px-4 py-2 border-t border-surface">
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-medium text-contrast">
           Queue ({messages.length}){paused ? ' — Paused' : ''}
@@ -57,16 +57,14 @@ export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onCl
         <div className="flex gap-1">
           {paused && (
             <button
-              className="text-xs px-2 py-0.5 rounded hover:opacity-80"
-              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-base)' }}
+              className="text-xs px-2 py-0.5 rounded bg-primary text-base hover:opacity-80"
               onClick={onResume}
             >
               ▶ Resume
             </button>
           )}
           <button
-            className="text-xs px-2 py-0.5 rounded opacity-60 hover:opacity-100"
-            style={{ color: 'var(--color-body)' }}
+            className="text-xs px-2 py-0.5 rounded text-body opacity-60 hover:opacity-100"
             onClick={onClear}
             aria-label="Clear queue"
           >
