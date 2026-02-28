@@ -26,6 +26,7 @@ import type {
   JupyterOutputChunk,
 } from '../shared/types'
 import type { PIExtensionInfo } from '../shared/constants'
+import type { PiUIEvent, PiUIRequest, PiUIResponse } from '../shared/piUITypes'
 
 export interface AgentAPI {
   auth: {
@@ -102,6 +103,9 @@ export interface AgentAPI {
   }
   pi: {
     listExtensions(): Promise<PIExtensionInfo[]>
+    onUIEvent(callback: (event: PiUIEvent) => void): () => void
+    onUIRequest(callback: (request: PiUIRequest) => void): () => void
+    respondUI(id: string, response: PiUIResponse): void
   }
   settings: {
     get(): Promise<Record<string, string>>

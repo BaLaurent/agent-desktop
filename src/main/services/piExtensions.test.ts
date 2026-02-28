@@ -87,11 +87,13 @@ describe('discoverPIExtensions', () => {
 
 describe('registerHandlers', () => {
   let mockHandle: ReturnType<typeof vi.fn>
+  let mockOn: ReturnType<typeof vi.fn>
   let mockDb: { prepare: ReturnType<typeof vi.fn> }
   let mockPrepare: { get: ReturnType<typeof vi.fn> }
 
   beforeEach(() => {
     mockHandle = vi.fn()
+    mockOn = vi.fn()
     mockPrepare = { get: vi.fn().mockReturnValue(undefined) }
     mockDb = { prepare: vi.fn().mockReturnValue(mockPrepare) }
 
@@ -101,12 +103,12 @@ describe('registerHandlers', () => {
   })
 
   it('registers pi:listExtensions handler', () => {
-    registerHandlers({ handle: mockHandle } as never, mockDb as never)
+    registerHandlers({ handle: mockHandle, on: mockOn } as never, mockDb as never)
     expect(mockHandle).toHaveBeenCalledWith('pi:listExtensions', expect.any(Function))
   })
 
   it('reads pi_extensionsDir from settings db', async () => {
-    registerHandlers({ handle: mockHandle } as never, mockDb as never)
+    registerHandlers({ handle: mockHandle, on: mockOn } as never, mockDb as never)
 
     const handler = mockHandle.mock.calls[0][1]
     await handler()
@@ -119,7 +121,7 @@ describe('registerHandlers', () => {
 
   it('passes extensionsDir to discoverPIExtensions when set in db', async () => {
     mockPrepare.get.mockReturnValue({ value: '/custom/ext/dir' })
-    registerHandlers({ handle: mockHandle } as never, mockDb as never)
+    registerHandlers({ handle: mockHandle, on: mockOn } as never, mockDb as never)
 
     const handler = mockHandle.mock.calls[0][1]
     await handler()
@@ -133,7 +135,7 @@ describe('registerHandlers', () => {
 
   it('passes undefined when pi_extensionsDir not in db', async () => {
     mockPrepare.get.mockReturnValue(undefined)
-    registerHandlers({ handle: mockHandle } as never, mockDb as never)
+    registerHandlers({ handle: mockHandle, on: mockOn } as never, mockDb as never)
 
     const handler = mockHandle.mock.calls[0][1]
     await handler()

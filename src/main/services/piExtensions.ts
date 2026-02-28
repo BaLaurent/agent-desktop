@@ -1,6 +1,7 @@
 import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'
 import type { PIExtensionInfo } from '../../shared/constants'
+import type { PiUIResponse } from '../../shared/piUITypes'
 import { loadPISdk } from './piSdk'
 
 export async function discoverPIExtensions(extensionsDir?: string): Promise<PIExtensionInfo[]> {
@@ -23,6 +24,17 @@ export async function discoverPIExtensions(extensionsDir?: string): Promise<PIEx
   }))
 }
 
+// Registry of active PiUIContext instances (keyed by conversationId)
+const activeContexts = new Map<number, { handleResponse: (r: PiUIResponse) => void }>()
+
+export function registerPiUIContext(conversationId: number, ctx: { handleResponse: (r: PiUIResponse) => void }): void {
+  activeContexts.set(conversationId, ctx)
+}
+
+export function unregisterPiUIContext(conversationId: number): void {
+  activeContexts.delete(conversationId)
+}
+
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('pi:listExtensions', async () => {
     const row = db
@@ -30,5 +42,11 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       .get() as { value: string } | undefined
     const extensionsDir = row?.value || undefined
     return discoverPIExtensions(extensionsDir)
+  })
+
+  ipcMain.on('pi:uiResponse', (_event, response: PiUIResponse) => {
+    for (const ctx of activeContexts.values()) {
+      ctx.handleResponse(response)
+    }
   })
 }
