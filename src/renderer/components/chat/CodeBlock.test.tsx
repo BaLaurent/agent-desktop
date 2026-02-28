@@ -2,7 +2,10 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import { CodeBlock } from './CodeBlock'
 
 vi.mock('../../lib/hljs', () => ({
-  default: { highlightElement: vi.fn() },
+  default: {
+    highlightElement: vi.fn(),
+    highlightAuto: vi.fn().mockReturnValue({ language: undefined, value: '', relevance: 0 }),
+  },
 }))
 
 import hljs from '../../lib/hljs'
@@ -103,11 +106,13 @@ describe('CodeBlock', () => {
     expect(hljs.highlightElement).toHaveBeenCalled()
   })
 
-  it('does not call hljs.highlightElement when no language', () => {
+  it('does not call hljs.highlightElement when no language (uses highlightAuto instead)', () => {
     vi.mocked(hljs.highlightElement).mockClear()
+    vi.mocked(hljs.highlightAuto).mockClear()
     render(<CodeBlock>{shortCode}</CodeBlock>)
     act(() => { vi.advanceTimersByTime(150) })
     expect(hljs.highlightElement).not.toHaveBeenCalled()
+    expect(hljs.highlightAuto).toHaveBeenCalledWith(shortCode)
   })
 
   it('does not call hljs.highlightElement when collapsed', () => {
@@ -130,5 +135,62 @@ describe('CodeBlock', () => {
     // After final chunk settles
     act(() => { vi.advanceTimersByTime(150) })
     expect(hljs.highlightElement).toHaveBeenCalledTimes(1)
+  })
+
+  // --- Auto-detection tests ---
+
+  it('shows detected language label when highlightAuto returns high relevance', () => {
+    vi.mocked(hljs.highlightAuto).mockReturnValue({
+      language: 'python',
+      value: '<span class="hljs-built_in">print</span>(<span class="hljs-string">"hello"</span>)',
+      relevance: 10,
+    } as any)
+    render(<CodeBlock>{'print("hello")'}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(screen.getByText('python')).toBeInTheDocument()
+  })
+
+  it('shows "text" when highlightAuto relevance is below threshold', () => {
+    vi.mocked(hljs.highlightAuto).mockReturnValue({
+      language: 'yaml',
+      value: 'hello world',
+      relevance: 2,
+    } as any)
+    render(<CodeBlock>{'hello world'}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(screen.getByText('text')).toBeInTheDocument()
+  })
+
+  it('shows "text" when highlightAuto returns no language', () => {
+    vi.mocked(hljs.highlightAuto).mockReturnValue({
+      language: undefined,
+      value: '┌──────┐',
+      relevance: 0,
+    } as any)
+    render(<CodeBlock>{'┌──────┐'}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(screen.getByText('text')).toBeInTheDocument()
+  })
+
+  it('applies highlighted HTML from highlightAuto when detected', () => {
+    const highlightedHtml = '<span class="hljs-keyword">const</span> x = 1'
+    vi.mocked(hljs.highlightAuto).mockReturnValue({
+      language: 'javascript',
+      value: highlightedHtml,
+      relevance: 8,
+    } as any)
+    const { container } = render(<CodeBlock>{'const x = 1'}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    const code = container.querySelector('code')
+    expect(code?.innerHTML).toBe(highlightedHtml)
+  })
+
+  it('prefers explicit language over auto-detection', () => {
+    vi.mocked(hljs.highlightElement).mockClear()
+    vi.mocked(hljs.highlightAuto).mockClear()
+    render(<CodeBlock language="typescript">{shortCode}</CodeBlock>)
+    act(() => { vi.advanceTimersByTime(150) })
+    expect(hljs.highlightElement).toHaveBeenCalled()
+    expect(hljs.highlightAuto).not.toHaveBeenCalled()
   })
 })

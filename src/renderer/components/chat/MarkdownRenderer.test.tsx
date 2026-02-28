@@ -4,7 +4,10 @@ import { useFileExplorerStore } from '../../stores/fileExplorerStore'
 import { useUiStore } from '../../stores/uiStore'
 
 vi.mock('../../lib/hljs', () => ({
-  default: { highlightElement: vi.fn() },
+  default: {
+    highlightElement: vi.fn(),
+    highlightAuto: vi.fn().mockReturnValue({ language: undefined, value: '', relevance: 0 }),
+  },
 }))
 
 beforeAll(() => {
