@@ -149,6 +149,27 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
       textareaRef.current?.focus()
     }, [externalText])
 
+    // Auto-focus: redirect keystrokes to textarea when no interactive element has focus
+    useEffect(() => {
+      const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        if (disabled) return
+        // Don't intercept if already in a text-input element
+        const active = document.activeElement
+        if (active && (
+          active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.tagName === 'SELECT' ||
+          (active as HTMLElement).isContentEditable
+        )) return
+        // Don't intercept shortcuts or special keys
+        if (e.ctrlKey || e.metaKey || e.altKey) return
+        if (e.key.length !== 1) return
+        textareaRef.current?.focus()
+      }
+      document.addEventListener('keydown', handleGlobalKeyDown)
+      return () => document.removeEventListener('keydown', handleGlobalKeyDown)
+    }, [disabled])
+
     // Auto-resize textarea
     useEffect(() => {
       const el = textareaRef.current
