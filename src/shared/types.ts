@@ -41,6 +41,7 @@ export interface Conversation {
   cleared_at: string | null
   compact_summary: string | null
   sdk_session_id: string | null
+  color: string | null
   created_at: string
   updated_at: string
 }

@@ -407,4 +407,60 @@ describe('Conversations Service', () => {
       await expect(ipc.invoke('conversations:fork', conv.id, 99999)).rejects.toThrow('Message not found')
     })
   })
+
+  describe('color', () => {
+    it('sets color on a conversation via update', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Colored') as any
+      await ipc.invoke('conversations:update', conv.id, { color: '#ef4444' })
+      const updated = await ipc.invoke('conversations:get', conv.id) as any
+      expect(updated.color).toBe('#ef4444')
+    })
+
+    it('clears color with null', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Colored') as any
+      await ipc.invoke('conversations:update', conv.id, { color: '#ef4444' })
+      await ipc.invoke('conversations:update', conv.id, { color: null })
+      const updated = await ipc.invoke('conversations:get', conv.id) as any
+      expect(updated.color).toBeNull()
+    })
+
+    it('rejects invalid color format', async () => {
+      const conv = await ipc.invoke('conversations:create', 'Bad') as any
+      await expect(
+        ipc.invoke('conversations:update', conv.id, { color: 'red' })
+      ).rejects.toThrow('color must be a valid hex color')
+    })
+
+    it('defaults color to null on new conversations', async () => {
+      const conv = await ipc.invoke('conversations:create', 'No Color') as any
+      expect(conv.color).toBeNull()
+    })
+
+    it('colorMany sets color on multiple conversations', async () => {
+      const c1 = await ipc.invoke('conversations:create', 'A') as any
+      const c2 = await ipc.invoke('conversations:create', 'B') as any
+      await ipc.invoke('conversations:colorMany', [c1.id, c2.id], '#22c55e')
+      const u1 = await ipc.invoke('conversations:get', c1.id) as any
+      const u2 = await ipc.invoke('conversations:get', c2.id) as any
+      expect(u1.color).toBe('#22c55e')
+      expect(u2.color).toBe('#22c55e')
+    })
+
+    it('colorMany clears color with null', async () => {
+      const c1 = await ipc.invoke('conversations:create', 'A') as any
+      await ipc.invoke('conversations:update', c1.id, { color: '#ef4444' })
+      await ipc.invoke('conversations:colorMany', [c1.id], null)
+      const u1 = await ipc.invoke('conversations:get', c1.id) as any
+      expect(u1.color).toBeNull()
+    })
+
+    it('colorMany rejects invalid ids', async () => {
+      await expect(ipc.invoke('conversations:colorMany', [-1], '#ef4444')).rejects.toThrow()
+    })
+
+    it('colorMany rejects invalid color', async () => {
+      const c1 = await ipc.invoke('conversations:create', 'A') as any
+      await expect(ipc.invoke('conversations:colorMany', [c1.id], 'bad')).rejects.toThrow('color must be a valid hex color')
+    })
+  })
 })

@@ -64,7 +64,11 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       if (data.ai_overrides !== undefined && data.ai_overrides !== null) validateString(data.ai_overrides as string, 'ai_overrides', 10_000)
       if (data.cleared_at !== undefined && data.cleared_at !== null) validateString(data.cleared_at as string, 'cleared_at', 50)
       if (data.folder_id !== undefined && data.folder_id !== null) validatePositiveInt(data.folder_id as number, 'folderId')
-      const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides', 'cleared_at', 'compact_summary', 'sdk_session_id']
+      if (data.color !== undefined && data.color !== null) {
+        const c = data.color as string
+        if (!/^#[0-9a-fA-F]{6}$/.test(c)) throw new Error('color must be a valid hex color (#rrggbb)')
+      }
+      const allowed = ['title', 'folder_id', 'position', 'model', 'system_prompt', 'kb_enabled', 'cwd', 'ai_overrides', 'cleared_at', 'compact_summary', 'sdk_session_id', 'color']
       // Auto-clear SDK session when cleared_at is set — session context no longer matches
       if (data.cleared_at !== undefined && data.cleared_at !== null) {
         data.sdk_session_id = null
@@ -108,6 +112,16 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     if (folderId !== null) validatePositiveInt(folderId, 'folderId')
     const stmt = db.prepare("UPDATE conversations SET folder_id = ?, updated_at = datetime('now') WHERE id = ?")
     db.transaction(() => { for (const id of ids) stmt.run(folderId, id) })()
+  })
+
+  ipcMain.handle('conversations:colorMany', (_e, ids: number[], color: string | null) => {
+    if (!Array.isArray(ids) || ids.length === 0) return
+    for (const id of ids) validatePositiveInt(id, 'conversationId')
+    if (color !== null) {
+      if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error('color must be a valid hex color (#rrggbb)')
+    }
+    const stmt = db.prepare("UPDATE conversations SET color = ?, updated_at = datetime('now') WHERE id = ?")
+    db.transaction(() => { for (const id of ids) stmt.run(color, id) })()
   })
 
   ipcMain.handle(

@@ -27,6 +27,7 @@ const api: AgentAPI = {
     delete: (id) => withTimeout(ipcRenderer.invoke('conversations:delete', id)),
     deleteMany: (ids: number[]) => withTimeout(ipcRenderer.invoke('conversations:deleteMany', ids)),
     moveMany: (ids: number[], folderId: number | null) => withTimeout(ipcRenderer.invoke('conversations:moveMany', ids, folderId)),
+    colorMany: (ids: number[], color: string | null) => withTimeout(ipcRenderer.invoke('conversations:colorMany', ids, color)),
     export: (id, format) => withTimeout(ipcRenderer.invoke('conversations:export', id, format)),
     import: (data) => withTimeout(ipcRenderer.invoke('conversations:import', data)),
     search: (query) => withTimeout(ipcRenderer.invoke('conversations:search', query)),
