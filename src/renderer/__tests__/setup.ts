@@ -141,6 +141,7 @@ export const mockAgent = {
       capturedConversationUpdatedListener = cb
       return () => {}
     }),
+    onAutoThemeSwitch: vi.fn().mockReturnValue(() => {}),
   },
   window: {
     minimize: vi.fn(),

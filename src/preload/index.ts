@@ -246,6 +246,11 @@ const api: AgentAPI = {
       ipcRenderer.on('messages:conversationUpdated', handler)
       return () => { ipcRenderer.removeListener('messages:conversationUpdated', handler) }
     },
+    onAutoThemeSwitch: (callback: (filename: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, filename: string) => callback(filename)
+      ipcRenderer.on('theme:autoSwitch', handler)
+      return () => { ipcRenderer.removeListener('theme:autoSwitch', handler) }
+    },
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

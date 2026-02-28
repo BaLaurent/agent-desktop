@@ -208,6 +208,7 @@ export interface AgentAPI {
     onOverlayStopRecording(callback: () => void): () => void
     onConversationsRefresh(callback: () => void): () => void
     onConversationUpdated(callback: (conversationId: number) => void): () => void
+    onAutoThemeSwitch(callback: (filename: string) => void): () => void
   }
   window: {
     minimize(): void

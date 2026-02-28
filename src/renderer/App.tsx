@@ -62,9 +62,19 @@ export default function App() {
     const unsubDeeplink = window.agent.events.onDeeplinkNavigate((id) => {
       useConversationsStore.getState().setActiveConversation(id)
     })
+    const unsubAutoTheme = window.agent.events.onAutoThemeSwitch((filename) => {
+      const { themes } = useSettingsStore.getState()
+      const theme = themes.find((t) => t.filename === filename)
+      if (theme) {
+        const styleEl = document.getElementById('agent-theme') as HTMLStyleElement | null
+        if (styleEl) styleEl.textContent = theme.css
+        useSettingsStore.setState({ activeTheme: filename })
+      }
+    })
     return () => {
       unsubTray()
       unsubDeeplink()
+      unsubAutoTheme()
     }
   }, [])
 
