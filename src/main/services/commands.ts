@@ -223,19 +223,14 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       results.set(macro.name, macro)
     }
 
-    // Pi extension commands (when PI backend is configured)
+    // Pi extension commands (always attempted — silently skipped if SDK unavailable)
     try {
-      const row = db
-        .prepare("SELECT value FROM settings WHERE key = 'ai_sdkBackend'")
+      const extDirRow = db
+        .prepare("SELECT value FROM settings WHERE key = 'pi_extensionsDir'")
         .get() as { value: string } | undefined
-      if (row?.value === 'pi') {
-        const extDirRow = db
-          .prepare("SELECT value FROM settings WHERE key = 'pi_extensionsDir'")
-          .get() as { value: string } | undefined
-        const piCommands = await discoverPIExtensionCommands(extDirRow?.value || undefined)
-        for (const cmd of piCommands) {
-          results.set(cmd.name, cmd)
-        }
+      const piCommands = await discoverPIExtensionCommands(extDirRow?.value || undefined)
+      for (const cmd of piCommands) {
+        results.set(cmd.name, cmd)
       }
     } catch {
       // PI SDK not available or extension discovery failed — skip
