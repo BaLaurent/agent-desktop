@@ -34,6 +34,7 @@ I build this project primarily for my own use — the features I add are the one
 ### AI Backend
 - **Claude Agent SDK** (default) — full-featured backend with session resume, tools, and MCP support
 - **PI Coding Agent** *(experimental)* — alternative backend via the PI Coding Agent SDK; selectable per-conversation, per-folder, or globally in settings. Not yet fully integration-tested — expect rough edges
+  - For sub-agent support, [`pi-subagents`](https://www.npmjs.com/package/pi-subagents) is a tested and working extension (other extensions may work too)
 
 ### File Explorer & Viewers
 - Built-in file explorer with context menu (open, rename, duplicate, move to trash, open in terminal)
