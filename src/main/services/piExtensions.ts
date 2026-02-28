@@ -1,11 +1,19 @@
 import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'
+import * as path from 'path'
 import type { PIExtensionInfo } from '../../shared/constants'
 import type { SlashCommand } from '../../shared/types'
 import type { PiUIResponse } from '../../shared/piUITypes'
 import { loadPISdk } from './piSdk'
 
-async function loadExtensions(extensionsDir?: string) {
+/** Extension shape returned by DefaultResourceLoader.getExtensions() */
+interface PIExtension {
+  path: string
+  resolvedPath: string
+  commands: Map<string, { name: string; description?: string }>
+}
+
+async function loadExtensions(extensionsDir?: string): Promise<{ extensions: PIExtension[]; errors: unknown[] }> {
   const pi = await loadPISdk()
 
   const resourceLoader = new pi.DefaultResourceLoader({
@@ -17,24 +25,29 @@ async function loadExtensions(extensionsDir?: string) {
   })
 
   await resourceLoader.reload()
-  return resourceLoader.getExtensions()
+  return resourceLoader.getExtensions() as { extensions: PIExtension[]; errors: unknown[] }
+}
+
+/** Derive a human-readable name from extension path (filename without extension) */
+function extensionName(ext: PIExtension): string {
+  return path.basename(ext.resolvedPath).replace(/\.[^.]+$/, '')
 }
 
 export async function discoverPIExtensions(extensionsDir?: string): Promise<PIExtensionInfo[]> {
   const { extensions } = await loadExtensions(extensionsDir)
-  return extensions.map((ext: { name: string; resolvedPath: string }) => ({
-    name: ext.name,
+  return extensions.map((ext) => ({
+    name: extensionName(ext),
     path: ext.resolvedPath,
   }))
 }
 
 /**
  * Discover commands registered by Pi extensions.
- * Runs each extension factory with a no-op Proxy API to capture registerCommand calls
- * without side effects.
+ * Reads the already-parsed commands Map on each Extension object
+ * (populated by DefaultResourceLoader after running factories).
  */
 export async function discoverPIExtensionCommands(extensionsDir?: string): Promise<SlashCommand[]> {
-  let extensions: { name: string; factory: (api: unknown) => void | Promise<void> }[]
+  let extensions: PIExtension[]
   try {
     const result = await loadExtensions(extensionsDir)
     extensions = result.extensions
@@ -45,33 +58,11 @@ export async function discoverPIExtensionCommands(extensionsDir?: string): Promi
   const commands: SlashCommand[] = []
 
   for (const ext of extensions) {
-    const registered: { name: string; description: string }[] = []
-
-    // Proxy that captures registerCommand and no-ops everything else
-    function createNoopProxy(): unknown {
-      return new Proxy(() => createNoopProxy(), {
-        get: (_target, prop) => {
-          if (prop === 'registerCommand') {
-            return (name: string, opts?: { description?: string }) => {
-              registered.push({ name, description: opts?.description || '' })
-            }
-          }
-          return createNoopProxy()
-        },
-        apply: () => createNoopProxy(),
-      })
-    }
-
-    try {
-      await ext.factory(createNoopProxy())
-    } catch {
-      // Extension factory may fail with mock — that's OK
-    }
-
-    for (const cmd of registered) {
+    if (!ext.commands || ext.commands.size === 0) continue
+    for (const [, cmd] of ext.commands) {
       commands.push({
         name: cmd.name,
-        description: cmd.description || `Extension: ${ext.name}`,
+        description: cmd.description || `Extension: ${extensionName(ext)}`,
         source: 'extension',
       })
     }

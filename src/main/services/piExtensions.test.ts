@@ -19,7 +19,7 @@ vi.mock('./piSdk', () => {
   }
 })
 
-import { discoverPIExtensions, registerHandlers } from './piExtensions'
+import { discoverPIExtensions, discoverPIExtensionCommands, registerHandlers } from './piExtensions'
 import { loadPISdk } from './piSdk'
 
 // Access internal mocks from the factory
@@ -43,8 +43,8 @@ describe('discoverPIExtensions', () => {
   it('maps discovered extensions to PIExtensionInfo shape', async () => {
     piSdkModule.__mocks.getExtensions.mockReturnValue({
       extensions: [
-        { name: 'code-review', resolvedPath: '/home/user/.pi/extensions/code-review.ts' },
-        { name: 'test-runner', resolvedPath: '/tmp/project/.pi/extensions/test-runner.ts' },
+        { path: 'code-review.ts', resolvedPath: '/home/user/.pi/extensions/code-review.ts', commands: new Map() },
+        { path: 'test-runner.ts', resolvedPath: '/tmp/project/.pi/extensions/test-runner.ts', commands: new Map() },
       ],
     })
 
@@ -82,6 +82,71 @@ describe('discoverPIExtensions', () => {
     const pi = await loadPISdk()
     const lastOpts = (pi.DefaultResourceLoader as unknown as { lastOpts: Record<string, unknown> }).lastOpts
     expect(lastOpts).not.toHaveProperty('additionalExtensionPaths')
+  })
+})
+
+describe('discoverPIExtensionCommands', () => {
+  beforeEach(() => {
+    piSdkModule.__mocks.reload.mockClear()
+    piSdkModule.__mocks.getExtensions.mockClear()
+    piSdkModule.__mocks.getExtensions.mockReturnValue({ extensions: [] })
+  })
+
+  it('returns empty array when no extensions', async () => {
+    const result = await discoverPIExtensionCommands()
+    expect(result).toEqual([])
+  })
+
+  it('reads commands from extension commands Map', async () => {
+    const cmds = new Map([
+      ['ui-test', { name: 'ui-test', description: 'Run UI tests', handler: async () => {} }],
+      ['ui-notify', { name: 'ui-notify', description: 'Send notification', handler: async () => {} }],
+    ])
+    piSdkModule.__mocks.getExtensions.mockReturnValue({
+      extensions: [
+        { path: 'ui-test.ts', resolvedPath: '/home/user/.pi/extensions/ui-test.ts', commands: cmds },
+      ],
+    })
+
+    const result = await discoverPIExtensionCommands()
+
+    expect(result).toHaveLength(2)
+    expect(result).toContainEqual({ name: 'ui-test', description: 'Run UI tests', source: 'extension' })
+    expect(result).toContainEqual({ name: 'ui-notify', description: 'Send notification', source: 'extension' })
+  })
+
+  it('uses extension filename as fallback when command has no description', async () => {
+    const cmds = new Map([
+      ['do-thing', { name: 'do-thing', handler: async () => {} }],
+    ])
+    piSdkModule.__mocks.getExtensions.mockReturnValue({
+      extensions: [
+        { path: 'my-ext.ts', resolvedPath: '/home/user/.pi/extensions/my-ext.ts', commands: cmds },
+      ],
+    })
+
+    const result = await discoverPIExtensionCommands()
+
+    expect(result[0].description).toBe('Extension: my-ext')
+  })
+
+  it('skips extensions with no commands', async () => {
+    piSdkModule.__mocks.getExtensions.mockReturnValue({
+      extensions: [
+        { path: 'no-cmds.ts', resolvedPath: '/x/no-cmds.ts', commands: new Map() },
+        { path: 'has-cmds.ts', resolvedPath: '/x/has-cmds.ts', commands: new Map([['hello', { name: 'hello', description: 'Hi', handler: async () => {} }]]) },
+      ],
+    })
+
+    const result = await discoverPIExtensionCommands()
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('hello')
+  })
+
+  it('returns empty array when loadExtensions fails', async () => {
+    piSdkModule.__mocks.reload.mockRejectedValueOnce(new Error('SDK not available'))
+    const result = await discoverPIExtensionCommands()
+    expect(result).toEqual([])
   })
 })
 
