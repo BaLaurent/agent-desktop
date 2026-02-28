@@ -804,6 +804,13 @@ export async function sendTurn(
     }
   }
 
+  // Invalidate if DB session was cleared (clear/compact/regenerate/edit)
+  if (session && session.status === 'active' && sdkSessionId === null) {
+    console.log(`[sessionManager] SDK session cleared in DB, invalidating in-memory session for conversation ${conversationId}`)
+    invalidateSession(conversationId)
+    session = undefined
+  }
+
   // Invalidate if session was closed
   if (session && session.status === 'closed') {
     sessions.delete(conversationId)
