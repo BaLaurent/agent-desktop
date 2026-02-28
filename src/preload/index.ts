@@ -99,6 +99,19 @@ const api: AgentAPI = {
   },
   pi: {
     listExtensions: () => withTimeout(ipcRenderer.invoke('pi:listExtensions')),
+    onUIEvent: (callback) => {
+      const handler = (_e: Electron.IpcRendererEvent, event: unknown) => callback(event as never)
+      ipcRenderer.on('pi:uiEvent', handler)
+      return () => { ipcRenderer.removeListener('pi:uiEvent', handler) }
+    },
+    onUIRequest: (callback) => {
+      const handler = (_e: Electron.IpcRendererEvent, request: unknown) => callback(request as never)
+      ipcRenderer.on('pi:uiRequest', handler)
+      return () => { ipcRenderer.removeListener('pi:uiRequest', handler) }
+    },
+    respondUI: (id, response) => {
+      ipcRenderer.send('pi:uiResponse', { id, ...response })
+    },
   },
   settings: {
     get: () => withTimeout(ipcRenderer.invoke('settings:get')),

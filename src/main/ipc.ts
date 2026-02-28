@@ -88,7 +88,7 @@ export function registerAllHandlers(ipcMain: IpcMain, db: Database.Database): vo
     register(safeIpc, db)
   }
   themesHandlers(safeIpc)
-  commandsHandlers(safeIpc)
+  commandsHandlers(safeIpc, db)
   updaterHandlers(safeIpc)
   jupyterHandlers(safeIpc)
   webServerHandlers(safeIpc)

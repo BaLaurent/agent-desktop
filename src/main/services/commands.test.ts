@@ -15,6 +15,10 @@ vi.mock('../utils/paths', () => ({
   expandTilde: (p: string) => p.replace('~', '/home/testuser'),
 }))
 
+vi.mock('./piExtensions', () => ({
+  discoverPIExtensionCommands: vi.fn().mockResolvedValue([]),
+}))
+
 import { registerHandlers } from './commands'
 
 function mkFd(content: string) {
@@ -45,7 +49,10 @@ describe('commands service', () => {
         handlers[channel] = (...args: unknown[]) => Promise.resolve(handler({} as IpcMainInvokeEvent, ...args))
       },
     } as unknown as IpcMain
-    registerHandlers(fakeIpcMain)
+    const fakeDb = {
+      prepare: () => ({ get: () => undefined }),
+    } as any
+    registerHandlers(fakeIpcMain, fakeDb)
   })
 
   it('registers commands:list handler', () => {

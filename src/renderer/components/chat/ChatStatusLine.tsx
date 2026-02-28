@@ -26,9 +26,10 @@ interface ChatStatusLineProps {
   kbCollections?: KbCollectionEntry[]
   onKbCollectionToggle?: (name: string) => void
   onKbAccessToggle?: (name: string) => void
+  extensionStatus?: Record<string, string>
 }
 
-export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChange, onPermissionModeChange, onMcpServerToggle, kbCollections, onKbCollectionToggle, onKbAccessToggle }: ChatStatusLineProps) {
+export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChange, onPermissionModeChange, onMcpServerToggle, kbCollections, onKbCollectionToggle, onKbAccessToggle, extensionStatus }: ChatStatusLineProps) {
   const shortModel = shortenModelName(model)
   const modeLabel = PERMISSION_LABELS[permissionMode] || permissionMode
   const [modelOpen, setModelOpen] = useState(false)
@@ -290,6 +291,21 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
               </div>
             )}
           </div>
+        </>
+      )}
+      {extensionStatus && Object.keys(extensionStatus).length > 0 && (
+        <>
+          <span aria-hidden="true">&middot;</span>
+          {Object.entries(extensionStatus).map(([key, text]) => (
+            <span
+              key={key}
+              className="whitespace-nowrap mobile:py-1 mobile:px-1"
+              title={`Extension: ${key}`}
+              style={{ color: 'var(--color-primary)' }}
+            >
+              {text}
+            </span>
+          ))}
         </>
       )}
     </div>

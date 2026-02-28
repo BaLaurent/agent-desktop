@@ -1,9 +1,11 @@
 import type { IpcMain } from 'electron'
+import type Database from 'better-sqlite3'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { expandTilde } from '../utils/paths'
 import { validatePathSafe } from '../utils/validate'
 import type { SlashCommand } from '../../shared/types'
+import { discoverPIExtensionCommands } from './piExtensions'
 
 const BUILTIN_COMMANDS: SlashCommand[] = [
   { name: 'compact', description: 'Compact conversation history', source: 'builtin' },
@@ -160,7 +162,7 @@ async function scanSkillsDir(dir: string): Promise<SlashCommand[]> {
   return skills
 }
 
-export function registerHandlers(ipcMain: IpcMain): void {
+export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('commands:list', async (_event, cwd?: string, skillsMode?: string) => {
     const results = new Map<string, SlashCommand>()
 
@@ -219,6 +221,24 @@ export function registerHandlers(ipcMain: IpcMain): void {
     const macros = await scanMacrosDir()
     for (const macro of macros) {
       results.set(macro.name, macro)
+    }
+
+    // Pi extension commands (when PI backend is configured)
+    try {
+      const row = db
+        .prepare("SELECT value FROM settings WHERE key = 'ai_sdkBackend'")
+        .get() as { value: string } | undefined
+      if (row?.value === 'pi') {
+        const extDirRow = db
+          .prepare("SELECT value FROM settings WHERE key = 'pi_extensionsDir'")
+          .get() as { value: string } | undefined
+        const piCommands = await discoverPIExtensionCommands(extDirRow?.value || undefined)
+        for (const cmd of piCommands) {
+          results.set(cmd.name, cmd)
+        }
+      }
+    } catch {
+      // PI SDK not available or extension discovery failed — skip
     }
 
     return Array.from(results.values())
