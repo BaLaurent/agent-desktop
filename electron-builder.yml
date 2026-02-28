@@ -61,7 +61,7 @@ linux:
   maintainer: Agent Desktop Contributors
   desktop:
     MimeType: x-scheme-handler/agent
-  synopsis: Open-source Linux desktop client for Claude AI
+  synopsis: Open-source desktop client for Claude AI
 win:
   target:
     - target: nsis

@@ -31,7 +31,10 @@ export function AboutSection() {
     }
   }
 
+  const [installing, setInstalling] = useState(false)
+
   const handleInstall = () => {
+    setInstalling(true)
     window.agent.updates.install()
   }
 
@@ -53,7 +56,7 @@ export function AboutSection() {
           className="text-sm"
           style={{ color: 'var(--color-text-muted)' }}
         >
-          Open-source Linux desktop client for Claude AI
+          Open-source desktop client for Claude AI
         </p>
       </div>
 
@@ -83,6 +86,7 @@ export function AboutSection() {
           onCheck={handleCheckUpdate}
           onDownload={handleDownload}
           onInstall={handleInstall}
+          installing={installing}
         />
       </div>
 
@@ -120,11 +124,13 @@ function UpdateSection({
   onCheck,
   onDownload,
   onInstall,
+  installing,
 }: {
   status: UpdateStatus
   onCheck: () => void
   onDownload: () => void
   onInstall: () => void
+  installing: boolean
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -164,9 +170,10 @@ function UpdateSection({
         {status.state === 'downloaded' && (
           <button
             onClick={onInstall}
-            className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-primary text-contrast mobile:py-3"
+            disabled={installing}
+            className="px-4 py-2 rounded text-sm font-medium transition-opacity bg-primary text-contrast mobile:py-3 disabled:opacity-50 hover:opacity-90 disabled:hover:opacity-50 disabled:cursor-not-allowed"
           >
-            Restart to Install
+            {installing ? 'Restarting...' : 'Restart to Install'}
           </button>
         )}
 

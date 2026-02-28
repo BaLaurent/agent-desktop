@@ -62,7 +62,7 @@ export function WelcomeScreen() {
           Agent Desktop
         </h1>
         <p className="mb-6 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Open-source Linux desktop client for Claude AI
+          Open-source desktop client for Claude AI
         </p>
 
         <div
