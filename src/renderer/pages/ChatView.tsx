@@ -538,7 +538,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
 
         {/* Extension widgets above editor */}
         {Object.values(widgets).filter(w => w.placement === 'aboveEditor').map(w => (
-          <div key={w.key} className="flex-shrink-0 px-4">
+          <div key={w.key} className="flex-shrink-0 px-4 pt-1">
             <ExtensionWidget widget={w} />
           </div>
         ))}
@@ -670,7 +670,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
         </div>
         {/* Extension widgets below editor */}
         {Object.values(widgets).filter(w => w.placement === 'belowEditor').map(w => (
-          <div key={w.key} className="flex-shrink-0 px-4 pb-1">
+          <div key={w.key} className="flex-shrink-0 px-4 pt-1 pb-1">
             <ExtensionWidget widget={w} />
           </div>
         ))}
