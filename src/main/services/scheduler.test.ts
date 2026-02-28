@@ -159,10 +159,11 @@ describe('getExpectedThemeFilename', () => {
       .toBe('light.css')
   })
 
-  it('handles inverted range — night crosses midnight (during night)', () => {
+  it('handles inverted range — early morning still in day period', () => {
     const now = new Date('2025-01-15T03:00:00')
+    // dayTime=22:00 means day wraps midnight → 03:00 is within [22:00, 06:00) = day
     expect(getExpectedThemeFilename('22:00', '06:00', 'light.css', 'dark.css', now))
-      .toBe('dark.css')
+      .toBe('light.css')
   })
 
   it('handles inverted range — night crosses midnight (afternoon = night)', () => {

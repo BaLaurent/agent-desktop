@@ -67,7 +67,7 @@ export function getExpectedThemeFilename(
   if (dayMinutes < nightMinutes) {
     return (currentMinutes >= dayMinutes && currentMinutes < nightMinutes) ? dayTheme : nightTheme
   }
-  return currentMinutes >= dayMinutes ? dayTheme : nightTheme
+  return (currentMinutes >= dayMinutes || currentMinutes < nightMinutes) ? dayTheme : nightTheme
 }
 
 // ─── DB helpers ─────────────────────────────────────────────
