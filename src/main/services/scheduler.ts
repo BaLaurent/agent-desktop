@@ -47,6 +47,29 @@ export function computeNextRun(
   return new Date(ms + intervalValue * 86_400_000).toISOString()
 }
 
+// ─── Auto day/night theme ───────────────────────────────────
+
+export function getExpectedThemeFilename(
+  dayTime: string,
+  nightTime: string,
+  dayTheme: string,
+  nightTheme: string,
+  now: Date = new Date()
+): string {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const [dayH, dayM] = dayTime.split(':').map(Number)
+  const [nightH, nightM] = nightTime.split(':').map(Number)
+  const dayMinutes = dayH * 60 + dayM
+  const nightMinutes = nightH * 60 + nightM
+
+  if (dayMinutes === nightMinutes) return dayTheme
+
+  if (dayMinutes < nightMinutes) {
+    return (currentMinutes >= dayMinutes && currentMinutes < nightMinutes) ? dayTheme : nightTheme
+  }
+  return currentMinutes >= dayMinutes ? dayTheme : nightTheme
+}
+
 // ─── DB helpers ─────────────────────────────────────────────
 
 function rowToTask(row: Record<string, unknown>): ScheduledTask {
@@ -220,10 +243,37 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
   }
 }
 
+// ─── Auto day/night theme check ─────────────────────────────
+
+function checkAutoTheme(db: Database.Database): void {
+  const getVal = (key: string): string | null => {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+    return row?.value ?? null
+  }
+
+  if (getVal('autoTheme_enabled') !== 'true') return
+
+  const dayTheme = getVal('autoTheme_dayTheme')
+  const nightTheme = getVal('autoTheme_nightTheme')
+  const dayTime = getVal('autoTheme_dayTime') || '07:00'
+  const nightTime = getVal('autoTheme_nightTime') || '21:00'
+
+  if (!dayTheme || !nightTheme) return
+
+  const expected = getExpectedThemeFilename(dayTime, nightTime, dayTheme, nightTheme)
+  const current = getVal('activeTheme')
+
+  if (current === expected) return
+
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('activeTheme', ?, datetime('now'))").run(expected)
+  notifyRenderer('theme:autoSwitch', expected)
+}
+
 // ─── Scheduler engine ───────────────────────────────────────
 
 function tick(): void {
   if (!schedulerDb) return
+  checkAutoTheme(schedulerDb)
 
   const now = new Date().toISOString()
   const dueTasks = schedulerDb.prepare(`
@@ -278,6 +328,9 @@ export function startScheduler(db: Database.Database): void {
       }
     }
   }
+
+  // Auto-theme: check on startup
+  checkAutoTheme(db)
 
   // 1-minute tick resolution
   tickInterval = setInterval(tick, 60_000)

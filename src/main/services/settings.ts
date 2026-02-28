@@ -27,6 +27,12 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'heatmap_mode',
   'heatmap_min',
   'heatmap_max',
+  // Auto day/night theme
+  'autoTheme_enabled',
+  'autoTheme_dayTheme',
+  'autoTheme_nightTheme',
+  'autoTheme_dayTime',
+  'autoTheme_nightTime',
   // Whisper / voice
   'whisper_binaryPath',
   'whisper_modelPath',

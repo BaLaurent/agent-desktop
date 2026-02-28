@@ -28,7 +28,7 @@ vi.mock('./tts', () => ({
   speak: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { computeNextRun } from './scheduler'
+import { computeNextRun, getExpectedThemeFilename } from './scheduler'
 
 const BASE = new Date('2025-01-15T10:00:00.000Z')
 
@@ -119,5 +119,61 @@ describe('computeNextRun', () => {
       const result = computeNextRun(1, 'days', '', BASE)
       expect(result).toBe(new Date(BASE.getTime() + 86_400_000).toISOString())
     })
+  })
+})
+
+describe('getExpectedThemeFilename', () => {
+  it('returns day theme during daytime (normal range)', () => {
+    const now = new Date('2025-01-15T12:00:00')
+    expect(getExpectedThemeFilename('07:00', '21:00', 'light.css', 'dark.css', now))
+      .toBe('light.css')
+  })
+
+  it('returns night theme before day starts (normal range)', () => {
+    const now = new Date('2025-01-15T05:00:00')
+    expect(getExpectedThemeFilename('07:00', '21:00', 'light.css', 'dark.css', now))
+      .toBe('dark.css')
+  })
+
+  it('returns night theme after night starts (normal range)', () => {
+    const now = new Date('2025-01-15T22:00:00')
+    expect(getExpectedThemeFilename('07:00', '21:00', 'light.css', 'dark.css', now))
+      .toBe('dark.css')
+  })
+
+  it('returns day theme at exact day start time', () => {
+    const now = new Date('2025-01-15T07:00:00')
+    expect(getExpectedThemeFilename('07:00', '21:00', 'light.css', 'dark.css', now))
+      .toBe('light.css')
+  })
+
+  it('returns night theme at exact night start time', () => {
+    const now = new Date('2025-01-15T21:00:00')
+    expect(getExpectedThemeFilename('07:00', '21:00', 'light.css', 'dark.css', now))
+      .toBe('dark.css')
+  })
+
+  it('handles inverted range — night crosses midnight (during day)', () => {
+    const now = new Date('2025-01-15T23:00:00')
+    expect(getExpectedThemeFilename('22:00', '06:00', 'light.css', 'dark.css', now))
+      .toBe('light.css')
+  })
+
+  it('handles inverted range — night crosses midnight (during night)', () => {
+    const now = new Date('2025-01-15T03:00:00')
+    expect(getExpectedThemeFilename('22:00', '06:00', 'light.css', 'dark.css', now))
+      .toBe('dark.css')
+  })
+
+  it('handles inverted range — night crosses midnight (afternoon = night)', () => {
+    const now = new Date('2025-01-15T14:00:00')
+    expect(getExpectedThemeFilename('22:00', '06:00', 'light.css', 'dark.css', now))
+      .toBe('dark.css')
+  })
+
+  it('returns day theme when both times are equal', () => {
+    const now = new Date('2025-01-15T12:00:00')
+    expect(getExpectedThemeFilename('12:00', '12:00', 'light.css', 'dark.css', now))
+      .toBe('light.css')
   })
 })
