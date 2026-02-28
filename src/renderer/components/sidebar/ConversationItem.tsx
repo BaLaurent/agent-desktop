@@ -4,6 +4,7 @@ import { useConversationsStore } from '../../stores/conversationsStore'
 import { useSchedulerStore } from '../../stores/schedulerStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
 import { ContextMenu, ContextMenuItem, ContextMenuDivider } from '../shared/ContextMenu'
+import { ColorSwatches, ColorPicker } from '../shared/ColorPicker'
 
 function invertHex(hex: string): string {
   const r = 255 - parseInt(hex.slice(1, 3), 16)
@@ -23,7 +24,7 @@ interface Props {
 
 export function ConversationItem({ conversation, isActive, isSelected, visibleOrder, depth = 0, folderColor }: Props) {
   const isMobile = useMobileMode()
-  const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders, handleSelect, selectedIds, deleteSelected, moveSelectedToFolder, clearSelection } =
+  const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders, handleSelect, selectedIds, deleteSelected, moveSelectedToFolder, colorSelected, clearSelection } =
     useConversationsStore()
   const hasScheduledTask = useSchedulerStore((s) => s.tasks.some((t) => t.conversation_id === conversation.id))
   const [isRenaming, setIsRenaming] = useState(false)
@@ -31,6 +32,8 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
   const [showMenu, setShowMenu] = useState(false)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const [showFolderSubmenu, setShowFolderSubmenu] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [colorPickerPos, setColorPickerPos] = useState({ x: 0, y: 0 })
   const inputRef = useRef<HTMLInputElement>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -136,6 +139,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
   }
 
   const timeAgo = formatTimeAgo(conversation.updated_at)
+  const effectiveColor = conversation.color || folderColor || null
 
   return (
     <>
@@ -173,13 +177,13 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
           paddingLeft: `${depth * 16 + 12}px`,
           paddingRight: '12px',
           backgroundColor: isActive
-            ? (folderColor ? `color-mix(in srgb, ${folderColor} 12%, var(--color-deep))` : 'var(--color-deep)')
+            ? (effectiveColor ? `color-mix(in srgb, ${effectiveColor} 12%, var(--color-deep))` : 'var(--color-deep)')
             : isSelected ? 'var(--color-bg)'
-            : folderColor ? `color-mix(in srgb, ${folderColor} 8%, transparent)`
+            : effectiveColor ? `color-mix(in srgb, ${effectiveColor} 8%, transparent)`
             : 'transparent',
           borderLeft: isActive ? '2px solid var(--color-primary)' : isSelected ? '2px solid var(--color-text-muted)' : '2px solid transparent',
-          ...(isActive && folderColor ? {
-            boxShadow: `0 0 8px 1px color-mix(in srgb, ${invertHex(folderColor)} 40%, transparent)`,
+          ...(isActive && effectiveColor ? {
+            boxShadow: `0 0 8px 1px color-mix(in srgb, ${invertHex(effectiveColor)} 40%, transparent)`,
           } : {}),
         }}
         role="treeitem"
@@ -288,6 +292,18 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
               </div>
             )}
           </div>
+          <ColorSwatches
+            currentColor={null}
+            onColorChange={(c) => {
+              colorSelected(c)
+              setShowMenu(false)
+            }}
+            onOpenPicker={() => {
+              setColorPickerPos({ x: menuPos.x, y: menuPos.y })
+              setShowColorPicker(true)
+              setShowMenu(false)
+            }}
+          />
           <ContextMenuDivider />
           <ContextMenuItem
             danger
@@ -360,10 +376,38 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
             Generate Title
           </ContextMenuItem>
           <ContextMenuDivider />
+          <ColorSwatches
+            currentColor={conversation.color}
+            onColorChange={(c) => {
+              updateConversation(conversation.id, { color: c })
+              setShowMenu(false)
+            }}
+            onOpenPicker={() => {
+              setColorPickerPos({ x: menuPos.x, y: menuPos.y })
+              setShowColorPicker(true)
+              setShowMenu(false)
+            }}
+          />
+          <ContextMenuDivider />
           <ContextMenuItem danger onClick={handleDelete} aria-label="Delete conversation">
             Delete
           </ContextMenuItem>
         </ContextMenu>
+      )}
+
+      {showColorPicker && (
+        <ColorPicker
+          currentColor={conversation.color}
+          onColorChange={(c) => {
+            if (selectedIds.size > 1) {
+              colorSelected(c)
+            } else {
+              updateConversation(conversation.id, { color: c })
+            }
+          }}
+          onClose={() => setShowColorPicker(false)}
+          position={colorPickerPos}
+        />
       )}
     </>
   )

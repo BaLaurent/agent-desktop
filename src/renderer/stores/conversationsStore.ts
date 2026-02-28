@@ -15,6 +15,7 @@ interface ConversationsState {
   clearSelection: () => void
   deleteSelected: () => Promise<void>
   moveSelectedToFolder: (folderId: number | null) => Promise<void>
+  colorSelected: (color: string | null) => Promise<void>
 
   loadConversations: () => Promise<void>
   loadFolders: () => Promise<void>
@@ -127,6 +128,25 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
     try {
       await window.agent.conversations.moveMany(ids, folderId)
+    } catch {
+      set({ conversations: prev })
+    }
+  },
+
+  colorSelected: async (color) => {
+    const { selectedIds, conversations } = get()
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    const prev = conversations
+    set({
+      conversations: conversations.map((c) =>
+        selectedIds.has(c.id) ? { ...c, color } : c
+      ),
+      selectedIds: new Set(),
+      lastClickedId: null,
+    })
+    try {
+      await window.agent.conversations.colorMany(ids, color)
     } catch {
       set({ conversations: prev })
     }
