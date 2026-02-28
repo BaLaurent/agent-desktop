@@ -6,6 +6,7 @@ export function createMockIpcMain() {
     handle: vi.fn((channel: string, handler: Function) => {
       handlers.set(channel, handler)
     }),
+    on: vi.fn(),
     invoke: async (channel: string, ...args: unknown[]) => {
       const handler = handlers.get(channel)
       if (!handler) throw new Error(`No handler for ${channel}`)

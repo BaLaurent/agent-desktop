@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
     isDestroyed: vi.fn(() => false),
   })),
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1920, height: 1080 } }) },
-  ipcMain: { handle: vi.fn() },
+  ipcMain: { handle: vi.fn(), on: vi.fn() },
   shell: { openPath: vi.fn(), openExternal: vi.fn() },
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
   Notification: vi.fn(() => ({ show: vi.fn(), on: vi.fn() })),

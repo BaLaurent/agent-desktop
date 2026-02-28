@@ -24,6 +24,11 @@ import { useVoiceInputStore } from '../stores/voiceInputStore'
 import type { Attachment, AIOverrides, KnowledgeSelection } from '../../shared/types'
 import type { TaskNotification } from '../stores/chatStore'
 import { DEFAULT_MODEL, DEFAULT_EXCLUDE_PATTERNS, shortenModelName } from '../../shared/constants'
+import { usePiExtensionUI } from '../hooks/usePiExtensionUI'
+import { usePiExtensionUIStore } from '../stores/piExtensionUIStore'
+import { ExtensionDialog } from '../components/extensions/ExtensionDialog'
+import { ExtensionToast } from '../components/extensions/ExtensionToast'
+import { ExtensionWidget } from '../components/extensions/ExtensionWidget'
 
 const EMPTY_TASK_NOTIFICATIONS: TaskNotification[] = []
 
@@ -96,6 +101,15 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
   const consumedVoiceIdRef = useRef(0)
   const messageInputRef = useRef<MessageInputHandle>(null)
   const [canSend, setCanSend] = useState(false)
+
+  // Pi extension UI
+  usePiExtensionUI()
+  const activeDialog = usePiExtensionUIStore((s) => s.activeDialog)
+  const notifications = usePiExtensionUIStore((s) => s.notifications)
+  const widgets = usePiExtensionUIStore((s) => s.widgets)
+  const statusEntries = usePiExtensionUIStore((s) => s.statusEntries)
+  const dismissDialog = usePiExtensionUIStore((s) => s.dismissDialog)
+  const removeNotification = usePiExtensionUIStore((s) => s.removeNotification)
 
   // Consume transcription: auto-send or inject into input
   const autoSendVoice = globalSettings.whisper_autoSend === 'true'
@@ -293,6 +307,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
 
   // Sync active conversation and load messages/files when conversation changes
   useEffect(() => {
+    usePiExtensionUIStore.getState().reset()
     if (conversationId) {
       setActiveConversation(conversationId)
       loadMessages(conversationId)
@@ -521,6 +536,13 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           onEditEnd={handleQueueEditEnd}
         />
 
+        {/* Extension widgets above editor */}
+        {Object.values(widgets).filter(w => w.placement === 'aboveEditor').map(w => (
+          <div key={w.key} className="flex-shrink-0 px-4">
+            <ExtensionWidget widget={w} />
+          </div>
+        ))}
+
         {/* Status line above input */}
         <div className="flex-shrink-0 px-4 pt-2">
           <ChatStatusLine
@@ -533,6 +555,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
             kbCollections={kbCollectionEntries}
             onKbCollectionToggle={handleKbCollectionToggle}
             onKbAccessToggle={handleKbAccessToggle}
+            extensionStatus={statusEntries}
           />
         </div>
 
@@ -645,6 +668,12 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
             </div>
           )}
         </div>
+        {/* Extension widgets below editor */}
+        {Object.values(widgets).filter(w => w.placement === 'belowEditor').map(w => (
+          <div key={w.key} className="flex-shrink-0 px-4 pb-1">
+            <ExtensionWidget widget={w} />
+          </div>
+        ))}
       </div>
       {showOverrides && conversationId && (
         <AIOverridesPopover
@@ -659,6 +688,18 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           }}
           onClose={() => setShowOverrides(false)}
         />
+      )}
+      {activeDialog && (
+        <ExtensionDialog
+          dialog={activeDialog}
+          onRespond={(response) => {
+            window.agent.pi.respondUI(response.id, response)
+            dismissDialog()
+          }}
+        />
+      )}
+      {notifications.length > 0 && (
+        <ExtensionToast notifications={notifications} onDismiss={removeNotification} />
       )}
     </FileDropZone>
   )
