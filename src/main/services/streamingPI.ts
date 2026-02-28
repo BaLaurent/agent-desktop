@@ -144,15 +144,24 @@ export async function streamMessagePI(
       // agent_start, agent_end, turn_start, turn_end, message_start, message_end → no-op
     })
 
-    // Build prompt: inject system prompt as context prefix since PI session
-    // uses its own system prompt mechanism via ResourceLoader
-    const historyPrompt = buildPromptWithHistory(messages)
-    const fullPrompt = systemPrompt
-      ? `<system_context>\n${systemPrompt}\n</system_context>\n\n${historyPrompt}`
-      : historyPrompt
+    // Extension commands: session.prompt() detects them via text.startsWith("/")
+    // so slash commands must be passed directly, not wrapped in <system_context>
+    const lastContent = messages[messages.length - 1]?.content?.trim() || ''
+    const isSlashCommand = /^\/[\w-]+/.test(lastContent)
+
+    let promptText: string
+    if (isSlashCommand) {
+      // Pass command directly so SDK can route to extension handler
+      promptText = lastContent
+    } else {
+      const historyPrompt = buildPromptWithHistory(messages)
+      promptText = systemPrompt
+        ? `<system_context>\n${systemPrompt}\n</system_context>\n\n${historyPrompt}`
+        : historyPrompt
+    }
 
     try {
-      await session.prompt(fullPrompt)
+      await session.prompt(promptText)
     } catch (err: unknown) {
       if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort'))) {
         aborted = true
