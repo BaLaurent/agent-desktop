@@ -1299,6 +1299,41 @@ describe('chatStore', () => {
       expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
     })
 
+    it('lockQueueForEdit sets queueEditLocked for conversation', () => {
+      useChatStore.getState().lockQueueForEdit(1)
+      expect(useChatStore.getState().queueEditLocked[1]).toBe(true)
+    })
+
+    it('unlockQueueForEdit clears queueEditLocked for conversation', () => {
+      useChatStore.getState().lockQueueForEdit(1)
+      useChatStore.getState().unlockQueueForEdit(1)
+      expect(useChatStore.getState().queueEditLocked[1]).toBeFalsy()
+    })
+
+    it('popQueue returns null when queueEditLocked', async () => {
+      useChatStore.setState({
+        activeConversationId: 1,
+        messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
+        queueEditLocked: { 1: true },
+      })
+
+      mockAgent.messages.send.mockResolvedValueOnce({ id: 2, role: 'assistant', content: 'done' })
+      mockAgent.conversations.get.mockResolvedValueOnce({ id: 1, title: 'Test', messages: [] })
+
+      await useChatStore.getState().sendMessage(1, 'first')
+
+      // Queue should remain since edit-locked
+      expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
+    })
+
+    it('clearQueue also clears queueEditLocked', () => {
+      useChatStore.getState().addToQueue(1, 'msg')
+      useChatStore.getState().lockQueueForEdit(1)
+      useChatStore.getState().clearQueue(1)
+
+      expect(useChatStore.getState().queueEditLocked[1]).toBeUndefined()
+    })
+
     it('streamOperation drains queue after stream completes', async () => {
       useChatStore.setState({
         activeConversationId: 1,

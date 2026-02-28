@@ -33,6 +33,7 @@ interface ChatState {
   activeConversationId: number | null
   messageQueues: Record<number, QueuedMessage[]>
   queuePaused: Record<number, boolean>
+  queueEditLocked: Record<number, boolean>
   taskNotifications: Record<number, TaskNotification[]>
 
   loadMessages: (conversationId: number) => Promise<void>
@@ -51,6 +52,8 @@ interface ChatState {
   clearQueue: (conversationId: number) => void
   pauseQueue: (conversationId: number) => void
   resumeQueue: (conversationId: number) => void
+  lockQueueForEdit: (conversationId: number) => void
+  unlockQueueForEdit: (conversationId: number) => void
 }
 
 function getTextFromParts(parts: StreamPart[]): string {
@@ -119,7 +122,7 @@ function cleanupStreamBuffer(
 
 /** Pop next item from queue and return it, or null if empty/paused */
 function popQueue(get: () => ChatState, conversationId: number): QueuedMessage | null {
-  if (get().queuePaused[conversationId]) return null
+  if (get().queuePaused[conversationId] || get().queueEditLocked[conversationId]) return null
   const queue = get().messageQueues[conversationId]
   if (!queue?.length) return null
   const next = queue[0]
@@ -235,6 +238,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeConversationId: null,
   messageQueues: {},
   queuePaused: {},
+  queueEditLocked: {},
   taskNotifications: {},
 
   loadMessages: async (conversationId: number) => {
@@ -432,7 +436,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const { [conversationId]: _, ...rest } = s.messageQueues
       const { [conversationId]: __, ...pausedRest } = s.queuePaused
-      return { messageQueues: rest, queuePaused: pausedRest }
+      const { [conversationId]: ___, ...editRest } = s.queueEditLocked
+      return { messageQueues: rest, queuePaused: pausedRest, queueEditLocked: editRest }
     })
   },
 
@@ -456,6 +461,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
             processQueuedMessage(get, conversationId, next.content, next.attachments)
           }
         })
+      }
+    }
+  },
+
+  lockQueueForEdit: (conversationId) => {
+    set((s) => ({ queueEditLocked: { ...s.queueEditLocked, [conversationId]: true } }))
+  },
+
+  unlockQueueForEdit: (conversationId) => {
+    const { [conversationId]: _, ...rest } = get().queueEditLocked
+    set({ queueEditLocked: rest })
+
+    // Drain if not paused and not streaming
+    if (!get().queuePaused[conversationId]) {
+      const isConvStreaming = conversationId in get().streamBuffers
+      if (!isConvStreaming) {
+        const next = popQueue(get, conversationId)
+        if (next) {
+          randomQueueDelay().then(() => {
+            if (!get().queuePaused[conversationId] && !get().queueEditLocked[conversationId]) {
+              processQueuedMessage(get, conversationId, next.content, next.attachments)
+            }
+          })
+        }
       }
     }
   },

@@ -10,9 +10,11 @@ interface QueuePanelProps {
   onReorder: (fromIndex: number, toIndex: number) => void
   onClear: () => void
   onResume: () => void
+  onEditStart?: () => void
+  onEditEnd?: () => void
 }
 
-export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onClear, onResume }: QueuePanelProps) {
+export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onClear, onResume, onEditStart, onEditEnd }: QueuePanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const dropIndexRef = useRef<number | null>(null)
 
@@ -83,6 +85,8 @@ export function QueuePanel({ messages, paused, onEdit, onDelete, onReorder, onCl
             onEdit={onEdit}
             onDelete={onDelete}
             onDragStart={handleDragStart}
+            onEditStart={onEditStart}
+            onEditEnd={onEditEnd}
           />
         ))}
       </div>

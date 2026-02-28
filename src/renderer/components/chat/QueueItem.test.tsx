@@ -55,6 +55,19 @@ describe('QueueItem', () => {
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
 
+  it('enters edit mode when clicking directly on the text', () => {
+    const onEdit = vi.fn()
+    render(<QueueItem {...defaultProps} onEdit={onEdit} />)
+
+    fireEvent.click(screen.getByText(/Fix the login bug/))
+
+    const input = screen.getByDisplayValue('Fix the login bug in the auth module')
+    fireEvent.change(input, { target: { value: 'Inline edited' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onEdit).toHaveBeenCalledWith('q1', 'Inline edited')
+  })
+
   it('exits edit mode on Escape without saving', () => {
     const onEdit = vi.fn()
     render(<QueueItem {...defaultProps} onEdit={onEdit} />)
@@ -64,5 +77,46 @@ describe('QueueItem', () => {
 
     expect(onEdit).not.toHaveBeenCalled()
     expect(screen.getByText(/Fix the login bug/)).toBeInTheDocument()
+  })
+
+  it('calls onEditStart when entering edit mode', () => {
+    const onEditStart = vi.fn()
+    render(<QueueItem {...defaultProps} onEditStart={onEditStart} />)
+
+    fireEvent.click(screen.getByText(/Fix the login bug/))
+    expect(onEditStart).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onEditEnd when saving edit', () => {
+    const onEditEnd = vi.fn()
+    render(<QueueItem {...defaultProps} onEditEnd={onEditEnd} />)
+
+    fireEvent.click(screen.getByText(/Fix the login bug/))
+    const input = screen.getByDisplayValue('Fix the login bug in the auth module')
+    fireEvent.change(input, { target: { value: 'New content' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onEditEnd).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onEditEnd when cancelling edit with Escape', () => {
+    const onEditEnd = vi.fn()
+    render(<QueueItem {...defaultProps} onEditEnd={onEditEnd} />)
+
+    fireEvent.click(screen.getByText(/Fix the login bug/))
+    fireEvent.keyDown(screen.getByDisplayValue('Fix the login bug in the auth module'), { key: 'Escape' })
+
+    expect(onEditEnd).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onEditEnd on unmount if still editing', () => {
+    const onEditEnd = vi.fn()
+    const { unmount } = render(<QueueItem {...defaultProps} onEditEnd={onEditEnd} />)
+
+    fireEvent.click(screen.getByText(/Fix the login bug/))
+    onEditEnd.mockClear()
+
+    unmount()
+    expect(onEditEnd).toHaveBeenCalledTimes(1)
   })
 })

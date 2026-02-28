@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
 interface QueueItemProps {
   id: string
@@ -7,20 +7,32 @@ interface QueueItemProps {
   onEdit: (id: string, newContent: string) => void
   onDelete: (id: string) => void
   onDragStart: (index: number, e: React.MouseEvent) => void
+  onEditStart?: () => void
+  onEditEnd?: () => void
 }
 
-export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }: QueueItemProps) {
+export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart, onEditStart, onEditEnd }: QueueItemProps) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(content)
   const inputRef = useRef<HTMLInputElement>(null)
   const savingRef = useRef(false)
+  const editActiveRef = useRef(false)
+  const onEditEndRef = useRef(onEditEnd)
+  onEditEndRef.current = onEditEnd
+
+  // Unlock queue if component unmounts while editing
+  useEffect(() => () => {
+    if (editActiveRef.current) onEditEndRef.current?.()
+  }, [])
 
   const handleEditClick = useCallback(() => {
     setEditValue(content)
     setEditing(true)
+    editActiveRef.current = true
     savingRef.current = false
+    onEditStart?.()
     setTimeout(() => inputRef.current?.focus(), 0)
-  }, [content])
+  }, [content, onEditStart])
 
   const handleSave = useCallback(() => {
     if (savingRef.current) return
@@ -30,7 +42,9 @@ export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }:
       onEdit(id, trimmed)
     }
     setEditing(false)
-  }, [editValue, content, id, onEdit])
+    editActiveRef.current = false
+    onEditEnd?.()
+  }, [editValue, content, id, onEdit, onEditEnd])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -38,8 +52,10 @@ export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }:
       handleSave()
     } else if (e.key === 'Escape') {
       setEditing(false)
+      editActiveRef.current = false
+      onEditEnd?.()
     }
-  }, [handleSave])
+  }, [handleSave, onEditEnd])
 
   return (
     <div className="flex items-center gap-1 px-2 py-1 rounded text-sm group bg-surface">
@@ -61,7 +77,7 @@ export function QueueItem({ id, content, index, onEdit, onDelete, onDragStart }:
           onBlur={handleSave}
         />
       ) : (
-        <span className="flex-1 truncate text-body">{content}</span>
+        <span className="flex-1 truncate text-body cursor-text" onClick={handleEditClick}>{content}</span>
       )}
 
       {!editing && (

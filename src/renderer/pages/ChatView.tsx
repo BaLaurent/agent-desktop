@@ -68,6 +68,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
   const reorderQueue = useChatStore((s) => s.reorderQueue)
   const clearQueue = useChatStore((s) => s.clearQueue)
   const resumeQueue = useChatStore((s) => s.resumeQueue)
+  const lockQueueForEdit = useChatStore((s) => s.lockQueueForEdit)
+  const unlockQueueForEdit = useChatStore((s) => s.unlockQueueForEdit)
 
   const { isAuthenticated } = useAuthStore()
   const globalSettings = useSettingsStore((s) => s.settings)
@@ -370,6 +372,14 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     if (conversationId) resumeQueue(conversationId)
   }, [conversationId, resumeQueue])
 
+  const handleQueueEditStart = useCallback(() => {
+    if (conversationId) lockQueueForEdit(conversationId)
+  }, [conversationId, lockQueueForEdit])
+
+  const handleQueueEditEnd = useCallback(() => {
+    if (conversationId) unlockQueueForEdit(conversationId)
+  }, [conversationId, unlockQueueForEdit])
+
   const handleRegenerate = () => {
     if (!conversationId) return
     regenerateLastResponse(conversationId)
@@ -507,6 +517,8 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           onReorder={handleQueueReorder}
           onClear={handleQueueClear}
           onResume={handleQueueResume}
+          onEditStart={handleQueueEditStart}
+          onEditEnd={handleQueueEditEnd}
         />
 
         {/* Status line above input */}
