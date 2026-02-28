@@ -36,6 +36,7 @@ export function AppearanceSettings() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [themesDir, setThemesDir] = useState<string | null>(null)
+  const [autoThemeDialog, setAutoThemeDialog] = useState<ThemeFile | null>(null)
 
   useEffect(() => {
     loadThemes()
@@ -47,12 +48,21 @@ export function AppearanceSettings() {
   const alwaysVisible = (settings.panelButtonAlwaysVisible ?? 'false') === 'true'
   const heatmapEnabled = (settings.heatmap_enabled ?? 'false') === 'true'
   const heatmapMode = settings.heatmap_mode ?? 'relative'
+  const autoThemeEnabled = (settings.autoTheme_enabled ?? 'false') === 'true'
+  const autoThemeDayTheme = settings.autoTheme_dayTheme ?? 'default-light.css'
+  const autoThemeNightTheme = settings.autoTheme_nightTheme ?? 'default-dark.css'
+  const autoThemeDayTime = settings.autoTheme_dayTime ?? '07:00'
+  const autoThemeNightTime = settings.autoTheme_nightTime ?? '21:00'
   useEffect(() => {
     document.documentElement.style.fontSize = currentFontSize + 'px'
   }, [currentFontSize])
 
   const handleSelectTheme = (theme: ThemeFile) => {
-    applyTheme(theme)
+    if (autoThemeEnabled) {
+      setAutoThemeDialog(theme)
+    } else {
+      applyTheme(theme)
+    }
   }
 
   const handleStartCreate = () => {
@@ -316,6 +326,86 @@ export function AppearanceSettings() {
         )}
       </div>
 
+      {/* Auto Day/Night Theme */}
+      <div className="rounded-lg overflow-hidden border border-deep">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-deep">
+          <div className="flex flex-col">
+            <span className="text-sm text-body">Auto Day/Night Theme</span>
+            <span className="text-xs text-muted">Switch theme automatically based on time of day</span>
+          </div>
+          <button
+            onClick={() => setSetting('autoTheme_enabled', autoThemeEnabled ? 'false' : 'true')}
+            role="switch"
+            aria-checked={autoThemeEnabled}
+            aria-label="Toggle auto day/night theme"
+            className="relative w-9 h-5 rounded-full flex-shrink-0 transition-colors"
+            style={{
+              backgroundColor: autoThemeEnabled ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              opacity: autoThemeEnabled ? 1 : 0.3,
+            }}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: autoThemeEnabled ? 'translateX(16px)' : 'translateX(0px)' }}
+            />
+          </button>
+        </div>
+
+        {autoThemeEnabled && (
+          <>
+            {/* Day theme row */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-deep">
+              <span className="text-sm text-body">Day theme</span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={autoThemeDayTheme}
+                  onChange={(e) => setSetting('autoTheme_dayTheme', e.target.value)}
+                  className="bg-surface text-body border border-muted rounded px-2 py-1 text-sm outline-none focus:border-primary mobile:text-base"
+                  aria-label="Day theme"
+                >
+                  {themes.map((t) => (
+                    <option key={t.filename} value={t.filename}>{t.name}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted">at</span>
+                <input
+                  type="time"
+                  value={autoThemeDayTime}
+                  onChange={(e) => setSetting('autoTheme_dayTime', e.target.value)}
+                  className="bg-surface text-body border border-muted rounded px-2 py-1 text-sm outline-none focus:border-primary mobile:text-base"
+                  aria-label="Day transition time"
+                />
+              </div>
+            </div>
+
+            {/* Night theme row */}
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-sm text-body">Night theme</span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={autoThemeNightTheme}
+                  onChange={(e) => setSetting('autoTheme_nightTheme', e.target.value)}
+                  className="bg-surface text-body border border-muted rounded px-2 py-1 text-sm outline-none focus:border-primary mobile:text-base"
+                  aria-label="Night theme"
+                >
+                  {themes.map((t) => (
+                    <option key={t.filename} value={t.filename}>{t.name}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted">at</span>
+                <input
+                  type="time"
+                  value={autoThemeNightTime}
+                  onChange={(e) => setSetting('autoTheme_nightTime', e.target.value)}
+                  className="bg-surface text-body border border-muted rounded px-2 py-1 text-sm outline-none focus:border-primary mobile:text-base"
+                  aria-label="Night transition time"
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Theme Selection */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -469,6 +559,55 @@ export function AppearanceSettings() {
             <button
               onClick={() => { setEditing(null); setError(null) }}
               className="px-4 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 bg-deep text-body"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-theme click dialog */}
+      {autoThemeDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'var(--color-overlay)' }}>
+          <div className="bg-surface rounded-lg p-4 max-w-xs w-full shadow-lg border border-muted">
+            <h3 className="text-sm font-semibold text-body mb-3">
+              Apply &quot;{autoThemeDialog.name}&quot;
+            </h3>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setSetting('autoTheme_dayTheme', autoThemeDialog.filename)
+                  applyTheme(autoThemeDialog)
+                  setAutoThemeDialog(null)
+                }}
+                className="px-3 py-2 rounded text-sm font-medium text-left transition-colors hover:bg-deep text-body"
+              >
+                Set as day theme
+              </button>
+              <button
+                onClick={() => {
+                  setSetting('autoTheme_nightTheme', autoThemeDialog.filename)
+                  applyTheme(autoThemeDialog)
+                  setAutoThemeDialog(null)
+                }}
+                className="px-3 py-2 rounded text-sm font-medium text-left transition-colors hover:bg-deep text-body"
+              >
+                Set as night theme
+              </button>
+              <button
+                onClick={() => {
+                  setSetting('autoTheme_enabled', 'false')
+                  applyTheme(autoThemeDialog)
+                  setAutoThemeDialog(null)
+                }}
+                className="px-3 py-2 rounded text-sm font-medium text-left transition-colors hover:bg-deep text-muted"
+              >
+                Apply globally (disable auto)
+              </button>
+            </div>
+            <button
+              onClick={() => setAutoThemeDialog(null)}
+              className="mt-3 w-full px-3 py-2 rounded text-sm font-medium transition-colors bg-deep text-body"
             >
               Cancel
             </button>
