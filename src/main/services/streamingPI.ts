@@ -1,5 +1,8 @@
 import { sendChunk, buildPromptWithHistory, abortControllers } from './streaming'
 import { loadPISdk } from './piSdk'
+import { PiUIContext } from './piUIContext'
+import { registerPiUIContext, unregisterPiUIContext } from './piExtensions'
+import { getMainWindow } from '../index'
 import type { AISettings } from './streaming'
 import type { ToolCall } from '../../shared/types'
 
@@ -65,6 +68,18 @@ export async function streamMessagePI(
       tools: pi.codingTools,
       resourceLoader,
     })
+
+    // Create UI context and bind to session for extension UI support
+    const uiContext = new PiUIContext(
+      getMainWindow() || { webContents: { send: () => {} }, isDestroyed: () => true },
+      convKey
+    )
+    registerPiUIContext(convKey, uiContext)
+    try {
+      await session.bindExtensions({ uiContext: uiContext as never })
+    } catch (err) {
+      console.log('[streamingPI] bindExtensions not available (PI SDK version may not support it)')
+    }
 
     // Wire abort: when our abort controller fires, abort the PI session
     const onAbort = () => {
@@ -148,6 +163,8 @@ export async function streamMessagePI(
       unsubscribe()
       abortController.signal.removeEventListener('abort', onAbort)
       session.dispose()
+      uiContext.dispose()
+      unregisterPiUIContext(convKey)
     }
 
     sendChunk('done', undefined, {

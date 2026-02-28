@@ -8,12 +8,30 @@ vi.mock('../index', () => ({
   })),
 }))
 
+const mockDispose = vi.fn()
+vi.mock('./piUIContext', () => {
+  return {
+    PiUIContext: function PiUIContext() {
+      this.dispose = mockDispose
+      this.handleResponse = vi.fn()
+    },
+  }
+})
+
+vi.mock('./piExtensions', () => ({
+  registerPiUIContext: vi.fn(),
+  unregisterPiUIContext: vi.fn(),
+  discoverPIExtensions: vi.fn(),
+  registerHandlers: vi.fn(),
+}))
+
 // Mock session object
 const mockSession = {
   subscribe: vi.fn(),
   prompt: vi.fn(),
   abort: vi.fn().mockResolvedValue(undefined),
   dispose: vi.fn(),
+  bindExtensions: vi.fn().mockResolvedValue(undefined),
 }
 
 const mockCreateAgentSession = vi.fn().mockResolvedValue({
@@ -49,6 +67,8 @@ describe('streamMessagePI', () => {
     mockSession.prompt.mockClear()
     mockSession.abort.mockClear()
     mockSession.dispose.mockClear()
+    mockSession.bindExtensions.mockClear()
+    mockDispose.mockClear()
 
     ;(globalThis as Record<string, unknown>).__lastResourceLoaderOpts = null
 
