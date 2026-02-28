@@ -11,6 +11,14 @@ export interface QueuedMessage {
   createdAt: number
 }
 
+export interface TaskNotification {
+  taskId?: string
+  taskStatus?: string
+  summary: string
+  outputFile?: string
+  receivedAt: number
+}
+
 interface ChatState {
   messages: Message[]
   clearedAt: string | null
@@ -25,6 +33,7 @@ interface ChatState {
   activeConversationId: number | null
   messageQueues: Record<number, QueuedMessage[]>
   queuePaused: Record<number, boolean>
+  taskNotifications: Record<number, TaskNotification[]>
 
   loadMessages: (conversationId: number) => Promise<void>
   sendMessage: (conversationId: number, content: string, attachments?: Attachment[]) => Promise<void>
@@ -226,6 +235,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeConversationId: null,
   messageQueues: {},
   queuePaused: {},
+  taskNotifications: {},
 
   loadMessages: async (conversationId: number) => {
     set((s) => ({ isLoading: true, error: s.error ?? null }))
@@ -249,15 +259,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       updated_at: new Date().toISOString(),
     }
 
-    set((s) => ({
-      messages: [...s.messages, userMsg],
-      isStreaming: true,
-      streamParts: [],
-      streamingContent: '',
-      streamBuffers: { ...s.streamBuffers, [conversationId]: [] },
-      error: null,
-      activeConversationId: conversationId,
-    }))
+    set((s) => {
+      const { [conversationId]: _, ...restNotifs } = s.taskNotifications
+      return {
+        messages: [...s.messages, userMsg],
+        isStreaming: true,
+        streamParts: [],
+        streamingContent: '',
+        streamBuffers: { ...s.streamBuffers, [conversationId]: [] },
+        error: null,
+        activeConversationId: conversationId,
+        taskNotifications: restNotifs,
+      }
+    })
 
     await streamOperation(
       get, set, conversationId,
@@ -464,6 +478,54 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
   // Route chunk to the correct buffer by conversationId
   const bufferKey = chunk.conversationId ?? store.activeConversationId
+
+  // task_notification can arrive between turns (no active stream buffer)
+  // Handle it before the buffer guard so it's never silently dropped
+  if (chunk.type === 'task_notification') {
+    const convId = bufferKey ?? store.activeConversationId
+    if (convId != null) {
+      const notification: TaskNotification = {
+        taskId: chunk.taskId,
+        taskStatus: chunk.taskStatus,
+        summary: chunk.content || 'Agent task completed',
+        outputFile: chunk.outputFile,
+        receivedAt: Date.now(),
+      }
+      const existing = store.taskNotifications[convId] || []
+      useChatStore.setState({
+        taskNotifications: { ...store.taskNotifications, [convId]: [...existing, notification] },
+      })
+      // Also add inline if streaming
+      if (convId in store.streamBuffers) {
+        const parts = [...(store.streamBuffers[convId] || [])]
+        parts.push({
+          type: 'task_notification',
+          summary: notification.summary,
+          taskId: chunk.taskId,
+          taskStatus: chunk.taskStatus,
+          outputFile: chunk.outputFile,
+        })
+        const buffers = { ...store.streamBuffers, [convId]: parts }
+        if (convId === store.activeConversationId) {
+          useChatStore.setState({ streamBuffers: buffers, streamParts: parts, streamingContent: getTextFromParts(parts) })
+        } else {
+          useChatStore.setState({ streamBuffers: buffers })
+        }
+      }
+      // Trigger notification sound + desktop notification
+      const notifSettings = useSettingsStore.getState().settings
+      if (notifSettings.notificationSounds === 'true') {
+        playCompletionSound()
+        const doneDesktopMode = notifSettings.notificationDesktopMode ?? 'unfocused'
+        if (shouldShowDesktopNotification(doneDesktopMode)) {
+          const status = chunk.taskStatus === 'failed' ? 'failed' : 'completed'
+          window.agent.system.showNotification('Agent Desktop', `Background agent ${status}`).catch(() => {})
+        }
+      }
+    }
+    return
+  }
+
   // Drop chunks for conversations without an active buffer (not streaming)
   if (bufferKey == null || !(bufferKey in store.streamBuffers)) {
     return

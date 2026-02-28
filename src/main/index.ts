@@ -13,6 +13,7 @@ import { showOverlay } from './services/quickChat'
 import { startScheduler, stopScheduler } from './services/scheduler'
 import { startBridge, stopBridge } from './services/schedulerBridge'
 import { shutdownAllKernels } from './services/jupyter'
+import { shutdownAllSessions } from './services/sessionManager'
 import { stop as stopTts } from './services/tts'
 import { startServer, stopServer } from './services/webServer'
 
@@ -170,6 +171,7 @@ if (!gotLock) {
     isShuttingDown = true
 
     // Sync cleanup
+    shutdownAllSessions()
     shutdownAllKernels()
     stopScheduler()
     stopBridge()

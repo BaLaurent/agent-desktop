@@ -1,3 +1,10 @@
+import { vi } from 'vitest'
+
+// Mock sessionManager to avoid transitive import of streaming → knowledge → app.getPath
+vi.mock('./sessionManager', () => ({
+  invalidateSession: vi.fn(),
+}))
+
 import { createTestDb } from '../__tests__/db-helper'
 import { createMockIpcMain } from '../__tests__/ipc-helper'
 import { registerHandlers } from './conversations'

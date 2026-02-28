@@ -5,6 +5,7 @@ import { promises as fsp } from 'fs'
 import { join, basename, extname, resolve, relative } from 'path'
 import { app } from 'electron'
 import { streamMessage, abortStream, respondToApproval, injectApiKeyEnv, notifyConversationUpdated, sendChunk } from './streaming'
+import { invalidateSession } from './sessionManager'
 import { runUserPromptSubmitHooks } from './hookRunner'
 import { loadAgentSDK } from './anthropic'
 import { getMainWindow } from '../index'
@@ -576,6 +577,7 @@ async function streamAndSave(
       if (attemptSessionId) {
         clearConversationSdkSessionId(db, conversationId)
       }
+      invalidateSession(conversationId)
 
       if (attempt < maxAttempts) {
         const delay = retrySettings.initialDelayMs * Math.pow(2, attempt - 1)
@@ -600,6 +602,7 @@ async function streamAndSave(
       if (attempt === 1 && sdkSessionId) {
         console.warn('[messages] SDK session resume failed, retrying with full history:', err instanceof Error ? err.message : String(err))
         clearConversationSdkSessionId(db, conversationId)
+        invalidateSession(conversationId)
         // Continue to next attempt with cleared session
         continue
       }
@@ -730,6 +733,7 @@ async function compactConversation(
     const clearedAt = new Date().toISOString()
     db.prepare('UPDATE conversations SET cleared_at = ?, compact_summary = ?, sdk_session_id = NULL, updated_at = ? WHERE id = ?')
       .run(clearedAt, summary || null, clearedAt, conversationId)
+    invalidateSession(conversationId)
 
     return { summary, clearedAt }
   } finally {
@@ -820,6 +824,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     // Clear SDK session — history has diverged from the SDK's internal state
     clearConversationSdkSessionId(db, conversationId)
+    invalidateSession(conversationId)
 
     // Bump updated_at so conversation sorts to top immediately (matches messages:send behavior)
     updateConversationTimestamp(db, conversationId)
@@ -852,6 +857,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       ).run(msg.conversation_id, msg.id)
       db.prepare('UPDATE conversations SET sdk_session_id = NULL WHERE id = ?').run(msg.conversation_id)
     })()
+    invalidateSession(msg.conversation_id)
 
     // Bump updated_at so conversation sorts to top immediately (matches messages:send behavior)
     updateConversationTimestamp(db, msg.conversation_id)

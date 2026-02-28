@@ -4,6 +4,7 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { StreamingIndicator } from './StreamingIndicator'
 import { useSettingsStore } from '../../stores/settingsStore'
 import type { Message, StreamPart } from '../../../shared/types'
+import type { TaskNotification } from '../../stores/chatStore'
 
 function ContextClearedDivider({ clearedCount }: { clearedCount: number }) {
   return (
@@ -50,6 +51,7 @@ interface MessageListProps {
   streamParts: StreamPart[]
   streamingContent: string
   isLoading: boolean
+  taskNotifications?: TaskNotification[]
   onEdit: (messageId: number, content: string) => void
   onRegenerate: () => void
   onFork: (messageId: number) => void
@@ -65,6 +67,7 @@ export function MessageList({
   streamParts,
   streamingContent,
   isLoading,
+  taskNotifications,
   onEdit,
   onRegenerate,
   onFork,
@@ -148,6 +151,39 @@ export function MessageList({
             compactSummary || isCompacting
               ? <CompactSummaryBubble summary={compactSummary || ''} clearedCount={messages.length} isCompacting={!!isCompacting} />
               : <ContextClearedDivider clearedCount={messages.length} />
+          )}
+
+          {/* Background agent task notifications (arrive between turns) */}
+          {taskNotifications && taskNotifications.length > 0 && !isStreaming && (
+            <div className="mb-4">
+              {taskNotifications.map((notif, idx) => {
+                const isFailed = notif.taskStatus === 'failed'
+                return (
+                  <div
+                    key={`tn_${idx}`}
+                    className="flex justify-start mb-2"
+                  >
+                    <div
+                      className="rounded-lg px-4 py-3 max-w-[80%] mobile:max-w-[95%] text-sm border"
+                      style={{
+                        backgroundColor: isFailed
+                          ? 'color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent)'
+                          : 'color-mix(in srgb, var(--color-success, #22c55e) 10%, transparent)',
+                        borderColor: isFailed
+                          ? 'color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent)'
+                          : 'color-mix(in srgb, var(--color-success, #22c55e) 30%, transparent)',
+                        color: 'var(--color-text)',
+                      }}
+                    >
+                      <div className="text-xs font-medium mb-1" style={{ color: isFailed ? 'var(--color-error, #ef4444)' : 'var(--color-success, #22c55e)' }}>
+                        Agent {notif.taskStatus || 'completed'}
+                      </div>
+                      <div>{notif.summary}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
 
           {isStreaming && (

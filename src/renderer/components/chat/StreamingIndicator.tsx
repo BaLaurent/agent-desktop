@@ -86,6 +86,29 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
                   </div>
                 )
               }
+              if (part.type === 'task_notification') {
+                const isFailed = part.taskStatus === 'failed'
+                return (
+                  <div
+                    key={`task_${idx}`}
+                    className="my-2 rounded px-3 py-2 text-xs border"
+                    style={{
+                      backgroundColor: isFailed
+                        ? 'color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent)'
+                        : 'color-mix(in srgb, var(--color-success, #22c55e) 10%, transparent)',
+                      borderColor: isFailed
+                        ? 'color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent)'
+                        : 'color-mix(in srgb, var(--color-success, #22c55e) 30%, transparent)',
+                      color: 'var(--color-text-muted)',
+                    }}
+                  >
+                    <span className="font-medium mr-1" style={{ color: isFailed ? 'var(--color-error, #ef4444)' : 'var(--color-success, #22c55e)' }}>
+                      Agent {part.taskStatus || 'completed'}
+                    </span>
+                    {part.summary}
+                  </div>
+                )
+              }
               return <ToolUseBlock key={part.id || `tool_${idx}`} tool={part} />
             })}
           </div>

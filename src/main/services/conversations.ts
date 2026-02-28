@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3'
 import { validateString, validatePositiveInt } from '../utils/validate'
 import { DEFAULT_MODEL } from '../../shared/constants'
 import { invalidateCwdCache } from './cwdCache'
+import { invalidateSession } from './sessionManager'
 
 const SEARCH_RESULTS_LIMIT = 50
 
@@ -89,12 +90,14 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
   ipcMain.handle('conversations:delete', (_e, id: number) => {
     validatePositiveInt(id, 'conversationId')
+    invalidateSession(id)
     db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
   })
 
   ipcMain.handle('conversations:deleteMany', (_e, ids: number[]) => {
     if (!Array.isArray(ids) || ids.length === 0) return
     for (const id of ids) validatePositiveInt(id, 'conversationId')
+    for (const id of ids) invalidateSession(id)
     const stmt = db.prepare('DELETE FROM conversations WHERE id = ?')
     db.transaction(() => { for (const id of ids) stmt.run(id) })()
   })

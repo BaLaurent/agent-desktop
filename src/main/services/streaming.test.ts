@@ -20,6 +20,15 @@ vi.mock('./streamingPI', () => ({
   streamMessagePI: (...args: unknown[]) => mockStreamMessagePI(...args),
 }))
 
+// Mock sessionManager — tests in this file exercise the one-shot path (persistSession: false)
+const mockSendTurn = vi.fn()
+vi.mock('./sessionManager', () => ({
+  sendTurn: (...args: unknown[]) => mockSendTurn(...args),
+  respondToSessionApproval: vi.fn(() => false),
+  abortSession: vi.fn(),
+  hasActiveSession: vi.fn(() => false),
+}))
+
 import { buildPromptWithHistory, streamMessage, registerStreamWindow, notifyConversationUpdated } from './streaming'
 
 describe('buildPromptWithHistory', () => {
@@ -81,7 +90,8 @@ describe('streamMessage — SDK session resume', () => {
       'system',
       { permissionMode: 'bypassPermissions' },
       1,
-      'session-abc-123'
+      'session-abc-123',
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -104,7 +114,8 @@ describe('streamMessage — SDK session resume', () => {
       'system',
       { permissionMode: 'bypassPermissions' },
       1,
-      'session-xyz'
+      'session-xyz',
+      false
     )
 
     const prompt = mockQueryFn.mock.calls[0][0].prompt
@@ -124,7 +135,8 @@ describe('streamMessage — SDK session resume', () => {
       'system',
       { permissionMode: 'bypassPermissions' },
       1,
-      null
+      null,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -152,7 +164,9 @@ describe('streamMessage — SDK session resume', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(result.sessionId).toBe('captured-session-id')
@@ -169,7 +183,9 @@ describe('streamMessage — SDK session resume', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(result.sessionId).toBeNull()
@@ -202,11 +218,11 @@ describe('streamMessage — SDK session resume', () => {
       }),
     })
 
+    // No conversationId → routes to one-shot path without persistSession
     await streamMessage(
       [{ role: 'user', content: 'test' }],
       'system',
-      { permissionMode: 'bypassPermissions' },
-      1
+      { permissionMode: 'bypassPermissions' }
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -238,7 +254,9 @@ describe('streamMessage — MCP allowedTools', () => {
         },
         permissionMode: 'bypassPermissions',
       },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(mockQueryFn).toHaveBeenCalledTimes(1)
@@ -262,7 +280,9 @@ describe('streamMessage — MCP allowedTools', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -280,7 +300,9 @@ describe('streamMessage — MCP allowedTools', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { mcpServers: {}, permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -305,7 +327,9 @@ describe('streamMessage — Skills settingSources', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { skills: 'off', permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -324,7 +348,9 @@ describe('streamMessage — Skills settingSources', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { skills: 'user', permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -349,7 +375,9 @@ describe('streamMessage — Skills settingSources', () => {
           spotify: { command: 'uvx', args: ['mcp-spotify'] },
         },
       },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -370,7 +398,9 @@ describe('streamMessage — Skills settingSources', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { skills: 'local', permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -389,7 +419,9 @@ describe('streamMessage — Skills settingSources', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { skills: 'user', skillsEnabled: false, permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -409,7 +441,9 @@ describe('streamMessage — Skills settingSources', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { skills: 'project', permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const opts = mockQueryFn.mock.calls[0][0].options
@@ -445,7 +479,9 @@ describe('streamMessage — canUseTool disabled skills', () => {
         disabledSkills: ['weather-wttr'],
         permissionMode: 'bypassPermissions',
       },
-      1
+      1,
+      undefined,
+      false
     )
 
     await streamPromise
@@ -476,7 +512,9 @@ describe('streamMessage — canUseTool disabled skills', () => {
         disabledSkills: ['weather-wttr'],
         permissionMode: 'bypassPermissions',
       },
-      1
+      1,
+      undefined,
+      false
     )
 
     await streamPromise
@@ -506,7 +544,9 @@ describe('streamMessage — canUseTool disabled skills', () => {
         disabledSkills: [],
         permissionMode: 'bypassPermissions',
       },
-      1
+      1,
+      undefined,
+      false
     )
 
     await streamPromise
@@ -551,7 +591,9 @@ describe('streamMessage — stopReason in done chunk', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const done = getDoneChunk()
@@ -581,7 +623,9 @@ describe('streamMessage — stopReason in done chunk', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const done = getDoneChunk()
@@ -609,7 +653,9 @@ describe('streamMessage — stopReason in done chunk', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const done = getDoneChunk()
@@ -627,7 +673,9 @@ describe('streamMessage — stopReason in done chunk', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const done = getDoneChunk()
@@ -645,7 +693,9 @@ describe('streamMessage — stopReason in done chunk', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const done = getDoneChunk()
@@ -655,13 +705,13 @@ describe('streamMessage — stopReason in done chunk', () => {
   })
 })
 
-describe('streamMessage — canUseTool forces Task background to foreground', () => {
+describe('streamMessage — canUseTool passthrough for Task tool', () => {
   beforeEach(() => {
     mockSendFn.mockClear()
     mockQueryFn.mockClear()
   })
 
-  it('strips run_in_background from Task tool input in bypass mode', async () => {
+  it('passes Task tool input through unchanged in bypass mode (persistent sessions handle background agents)', async () => {
     let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<unknown>) | undefined
 
     mockQueryFn.mockImplementation((args: { options: Record<string, unknown> }) => {
@@ -677,7 +727,9 @@ describe('streamMessage — canUseTool forces Task background to foreground', ()
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(capturedCanUseTool).toBeDefined()
@@ -688,7 +740,7 @@ describe('streamMessage — canUseTool forces Task background to foreground', ()
     }) as { behavior: string; updatedInput: Record<string, unknown> }
 
     expect(result.behavior).toBe('allow')
-    expect(result.updatedInput.run_in_background).toBe(false)
+    expect(result.updatedInput.run_in_background).toBe(true)
     expect(result.updatedInput.prompt).toBe('do something')
   })
 
@@ -708,7 +760,9 @@ describe('streamMessage — canUseTool forces Task background to foreground', ()
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(capturedCanUseTool).toBeDefined()
@@ -737,7 +791,9 @@ describe('streamMessage — canUseTool forces Task background to foreground', ()
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(capturedCanUseTool).toBeDefined()
@@ -783,7 +839,9 @@ describe('streamMessage — system init (MCP status)', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     // Find the mcp_status chunk among sent chunks
@@ -819,7 +877,9 @@ describe('streamMessage — system init (MCP status)', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const mcpChunks = mockSendFn.mock.calls.filter(
@@ -868,7 +928,9 @@ describe('streamMessage — system hook_response', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const chunks = getSystemMessageChunks()
@@ -905,7 +967,9 @@ describe('streamMessage — system hook_response', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const chunks = getSystemMessageChunks()
@@ -938,7 +1002,9 @@ describe('streamMessage — system hook_response', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(getSystemMessageChunks()).toHaveLength(0)
@@ -969,7 +1035,9 @@ describe('streamMessage — system hook_response', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(getSystemMessageChunks()).toHaveLength(0)
@@ -1000,7 +1068,9 @@ describe('streamMessage — system hook_response', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     const chunks = getSystemMessageChunks()
@@ -1035,7 +1105,9 @@ describe('streamMessage — system hook_response', () => {
       [{ role: 'user', content: 'test' }],
       'system prompt',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(getSystemMessageChunks()).toHaveLength(0)
@@ -1091,7 +1163,9 @@ describe('streamMessage — PI backend delegation', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { sdkBackend: 'pi', cwd: '/tmp/test' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(mockStreamMessagePI).toHaveBeenCalledTimes(1)
@@ -1117,7 +1191,9 @@ describe('streamMessage — PI backend delegation', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { sdkBackend: 'claude-agent-sdk', permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(mockStreamMessagePI).not.toHaveBeenCalled()
@@ -1135,7 +1211,9 @@ describe('streamMessage — PI backend delegation', () => {
       [{ role: 'user', content: 'test' }],
       'system',
       { permissionMode: 'bypassPermissions' },
-      1
+      1,
+      undefined,
+      false
     )
 
     expect(mockStreamMessagePI).not.toHaveBeenCalled()

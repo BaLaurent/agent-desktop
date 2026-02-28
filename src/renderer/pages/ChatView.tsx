@@ -22,7 +22,10 @@ import { parseOverrides, resolveEffectiveSettings, getInheritanceSource } from '
 import { parseMcpDisabledList } from '../utils/mcpUtils'
 import { useVoiceInputStore } from '../stores/voiceInputStore'
 import type { Attachment, AIOverrides, KnowledgeSelection } from '../../shared/types'
+import type { TaskNotification } from '../stores/chatStore'
 import { DEFAULT_MODEL, DEFAULT_EXCLUDE_PATTERNS, shortenModelName } from '../../shared/constants'
+
+const EMPTY_TASK_NOTIFICATIONS: TaskNotification[] = []
 
 interface ChatViewProps {
   conversationId: number | null
@@ -53,6 +56,10 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     setActiveConversation,
   } = useChatStore()
 
+  const taskNotificationsRaw = useChatStore((s) =>
+    conversationId != null ? s.taskNotifications[conversationId] : undefined
+  )
+  const taskNotifications = taskNotificationsRaw ?? EMPTY_TASK_NOTIFICATIONS
   const messageQueues = useChatStore((s) => s.messageQueues)
   const queuePaused = useChatStore((s) => s.queuePaused)
   const addToQueue = useChatStore((s) => s.addToQueue)
@@ -474,6 +481,7 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           streamParts={streamParts}
           streamingContent={streamingContent}
           isLoading={isLoading}
+          taskNotifications={taskNotifications}
           onEdit={editMessage}
           onRegenerate={handleRegenerate}
           onFork={handleFork}

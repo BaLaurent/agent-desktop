@@ -3,6 +3,7 @@ import { BrowserWindow } from 'electron'
 import { getMainWindow } from '../index'
 import { loadAgentSDK } from './anthropic'
 import { streamMessagePI } from './streamingPI'
+import { sendTurn, respondToSessionApproval, abortSession, hasActiveSession } from './sessionManager'
 import { buildCwdRestrictionHooks } from './cwdHooks'
 import { findBinaryInPath, ensureFreshMacOSToken } from '../utils/env'
 import { broadcast } from '../utils/broadcast'
@@ -21,7 +22,10 @@ export function respondToApproval(requestId: string, response: ToolApprovalRespo
   if (pending) {
     pending.resolve(response)
     pendingRequests.delete(requestId)
+    return
   }
+  // Fall through to persistent session approval
+  respondToSessionApproval(requestId, response)
 }
 
 function denyAllPending(): void {
@@ -170,6 +174,11 @@ interface SystemMessage {
   stderr?: string
   exit_code?: number
   outcome?: string
+  // task_notification fields
+  task_id?: string
+  status?: string
+  output_file?: string
+  summary?: string
 }
 
 type SDKMessage = StreamEventMessage | ResultMessage | SystemMessage | { type: string }
@@ -185,11 +194,28 @@ export async function streamMessage(
   sdkSessionId?: string | null,
   persistSession?: boolean
 ): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
-  // Delegate to PI-SDK backend when selected
+  // PI backend: unchanged
   if (aiSettings?.sdkBackend === 'pi') {
     return streamMessagePI(messages, systemPrompt, aiSettings, conversationId)
   }
 
+  // One-shot: scheduler, no conversationId, or persistSession === false
+  if (persistSession === false || conversationId == null) {
+    return streamMessageOneShot(messages, systemPrompt, aiSettings, conversationId, sdkSessionId, persistSession)
+  }
+
+  // Persistent: delegate to SessionManager
+  return sendTurn(conversationId, messages, systemPrompt, aiSettings, sdkSessionId ?? null)
+}
+
+async function streamMessageOneShot(
+  messages: MessageParam[],
+  systemPrompt?: string,
+  aiSettings?: AISettings,
+  conversationId?: number,
+  sdkSessionId?: string | null,
+  persistSession?: boolean
+): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
   // Ensure the macOS OAuth token is fresh — skip when using API key auth
   if (!aiSettings?.apiKey) {
     await ensureFreshMacOSToken()
@@ -286,11 +312,6 @@ export async function streamMessage(
 
     // Always set canUseTool — AskUserQuestion needs interactive handling in all modes
     queryOptions.canUseTool = async (toolName: string, input: Record<string, unknown>) => {
-      // Force Task tools to foreground — background agents can't survive between messages
-      if (toolName === 'Task' && input.run_in_background) {
-        input = { ...input, run_in_background: false }
-      }
-
       // AskUserQuestion: always interactive, regardless of permission mode
       if (toolName === 'AskUserQuestion') {
         const requestId = randomUUID()
@@ -546,6 +567,13 @@ export async function streamMessage(
               ...(sysMsg.hook_event ? { hookEvent: sysMsg.hook_event } : {}),
             })
           }
+        } else if (sysMsg.subtype === 'task_notification') {
+          sendOrBuffer('task_notification', sysMsg.summary, {
+            ...convExtra,
+            ...(sysMsg.task_id ? { taskId: sysMsg.task_id } : {}),
+            ...(sysMsg.status ? { taskStatus: sysMsg.status } : {}),
+            ...(sysMsg.output_file ? { outputFile: sysMsg.output_file } : {}),
+          })
         }
       }
     }
@@ -592,6 +620,11 @@ export function notifyConversationUpdated(conversationId: number): void {
 export function abortStream(conversationId?: number): void {
   denyPendingForConversation(conversationId)
   if (conversationId != null) {
+    // Abort persistent session if active (handles cleanup internally)
+    if (hasActiveSession(conversationId)) {
+      abortSession(conversationId)
+      return
+    }
     const controller = abortControllers.get(conversationId)
     if (controller) {
       controller.abort()
