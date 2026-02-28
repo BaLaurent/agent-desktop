@@ -116,6 +116,9 @@ const api: AgentAPI = {
   commands: {
     list: (cwd?: string, skillsMode?: string) => withTimeout(ipcRenderer.invoke('commands:list', cwd, skillsMode)),
   },
+  macros: {
+    load: (name: string) => withTimeout(ipcRenderer.invoke('macros:load', name)),
+  },
   quickChat: {
     getConversationId: (mode?: string) => withTimeout(ipcRenderer.invoke('quickChat:getConversationId', mode)),
     purge: () => withTimeout(ipcRenderer.invoke('quickChat:purge')),

@@ -4,9 +4,11 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 // Mock fs/promises before import
 const mockReaddir = vi.fn()
 const mockOpen = vi.fn()
+const mockReadFile = vi.fn()
 vi.mock('fs/promises', () => ({
   readdir: (...args: unknown[]) => mockReaddir(...args),
   open: (...args: unknown[]) => mockOpen(...args),
+  readFile: (...args: unknown[]) => mockReadFile(...args),
 }))
 
 vi.mock('../utils/paths', () => ({
@@ -35,6 +37,8 @@ describe('commands service', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
+    // Default: directories not found — individual tests override with mockResolvedValueOnce
+    mockReaddir.mockRejectedValue(new Error('ENOENT'))
     handlers = {}
     const fakeIpcMain = {
       handle: (channel: string, handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown) => {
@@ -174,8 +178,8 @@ describe('commands service', () => {
 
     const result = await handlers['commands:list']('/tmp/proj', 'user') as { source: string }[]
     expect(result.every((c) => c.source !== 'skill')).toBe(true)
-    // readdir should have been called exactly 3 times (user cmds, project cmds, user skills)
-    expect(mockReaddir).toHaveBeenCalledTimes(3)
+    // readdir: user cmds, project cmds, user skills, macros
+    expect(mockReaddir).toHaveBeenCalledTimes(4)
   })
 
   it('handles YAML folded block description in skills', async () => {
@@ -224,5 +228,85 @@ describe('commands service', () => {
     const skill = result.find((c) => c.name === 'local-skill')
     expect(skill).toBeDefined()
     expect(skill!.source).toBe('skill')
+  })
+
+  // ─── Macros tests ──────────────────────────────────────────
+
+  it('registers macros:load handler', () => {
+    expect(handlers['macros:load']).toBeDefined()
+  })
+
+  it('discovers macro files in commands:list', async () => {
+    mockReaddir
+      .mockResolvedValueOnce([])  // user commands dir
+      .mockResolvedValueOnce(['deploy.json', 'not-json.txt'])  // macros dir
+    mockReadFile.mockResolvedValue(JSON.stringify({ description: 'Deploy to prod', messages: ['build', 'push'] }))
+
+    const result = await handlers['commands:list']() as { name: string; description: string; source: string }[]
+    const macro = result.find((c) => c.name === 'deploy')
+    expect(macro).toBeDefined()
+    expect(macro!.source).toBe('macro')
+    expect(macro!.description).toBe('Deploy to prod')
+    // non-json file should be skipped
+    expect(result.find((c) => c.name === 'not-json')).toBeUndefined()
+  })
+
+  it('skips macro files with invalid JSON', async () => {
+    mockReaddir
+      .mockResolvedValueOnce([])  // user commands dir
+      .mockResolvedValueOnce(['broken.json'])  // macros dir
+    mockReadFile.mockResolvedValue('not valid json {{{')
+
+    const result = await handlers['commands:list']() as { name: string }[]
+    expect(result.find((c) => c.name === 'broken')).toBeUndefined()
+  })
+
+  it('skips macro files with empty messages array', async () => {
+    mockReaddir
+      .mockResolvedValueOnce([])  // user commands dir
+      .mockResolvedValueOnce(['empty.json'])  // macros dir
+    mockReadFile.mockResolvedValue(JSON.stringify({ description: 'Empty', messages: [] }))
+
+    const result = await handlers['commands:list']() as { name: string }[]
+    expect(result.find((c) => c.name === 'empty')).toBeUndefined()
+  })
+
+  it('macros:load returns messages for valid macro', async () => {
+    const messages = ['step 1', 'step 2', 'step 3']
+    mockReadFile.mockResolvedValue(JSON.stringify({ description: 'Test', messages }))
+
+    const result = await handlers['macros:load']('test-macro')
+    expect(result).toEqual(messages)
+  })
+
+  it('macros:load returns null for non-existent macro', async () => {
+    mockReadFile.mockRejectedValue(new Error('ENOENT'))
+
+    const result = await handlers['macros:load']('nonexistent')
+    expect(result).toBeNull()
+  })
+
+  it('macros:load returns null when messages contains non-strings', async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify({ messages: ['ok', 42, true] }))
+
+    const result = await handlers['macros:load']('bad-types')
+    expect(result).toBeNull()
+  })
+
+  it('macros:load returns null for invalid argument', async () => {
+    const result = await handlers['macros:load'](123)
+    expect(result).toBeNull()
+  })
+
+  it('macro with no description uses empty string', async () => {
+    mockReaddir
+      .mockResolvedValueOnce([])  // user commands dir
+      .mockResolvedValueOnce(['nodesc.json'])  // macros dir
+    mockReadFile.mockResolvedValue(JSON.stringify({ messages: ['hello'] }))
+
+    const result = await handlers['commands:list']() as { name: string; description: string; source: string }[]
+    const macro = result.find((c) => c.name === 'nodesc')
+    expect(macro).toBeDefined()
+    expect(macro!.description).toBe('')
   })
 })

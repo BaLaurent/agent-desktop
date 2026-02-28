@@ -90,6 +90,52 @@ async function scanCommandsDir(dir: string, source: 'user' | 'project'): Promise
   return commands
 }
 
+const MACROS_DIR = expandTilde('~/.agent-desktop/macros')
+
+interface MacroFile {
+  description?: string
+  messages: string[]
+}
+
+async function scanMacrosDir(): Promise<SlashCommand[]> {
+  let entries: string[]
+  try {
+    entries = await fs.readdir(MACROS_DIR)
+  } catch {
+    return []
+  }
+
+  const macros: SlashCommand[] = []
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue
+    const name = entry.slice(0, -5)
+    try {
+      const raw = await fs.readFile(path.join(MACROS_DIR, entry), 'utf-8')
+      const parsed = JSON.parse(raw) as MacroFile
+      if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+        macros.push({ name, description: parsed.description || '', source: 'macro' })
+      }
+    } catch {
+      // Invalid JSON or unreadable — skip
+    }
+  }
+  return macros
+}
+
+async function loadMacro(name: string): Promise<string[] | null> {
+  try {
+    const filePath = path.join(MACROS_DIR, `${name}.json`)
+    const raw = await fs.readFile(filePath, 'utf-8')
+    const parsed = JSON.parse(raw) as MacroFile
+    if (Array.isArray(parsed.messages) && parsed.messages.every((m) => typeof m === 'string') && parsed.messages.length > 0) {
+      return parsed.messages
+    }
+  } catch {
+    // File not found or invalid
+  }
+  return null
+}
+
 async function scanSkillsDir(dir: string): Promise<SlashCommand[]> {
   let entries: fs.Dirent[] | string[]
   try {
@@ -169,6 +215,17 @@ export function registerHandlers(ipcMain: IpcMain): void {
       }
     }
 
+    // Macros (~/.agent-desktop/macros/)
+    const macros = await scanMacrosDir()
+    for (const macro of macros) {
+      results.set(macro.name, macro)
+    }
+
     return Array.from(results.values())
+  })
+
+  ipcMain.handle('macros:load', async (_event, name: string) => {
+    if (typeof name !== 'string') return null
+    return loadMacro(name)
   })
 }

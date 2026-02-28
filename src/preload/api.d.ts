@@ -119,6 +119,9 @@ export interface AgentAPI {
   commands: {
     list(cwd?: string, skillsMode?: string): Promise<SlashCommand[]>
   }
+  macros: {
+    load(name: string): Promise<string[] | null>
+  }
   quickChat: {
     getConversationId(mode?: 'text' | 'voice'): Promise<number>
     purge(): Promise<void>

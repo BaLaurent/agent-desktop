@@ -316,6 +316,19 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
       await useChatStore.getState().compactContext(conversationId)
       return
     }
+    // Macro invocation: /name with no extra arguments
+    if (/^\/[\w-]+$/.test(trimmed)) {
+      const macroName = trimmed.slice(1)
+      const messages = await window.agent.macros.load(macroName)
+      if (messages) {
+        const [first, ...rest] = messages
+        for (const msg of rest) {
+          addToQueue(conversationId, msg)
+        }
+        sendMessage(conversationId, first)
+        return
+      }
+    }
     sendMessage(conversationId, content, attachments.length > 0 ? attachments : undefined)
     setAttachments([])
   }

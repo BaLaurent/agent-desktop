@@ -108,6 +108,77 @@ function cleanupStreamBuffer(
   }
 }
 
+/** Pop next item from queue and return it, or null if empty/paused */
+function popQueue(get: () => ChatState, conversationId: number): QueuedMessage | null {
+  if (get().queuePaused[conversationId]) return null
+  const queue = get().messageQueues[conversationId]
+  if (!queue?.length) return null
+  const next = queue[0]
+  const rest = queue.slice(1)
+  useChatStore.setState({
+    messageQueues: rest.length
+      ? { ...get().messageQueues, [conversationId]: rest }
+      : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
+  })
+  return next
+}
+
+/** Process a queued message: handle slash commands (/clear, /compact) and macros, or send normally */
+async function processQueuedMessage(
+  get: () => ChatState,
+  conversationId: number,
+  content: string,
+  attachments?: Attachment[]
+): Promise<void> {
+  const trimmed = content.trim()
+
+  // Client-side slash commands — don't start a stream, so must continue drain
+  if (trimmed === '/clear' || trimmed === '/compact') {
+    if (trimmed === '/clear') {
+      await get().clearContext(conversationId)
+    } else {
+      await get().compactContext(conversationId)
+    }
+    // Continue draining: these don't trigger streamOperation, so drain manually
+    const next = popQueue(get, conversationId)
+    if (next) {
+      await randomQueueDelay()
+      if (!get().queuePaused[conversationId]) {
+        await processQueuedMessage(get, conversationId, next.content, next.attachments)
+      }
+    }
+    return
+  }
+
+  // Macro expansion: /name → load macro → prepend messages to queue
+  if (/^\/[\w-]+$/.test(trimmed) && typeof window !== 'undefined' && window.agent?.macros?.load) {
+    const messages = await window.agent.macros.load(trimmed.slice(1))
+    if (messages) {
+      const [first, ...rest] = messages
+      if (rest.length) {
+        const existing = get().messageQueues[conversationId] || []
+        const queued = rest.map((msg) => ({
+          id: crypto.randomUUID(),
+          content: msg,
+          createdAt: Date.now(),
+        }))
+        useChatStore.setState({
+          messageQueues: {
+            ...get().messageQueues,
+            [conversationId]: [...queued, ...existing],
+          },
+        })
+      }
+      // Process first message recursively (could be a slash command or another macro)
+      await processQueuedMessage(get, conversationId, first)
+      return
+    }
+  }
+
+  // Regular message — send to AI (streamOperation will drain the rest)
+  await get().sendMessage(conversationId, content, attachments)
+}
+
 async function streamOperation(
   get: () => ChatState,
   set: (partial: Partial<ChatState>) => void,
@@ -123,21 +194,12 @@ async function streamOperation(
     }
     set(cleanupStreamBuffer(get(), conversationId))
 
-    // Drain queue: send next queued message if not paused
-    const queue = get().messageQueues[conversationId]
-    if (queue?.length && !get().queuePaused[conversationId]) {
-      const next = queue[0]
+    // Drain queue: process next queued message if not paused
+    const next = popQueue(get, conversationId)
+    if (next) {
       await randomQueueDelay()
-      // Re-check pause after delay — user may have paused while waiting
       if (!get().queuePaused[conversationId]) {
-        const fresh = get().messageQueues[conversationId] || []
-        const rest = fresh.slice(1)
-        set({
-          messageQueues: rest.length
-            ? { ...get().messageQueues, [conversationId]: rest }
-            : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
-        })
-        await get().sendMessage(conversationId, next.content, next.attachments)
+        await processQueuedMessage(get, conversationId, next.content, next.attachments)
       }
     }
   } catch (err) {
@@ -372,22 +434,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // If not currently streaming, drain immediately
     const isConvStreaming = conversationId in get().streamBuffers
-    const queue = get().messageQueues[conversationId]
-    if (!isConvStreaming && queue?.length) {
-      const next = queue[0]
-      randomQueueDelay().then(() => {
-        // Re-check pause after delay — user may have paused while waiting
-        if (!get().queuePaused[conversationId]) {
-          const fresh = get().messageQueues[conversationId] || []
-          const rest = fresh.slice(1)
-          set({
-            messageQueues: rest.length
-              ? { ...get().messageQueues, [conversationId]: rest }
-              : (() => { const { [conversationId]: _, ...r } = get().messageQueues; return r })(),
-          })
-          get().sendMessage(conversationId, next.content, next.attachments)
-        }
-      })
+    if (!isConvStreaming) {
+      const next = popQueue(get, conversationId)
+      if (next) {
+        randomQueueDelay().then(() => {
+          if (!get().queuePaused[conversationId]) {
+            processQueuedMessage(get, conversationId, next.content, next.attachments)
+          }
+        })
+      }
     }
   },
 }))

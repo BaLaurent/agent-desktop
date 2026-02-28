@@ -163,7 +163,7 @@ export interface KeyboardShortcut {
 export interface SlashCommand {
   name: string          // e.g. "compact", "refactor", "weather-wttr"
   description: string   // from frontmatter or built-in
-  source: 'builtin' | 'user' | 'project' | 'skill'
+  source: 'builtin' | 'user' | 'project' | 'skill' | 'macro'
 }
 
 // ─── Scheduled Tasks ─────────────────────────────────────────
