@@ -69,7 +69,7 @@ function dispatch(req: BridgeRequest): unknown {
       const intervalValue = p.interval_value as number
       const intervalUnit = p.interval_unit as IntervalUnit
       const scheduleTime = (p.schedule_time as string) || null
-      const oneShot = Boolean(p.one_shot)
+      const maxRuns = p.max_runs != null ? (p.max_runs as number) : null
 
       validateString(name, 'name', 200)
       validateString(prompt, 'prompt', 10_000_000)
@@ -92,20 +92,23 @@ function dispatch(req: BridgeRequest): unknown {
       const nextRun = computeNextRun(intervalValue, intervalUnit, scheduleTime, now)
       const nowIso = now.toISOString()
 
+      // Validate max_runs: must be null or positive integer
+      if (maxRuns !== null) validatePositiveInt(maxRuns, 'max_runs')
+
       const result = db.prepare(`
         INSERT INTO scheduled_tasks (name, prompt, conversation_id, interval_value, interval_unit,
-          schedule_time, catch_up, one_shot, notify_desktop, notify_voice, next_run_at, created_at, updated_at)
+          schedule_time, catch_up, max_runs, notify_desktop, notify_voice, next_run_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, 0, ?, 1, 0, ?, ?, ?)
       `).run(
         name, prompt, conversationId, intervalValue, intervalUnit,
-        scheduleTime, oneShot ? 1 : 0, nextRun, nowIso, nowIso
+        scheduleTime, maxRuns, nextRun, nowIso, nowIso
       )
 
       const task = db.prepare('SELECT * FROM scheduled_tasks WHERE id = ?')
         .get(result.lastInsertRowid) as Record<string, unknown>
 
       notifyRenderer('scheduler:taskUpdate', task)
-      return { id: result.lastInsertRowid as number, name, next_run_at: nextRun, one_shot: oneShot }
+      return { id: result.lastInsertRowid as number, name, next_run_at: nextRun, max_runs: maxRuns }
     }
 
     case 'scheduler.list': {
@@ -113,7 +116,7 @@ function dispatch(req: BridgeRequest): unknown {
       validatePositiveInt(conversationId, 'conversation_id')
 
       const rows = db.prepare(
-        'SELECT id, name, prompt, enabled, interval_value, interval_unit, one_shot, next_run_at, last_status, run_count FROM scheduled_tasks WHERE conversation_id = ? ORDER BY created_at DESC'
+        'SELECT id, name, prompt, enabled, interval_value, interval_unit, max_runs, next_run_at, last_status, run_count FROM scheduled_tasks WHERE conversation_id = ? ORDER BY created_at DESC'
       ).all(conversationId) as Record<string, unknown>[]
 
       return rows.map(r => ({
@@ -123,7 +126,7 @@ function dispatch(req: BridgeRequest): unknown {
         enabled: Boolean(r.enabled),
         interval_value: r.interval_value,
         interval_unit: r.interval_unit,
-        one_shot: Boolean(r.one_shot),
+        max_runs: r.max_runs != null ? (r.max_runs as number) : null,
         next_run_at: r.next_run_at,
         last_status: r.last_status,
         run_count: r.run_count,

@@ -108,6 +108,7 @@ const TABLES = [
     last_status TEXT,
     last_error TEXT,
     run_count INTEGER DEFAULT 0,
+    max_runs INTEGER DEFAULT NULL,
     one_shot INTEGER DEFAULT 0,
     notify_desktop INTEGER DEFAULT 1,
     notify_voice INTEGER DEFAULT 0,
@@ -203,6 +204,15 @@ function runMigrations(db: Database.Database): void {
   const schedCols = db.pragma('table_info(scheduled_tasks)') as { name: string }[]
   if (!schedCols.some((c) => c.name === 'one_shot')) {
     try { db.exec('ALTER TABLE scheduled_tasks ADD COLUMN one_shot INTEGER DEFAULT 0') } catch (e) { console.warn('[migration] scheduled_tasks.one_shot:', e) }
+  }
+
+  // Add max_runs column to scheduled_tasks (replaces one_shot with N-run limit)
+  if (!schedCols.some((c) => c.name === 'max_runs')) {
+    try {
+      db.exec('ALTER TABLE scheduled_tasks ADD COLUMN max_runs INTEGER DEFAULT NULL')
+      // Backfill: convert one_shot=1 rows to max_runs=1
+      db.exec('UPDATE scheduled_tasks SET max_runs = 1 WHERE one_shot = 1')
+    } catch (e) { console.warn('[migration] scheduled_tasks.max_runs:', e) }
   }
 
   // Add is_default column to folders (marks the auto-created default folder)

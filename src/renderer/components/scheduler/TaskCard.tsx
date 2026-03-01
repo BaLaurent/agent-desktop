@@ -163,7 +163,11 @@ export function TaskCard({ task, onEdit, onToggle, onRunNow, onDelete, onClose }
         {task.run_count > 0 && (
           <>
             <span>·</span>
-            <span>{task.run_count} run{task.run_count !== 1 ? 's' : ''}</span>
+            <span>
+              {task.max_runs != null
+                ? `${task.run_count}/${task.max_runs} run${task.max_runs !== 1 ? 's' : ''}`
+                : `${task.run_count} run${task.run_count !== 1 ? 's' : ''}`}
+            </span>
           </>
         )}
       </div>

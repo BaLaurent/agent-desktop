@@ -24,6 +24,12 @@ export function TaskFormModal({ task, initialPrompt, initialConversationId, onSa
   const [scheduleTime, setScheduleTime] = useState(task?.schedule_time || '')
   const [catchUp, setCatchUp] = useState(task?.catch_up !== false)
   const [notifyDesktop, setNotifyDesktop] = useState(task?.notify_desktop !== false)
+  const [maxRunsMode, setMaxRunsMode] = useState<'unlimited' | 'once' | 'custom'>(
+    task?.max_runs == null ? 'unlimited' : task.max_runs === 1 ? 'once' : 'custom'
+  )
+  const [maxRunsValue, setMaxRunsValue] = useState(
+    task?.max_runs != null && task.max_runs > 1 ? task.max_runs : 5
+  )
   const [notifyVoice, setNotifyVoice] = useState(task?.notify_voice || false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,6 +63,7 @@ export function TaskFormModal({ task, initialPrompt, initialConversationId, onSa
         interval_unit: intervalUnit,
         schedule_time: intervalUnit === 'days' && scheduleTime ? scheduleTime : undefined,
         catch_up: catchUp,
+        max_runs: maxRunsMode === 'unlimited' ? null : maxRunsMode === 'once' ? 1 : maxRunsValue,
         notify_desktop: notifyDesktop,
         notify_voice: notifyVoice,
       })
@@ -250,6 +257,45 @@ export function TaskFormModal({ task, initialPrompt, initialConversationId, onSa
               </div>
             </div>
           )}
+
+          {/* Execution limit */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Execution limit
+            </label>
+            <div className="flex flex-col gap-1.5">
+              {([
+                { value: 'unlimited' as const, label: 'Unlimited' },
+                { value: 'once' as const, label: 'Run once' },
+                { value: 'custom' as const, label: 'Custom' },
+              ]).map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="maxRunsMode"
+                    checked={maxRunsMode === value}
+                    onChange={() => setMaxRunsMode(value)}
+                    className="accent-[var(--color-primary)]"
+                  />
+                  <span className="text-sm" style={{ color: 'var(--color-text)' }}>{label}</span>
+                  {value === 'custom' && maxRunsMode === 'custom' && (
+                    <input
+                      type="number"
+                      min={2}
+                      value={maxRunsValue}
+                      onChange={(e) => setMaxRunsValue(Math.max(2, Number(e.target.value)))}
+                      className="w-20 px-2 py-1 rounded text-sm outline-none ml-1"
+                      style={{
+                        backgroundColor: 'var(--color-bg)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-text-muted)/20',
+                      }}
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
 
           {/* Toggles */}
           <div className="space-y-2">

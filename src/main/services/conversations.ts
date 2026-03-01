@@ -4,6 +4,7 @@ import { validateString, validatePositiveInt } from '../utils/validate'
 import { DEFAULT_MODEL } from '../../shared/constants'
 import { invalidateCwdCache } from './cwdCache'
 import { invalidateSession } from './sessionManager'
+import { reassignOrphanedTasks } from './scheduler'
 
 const SEARCH_RESULTS_LIMIT = 50
 
@@ -94,6 +95,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
   ipcMain.handle('conversations:delete', (_e, id: number) => {
     validatePositiveInt(id, 'conversationId')
+    reassignOrphanedTasks(db, id)
     invalidateSession(id)
     db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
   })
@@ -101,6 +103,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
   ipcMain.handle('conversations:deleteMany', (_e, ids: number[]) => {
     if (!Array.isArray(ids) || ids.length === 0) return
     for (const id of ids) validatePositiveInt(id, 'conversationId')
+    for (const id of ids) reassignOrphanedTasks(db, id)
     for (const id of ids) invalidateSession(id)
     const stmt = db.prepare('DELETE FROM conversations WHERE id = ?')
     db.transaction(() => { for (const id of ids) stmt.run(id) })()

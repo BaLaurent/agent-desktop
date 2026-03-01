@@ -84,7 +84,7 @@ function rowToTask(row: Record<string, unknown>): ScheduledTask {
     interval_unit: row.interval_unit as IntervalUnit,
     schedule_time: (row.schedule_time as string) || null,
     catch_up: Boolean(row.catch_up),
-    one_shot: Boolean(row.one_shot),
+    max_runs: row.max_runs != null ? (row.max_runs as number) : null,
     last_run_at: (row.last_run_at as string) || null,
     next_run_at: (row.next_run_at as string) || null,
     last_status: (row.last_status as ScheduledTask['last_status']) || null,
@@ -130,7 +130,29 @@ function notifyRenderer(event: string, data: unknown): void {
   broadcast(event, data)
 }
 
-async function executeTask(db: Database.Database, task: ScheduledTask): Promise<void> {
+/** Reassign scheduled tasks to new conversations before a conversation is deleted (avoids ON DELETE CASCADE). */
+export function reassignOrphanedTasks(db: Database.Database, conversationId: number): void {
+  const tasks = db.prepare('SELECT id, name FROM scheduled_tasks WHERE conversation_id = ?')
+    .all(conversationId) as { id: number; name: string }[]
+
+  if (tasks.length === 0) return
+
+  const modelRow = db.prepare("SELECT value FROM settings WHERE key = 'ai_model'").get() as { value: string } | undefined
+  const model = modelRow?.value || DEFAULT_MODEL
+  const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as { id: number } | undefined
+  const now = new Date().toISOString()
+
+  for (const task of tasks) {
+    const convResult = db.prepare(
+      "INSERT INTO conversations (title, folder_id, model, updated_at) VALUES (?, ?, ?, datetime('now'))"
+    ).run(task.name, defaultFolder?.id ?? null, model)
+    db.prepare('UPDATE scheduled_tasks SET conversation_id = ?, updated_at = ? WHERE id = ?')
+      .run(convResult.lastInsertRowid as number, now, task.id)
+    console.log(`[scheduler] Task "${task.name}" (id=${task.id}): conversation ${conversationId} deleted, reassigned to new conversation ${convResult.lastInsertRowid}`)
+  }
+}
+
+export async function executeTask(db: Database.Database, task: ScheduledTask): Promise<void> {
   const now = new Date().toISOString()
 
   // Mark as running
@@ -139,10 +161,23 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
   notifyRenderer('scheduler:taskUpdate', { ...task, last_status: 'running' })
 
   try {
-    // Verify conversation still exists
+    // Verify conversation still exists — recreate if deleted
     const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(task.conversation_id) as { id: number } | undefined
     if (!conv) {
-      throw new Error('Linked conversation has been deleted')
+      const modelRow = db.prepare("SELECT value FROM settings WHERE key = 'ai_model'").get() as { value: string } | undefined
+      const model = modelRow?.value || DEFAULT_MODEL
+      const defaultFolder = db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as { id: number } | undefined
+      const convResult = db.prepare(
+        "INSERT INTO conversations (title, folder_id, model, updated_at) VALUES (?, ?, ?, datetime('now'))"
+      ).run(task.name, defaultFolder?.id ?? null, model)
+      const newConvId = convResult.lastInsertRowid as number
+
+      db.prepare('UPDATE scheduled_tasks SET conversation_id = ?, updated_at = ? WHERE id = ?')
+        .run(newConvId, now, task.id)
+      task = { ...task, conversation_id: newConvId }
+
+      console.log(`[scheduler] Task "${task.name}" (id=${task.id}): conversation was deleted, created new conversation ${newConvId}`)
+      notifyRenderer('conversations:refresh', undefined)
     }
 
     // Save user message (the scheduled prompt)
@@ -185,8 +220,9 @@ async function executeTask(db: Database.Database, task: ScheduledTask): Promise<
       }
 
       // Update task: success
-      if (task.one_shot) {
-        // One-shot: disable after single execution
+      const reachedLimit = task.max_runs !== null && task.run_count + 1 >= task.max_runs
+      if (reachedLimit) {
+        // Reached max_runs limit: disable and clear next_run_at
         db.prepare(`
           UPDATE scheduled_tasks
           SET last_run_at = ?, next_run_at = NULL, last_status = 'success', last_error = NULL,
@@ -397,9 +433,14 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     const nextRun = computeNextRun(data.interval_value, data.interval_unit, data.schedule_time || null, now)
     const nowIso = now.toISOString()
 
+    // Validate max_runs: must be null or positive integer
+    if (data.max_runs !== undefined && data.max_runs !== null) {
+      validatePositiveInt(data.max_runs, 'max_runs')
+    }
+
     const result = db.prepare(`
       INSERT INTO scheduled_tasks (name, prompt, conversation_id, interval_value, interval_unit,
-        schedule_time, catch_up, one_shot, notify_desktop, notify_voice, next_run_at, created_at, updated_at)
+        schedule_time, catch_up, max_runs, notify_desktop, notify_voice, next_run_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.name,
@@ -409,7 +450,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       data.interval_unit,
       data.schedule_time || null,
       data.catch_up !== false ? 1 : 0,
-      data.one_shot ? 1 : 0,
+      data.max_runs ?? null,
       data.notify_desktop !== false ? 1 : 0,
       data.notify_voice ? 1 : 0,
       nextRun,
@@ -468,9 +509,10 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       updates.push('catch_up = ?')
       values.push(data.catch_up ? 1 : 0)
     }
-    if (data.one_shot !== undefined) {
-      updates.push('one_shot = ?')
-      values.push(data.one_shot ? 1 : 0)
+    if (data.max_runs !== undefined) {
+      if (data.max_runs !== null) validatePositiveInt(data.max_runs, 'max_runs')
+      updates.push('max_runs = ?')
+      values.push(data.max_runs ?? null)
     }
     if (data.notify_desktop !== undefined) {
       updates.push('notify_desktop = ?')

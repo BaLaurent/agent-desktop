@@ -140,7 +140,7 @@ const TOOLS = [
         delay_minutes: { type: 'number', description: 'For one-time reminders: number of minutes from now. Mutually exclusive with interval_value/interval_unit.' },
         interval_value: { type: 'number', description: 'For recurring tasks: interval amount (e.g. 2 for "every 2 hours")' },
         interval_unit: { type: 'string', enum: ['minutes', 'hours', 'days'], description: 'For recurring tasks: interval unit' },
-        one_shot: { type: 'boolean', description: 'If true, task auto-disables after first execution. Automatically set when using delay_minutes.' },
+        max_runs: { type: 'number', description: 'Maximum number of executions before auto-disable. null=unlimited, 1=one-shot. Automatically set to 1 when using delay_minutes.' },
         schedule_time: { type: 'string', description: 'For daily tasks: time in HH:MM format (24h). Only used with interval_unit=days.' },
       },
       required: ['name', 'prompt'],
@@ -174,7 +174,7 @@ async function handleToolCall(name, args) {
 
   switch (name) {
     case 'schedule_task': {
-      let { name: taskName, prompt, delay_minutes, interval_value, interval_unit, one_shot, schedule_time } = args
+      let { name: taskName, prompt, delay_minutes, interval_value, interval_unit, max_runs, schedule_time } = args
 
       if (!taskName || !prompt) {
         throw new Error('name and prompt are required')
@@ -187,7 +187,7 @@ async function handleToolCall(name, args) {
         }
         interval_value = Math.max(1, Math.round(delay_minutes))
         interval_unit = 'minutes'
-        one_shot = true
+        max_runs = 1
       }
 
       if (!interval_value || !interval_unit) {
@@ -199,7 +199,7 @@ async function handleToolCall(name, args) {
         prompt,
         interval_value,
         interval_unit,
-        one_shot: one_shot ?? false,
+        max_runs: max_runs ?? null,
         schedule_time: schedule_time || null,
       })
 

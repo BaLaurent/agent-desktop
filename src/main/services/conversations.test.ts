@@ -5,6 +5,11 @@ vi.mock('./sessionManager', () => ({
   invalidateSession: vi.fn(),
 }))
 
+// Mock scheduler to avoid transitive import of streaming → knowledge → app.getPath
+vi.mock('./scheduler', () => ({
+  reassignOrphanedTasks: vi.fn(),
+}))
+
 import { createTestDb } from '../__tests__/db-helper'
 import { createMockIpcMain } from '../__tests__/ipc-helper'
 import { registerHandlers } from './conversations'

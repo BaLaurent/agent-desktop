@@ -183,7 +183,7 @@ export interface ScheduledTask {
   interval_unit: IntervalUnit
   schedule_time: string | null
   catch_up: boolean
-  one_shot: boolean
+  max_runs: number | null
   last_run_at: string | null
   next_run_at: string | null
   last_status: TaskStatus | null
@@ -203,7 +203,7 @@ export interface CreateScheduledTask {
   interval_unit: IntervalUnit
   schedule_time?: string
   catch_up?: boolean
-  one_shot?: boolean
+  max_runs?: number | null
   notify_desktop?: boolean
   notify_voice?: boolean
 }
