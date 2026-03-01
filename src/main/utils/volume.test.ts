@@ -140,9 +140,13 @@ describe('stream ducking', () => {
     'Sink Input #42',
     '    Driver: protocol-native.c',
     '    Volume: front-left: 52428 /  80% / -5.81 dB',
+    '    Properties:',
+    '        application.process.binary = "firefox"',
     'Sink Input #99',
     '    Driver: protocol-native.c',
     '    Volume: front-left: 32768 /  50% / -18.06 dB',
+    '    Properties:',
+    '        application.process.binary = "vlc"',
   ].join('\n')
 
   beforeEach(() => {
@@ -197,17 +201,20 @@ describe('stream ducking', () => {
 
   it('restoreOtherStreams restores saved streams', async () => {
     vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
-    mockExecSequence([PACTL_LIST_TWO_INPUTS, '', '', '', ''])
+    // duck: list(0) + set(1) + set(2), restore: re-list(3) + set(4) + set(5)
+    mockExecSequence([PACTL_LIST_TWO_INPUTS, '', '', PACTL_LIST_TWO_INPUTS, '', ''])
 
     await duckOtherStreams(30)
     await restoreOtherStreams()
 
-    // 3 from duck + 2 restore calls
-    expect(execFile).toHaveBeenCalledTimes(5)
+    // 3 from duck + 1 re-list + 2 restore calls
+    expect(execFile).toHaveBeenCalledTimes(6)
+    // re-list during restore
+    expect(vi.mocked(execFile).mock.calls[3][1]).toEqual(['list', 'sink-inputs'])
     // restore #42 to original 80%
-    expect(vi.mocked(execFile).mock.calls[3][1]).toEqual(['set-sink-input-volume', '42', '80%'])
+    expect(vi.mocked(execFile).mock.calls[4][1]).toEqual(['set-sink-input-volume', '42', '80%'])
     // restore #99 to original 50%
-    expect(vi.mocked(execFile).mock.calls[4][1]).toEqual(['set-sink-input-volume', '99', '50%'])
+    expect(vi.mocked(execFile).mock.calls[5][1]).toEqual(['set-sink-input-volume', '99', '50%'])
   })
 
   it('restoreOtherStreams is no-op when not ducked', async () => {
@@ -216,5 +223,77 @@ describe('stream ducking', () => {
     await restoreOtherStreams()
 
     expect(execFile).not.toHaveBeenCalled()
+  })
+
+  it('restoreOtherStreams matches by app name when stream index changes', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+
+    const duckList = [
+      'Sink Input #42',
+      '    Volume: front-left: 52428 /  80% / -5.81 dB',
+      '    Properties:',
+      '        application.process.binary = "firefox"',
+    ].join('\n')
+
+    // Stream died and was recreated with a different index
+    const restoreList = [
+      'Sink Input #57',
+      '    Volume: front-left: 36045 /  55% / -blah',
+      '    Properties:',
+      '        application.process.binary = "firefox"',
+    ].join('\n')
+
+    // duck: list(0) + set(1), restore: re-list(2) + set(3)
+    mockExecSequence([duckList, '', restoreList, ''])
+
+    await duckOtherStreams(25)
+    await restoreOtherStreams()
+
+    expect(execFile).toHaveBeenCalledTimes(4)
+    // Restore: matched by app name to new index #57, original volume 80%
+    expect(vi.mocked(execFile).mock.calls[3][1]).toEqual(['set-sink-input-volume', '57', '80%'])
+  })
+
+  it('restoreOtherStreams awaits pending duck before restoring', async () => {
+    vi.mocked(findBinaryInPath).mockImplementation((n) => (n === 'pactl' ? '/usr/bin/pactl' : null))
+
+    const listOutput = [
+      'Sink Input #42',
+      '    Volume: front-left: 52428 /  80% / -5.81 dB',
+    ].join('\n')
+
+    // duck: list(0) + set(1), restore: re-list(2) + set(3)
+    mockExecSequence([listOutput, '', listOutput, ''])
+
+    // Start duck without awaiting (simulates fire-and-forget)
+    const duckP = duckOtherStreams(30)
+    // Immediately restore — should wait for duck to finish first
+    await restoreOtherStreams()
+    await duckP
+
+    expect(execFile).toHaveBeenCalledTimes(4)
+    expect(vi.mocked(execFile).mock.calls[3][1]).toEqual(['set-sink-input-volume', '42', '80%'])
+  })
+})
+
+describe('race condition protection', () => {
+  beforeEach(() => {
+    _resetForTesting()
+    vi.clearAllMocks()
+  })
+
+  it('restoreVolume awaits pending duckVolume before restoring', async () => {
+    mockBackend('wpctl', '/usr/bin/wpctl')
+    mockExecSequence(['Volume: 0.80', '', ''])
+
+    // Start duck without awaiting (simulates quickChat.ts fire-and-forget)
+    const duckP = duckVolume(30)
+    // Immediately call restore — should wait for duck to finish first
+    await restoreVolume()
+    await duckP
+
+    // 3 calls: get-volume + set-volume(duck) + set-volume(restore)
+    expect(execFile).toHaveBeenCalledTimes(3)
+    expect(vi.mocked(execFile).mock.calls[2][1]).toEqual(['set-volume', '@DEFAULT_AUDIO_SINK@', '0.8'])
   })
 })

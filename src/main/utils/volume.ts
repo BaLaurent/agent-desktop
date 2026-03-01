@@ -8,6 +8,7 @@ interface BackendInfo {
 
 let cachedBackend: BackendInfo | null | undefined = undefined
 let savedVolume: number | null = null
+let duckPromise: Promise<void> | null = null
 
 function detectBackend(): BackendInfo | null {
   if (cachedBackend !== undefined) return cachedBackend
@@ -72,28 +73,36 @@ async function setVolume(backend: BackendInfo, percent: number): Promise<void> {
   }
 }
 
-export async function duckVolume(reductionPercent: number): Promise<void> {
-  if (reductionPercent <= 0 || savedVolume !== null) return
+export function duckVolume(reductionPercent: number): Promise<void> {
+  if (reductionPercent <= 0 || savedVolume !== null) return Promise.resolve()
 
   const backend = detectBackend()
   if (!backend) {
     console.warn('[volume] No audio backend found (wpctl/pactl/amixer)')
-    return
+    return Promise.resolve()
   }
 
-  try {
-    const current = await getVolume(backend)
-    savedVolume = current
-    const target = Math.max(0, current - reductionPercent)
-    await setVolume(backend, target)
-    console.log(`[volume] Ducked: ${current}% -> ${target}% (reduction: ${reductionPercent}%)`)
-  } catch (err) {
-    savedVolume = null
-    console.warn('[volume] Duck failed:', err)
-  }
+  duckPromise = (async () => {
+    try {
+      const current = await getVolume(backend)
+      savedVolume = current
+      const target = Math.max(0, current - reductionPercent)
+      await setVolume(backend, target)
+      console.log(`[volume] Ducked: ${current}% -> ${target}% (reduction: ${reductionPercent}%)`)
+    } catch (err) {
+      savedVolume = null
+      console.warn('[volume] Duck failed:', err)
+    }
+  })()
+  return duckPromise
 }
 
 export async function restoreVolume(): Promise<void> {
+  if (duckPromise) {
+    await duckPromise
+    duckPromise = null
+  }
+
   if (savedVolume === null) return
 
   const backend = detectBackend()
@@ -117,9 +126,11 @@ export async function restoreVolume(): Promise<void> {
 interface SavedStream {
   index: number
   volume: number // percentage
+  appName?: string // application.process.binary for fallback matching
 }
 
 let savedStreams: SavedStream[] | null = null
+let duckStreamsPromise: Promise<void> | null = null
 
 async function listSinkInputs(pactlPath: string): Promise<SavedStream[]> {
   const out = await exec(pactlPath, ['list', 'sink-inputs'])
@@ -131,38 +142,47 @@ async function listSinkInputs(pactlPath: string): Promise<SavedStream[]> {
     const body = blocks[i + 1] || ''
     const volMatch = body.match(/Volume:.*?(\d+)%/)
     if (volMatch) {
-      inputs.push({ index, volume: parseInt(volMatch[1], 10) })
+      const appMatch = body.match(/application\.process\.binary\s*=\s*"([^"]+)"/)
+      inputs.push({ index, volume: parseInt(volMatch[1], 10), appName: appMatch?.[1] })
     }
   }
   return inputs
 }
 
-export async function duckOtherStreams(reductionPercent: number): Promise<void> {
-  if (reductionPercent <= 0 || savedStreams !== null) return
+export function duckOtherStreams(reductionPercent: number): Promise<void> {
+  if (reductionPercent <= 0 || savedStreams !== null) return Promise.resolve()
 
   const pactlPath = findBinaryInPath('pactl')
   if (!pactlPath) {
     console.warn('[volume] pactl not found — per-stream ducking unavailable')
-    return
+    return Promise.resolve()
   }
 
-  try {
-    const inputs = await listSinkInputs(pactlPath)
-    if (inputs.length === 0) return
+  duckStreamsPromise = (async () => {
+    try {
+      const inputs = await listSinkInputs(pactlPath)
+      if (inputs.length === 0) return
 
-    savedStreams = inputs
-    for (const input of inputs) {
-      const target = Math.max(0, input.volume - reductionPercent)
-      await exec(pactlPath, ['set-sink-input-volume', String(input.index), `${target}%`])
+      savedStreams = inputs
+      for (const input of inputs) {
+        const target = Math.max(0, input.volume - reductionPercent)
+        await exec(pactlPath, ['set-sink-input-volume', String(input.index), `${target}%`])
+      }
+      console.log(`[volume] Ducked ${inputs.length} stream(s) by ${reductionPercent}%`)
+    } catch (err) {
+      savedStreams = null
+      console.warn('[volume] Duck streams failed:', err)
     }
-    console.log(`[volume] Ducked ${inputs.length} stream(s) by ${reductionPercent}%`)
-  } catch (err) {
-    savedStreams = null
-    console.warn('[volume] Duck streams failed:', err)
-  }
+  })()
+  return duckStreamsPromise
 }
 
 export async function restoreOtherStreams(): Promise<void> {
+  if (duckStreamsPromise) {
+    await duckStreamsPromise
+    duckStreamsPromise = null
+  }
+
   if (!savedStreams) return
 
   const pactlPath = findBinaryInPath('pactl')
@@ -171,14 +191,56 @@ export async function restoreOtherStreams(): Promise<void> {
   const streams = savedStreams
   savedStreams = null
 
-  for (const input of streams) {
+  // Re-list current sink inputs to handle streams that changed index
+  let currentInputs: SavedStream[] | null = null
+  try {
+    currentInputs = await listSinkInputs(pactlPath)
+  } catch {
+    // Fall through to index-only restore below
+  }
+
+  if (!currentInputs) {
+    // Fallback: try restoring by original index (pre-fix behavior)
+    for (const saved of streams) {
+      try {
+        await exec(pactlPath, ['set-sink-input-volume', String(saved.index), `${saved.volume}%`])
+      } catch {
+        // Stream may have ended
+      }
+    }
+    console.log(`[volume] Restored ${streams.length} stream(s) (index-only fallback)`)
+    return
+  }
+
+  const currentIndices = new Set(currentInputs.map(s => s.index))
+  const matched = new Set<number>()
+
+  // Pass 1: restore streams still at their original index
+  for (const saved of streams) {
+    if (!currentIndices.has(saved.index)) continue
     try {
-      await exec(pactlPath, ['set-sink-input-volume', String(input.index), `${input.volume}%`])
+      await exec(pactlPath, ['set-sink-input-volume', String(saved.index), `${saved.volume}%`])
+      matched.add(saved.index)
     } catch {
-      // Stream may have ended — ignore
+      // Stream ended between re-list and restore
     }
   }
-  console.log(`[volume] Restored ${streams.length} stream(s)`)
+
+  // Pass 2: match remaining saved streams to current streams by app name
+  for (const saved of streams) {
+    if (matched.has(saved.index) || !saved.appName) continue
+    const candidate = currentInputs.find(c => c.appName === saved.appName && !matched.has(c.index))
+    if (candidate) {
+      try {
+        await exec(pactlPath, ['set-sink-input-volume', String(candidate.index), `${saved.volume}%`])
+        matched.add(candidate.index)
+      } catch {
+        // Stream ended between re-list and restore
+      }
+    }
+  }
+
+  console.log(`[volume] Restored ${matched.size} stream(s)`)
 }
 
 /** Reset module state for testing */
@@ -186,4 +248,6 @@ export function _resetForTesting(): void {
   cachedBackend = undefined
   savedVolume = null
   savedStreams = null
+  duckPromise = null
+  duckStreamsPromise = null
 }

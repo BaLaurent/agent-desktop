@@ -367,7 +367,7 @@ export async function speak(text: string, db: Database.Database): Promise<void> 
         throw new Error(`Unknown TTS provider: ${provider}`)
     }
   } finally {
-    restoreOtherStreams().catch(() => {})
+    await restoreOtherStreams().catch(() => {})
     notifySpeakingState(false)
   }
 }
