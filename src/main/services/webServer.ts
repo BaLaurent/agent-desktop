@@ -106,10 +106,14 @@ function generateShim(token: string): string {
       }
       var id = String(++reqId);
       pending[id] = { resolve: resolve, reject: reject };
-      // Encode Uint8Array args as base64
+      // Encode Uint8Array args as base64 (chunked to avoid call stack overflow on large buffers)
       var encodedArgs = args.map(function(a) {
         if (a instanceof Uint8Array) {
-          return { __type: 'binary', data: btoa(String.fromCharCode.apply(null, a)) };
+          var chunks = [];
+          for (var i = 0; i < a.length; i += 8192) {
+            chunks.push(String.fromCharCode.apply(null, a.subarray(i, i + 8192)));
+          }
+          return { __type: 'binary', data: btoa(chunks.join('')) };
         }
         return a;
       });
