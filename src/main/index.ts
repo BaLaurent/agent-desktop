@@ -150,6 +150,8 @@ if (!gotLock) {
       startServer(port, {
         shortCode: shortCodeRow?.value || undefined,
         accessMode: accessModeRow?.value === 'all' ? 'all' : 'lan',
+      }).then(() => {
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('server_enabled', 'true')").run()
       }).catch(err => console.error('[webServer] Auto-start failed:', err.message))
     }
 

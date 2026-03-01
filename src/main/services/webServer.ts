@@ -1,3 +1,4 @@
+import * as net from 'net'
 import * as http from 'http'
 import * as https from 'https'
 import * as fs from 'fs'
@@ -13,6 +14,7 @@ import { setBroadcastHandler } from '../utils/broadcast'
 
 // ─── State ───────────────────────────────────────────
 
+let tcpServer: net.Server | null = null
 let httpServer: http.Server | https.Server | null = null
 let wss: WebSocketServer | null = null
 let serverToken: string | null = null
@@ -106,8 +108,11 @@ function generateShim(token: string): string {
       }
       var id = String(++reqId);
       pending[id] = { resolve: resolve, reject: reject };
-      // Encode Uint8Array args as base64 (chunked to avoid call stack overflow on large buffers)
+      // Encode special types that JSON cannot represent natively:
+      // - Uint8Array → { __type: 'binary', data } (base64, chunked to avoid stack overflow)
+      // - undefined  → { __type: 'undefined' }    (JSON.stringify turns undefined into null)
       var encodedArgs = args.map(function(a) {
+        if (a === undefined) return { __type: 'undefined' };
         if (a instanceof Uint8Array) {
           var chunks = [];
           for (var i = 0; i < a.length; i += 8192) {
@@ -513,12 +518,14 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
       return
     }
 
-    // Decode base64 binary args back to Uint8Array
+    // Decode special types back to their native representations
     const decodedArgs = (msg.args || []).map((arg) => {
-      if (arg && typeof arg === 'object' && (arg as Record<string, unknown>).__type === 'binary') {
-        const b64 = (arg as Record<string, unknown>).data as string
-        const binary = Buffer.from(b64, 'base64')
-        return new Uint8Array(binary)
+      if (arg && typeof arg === 'object') {
+        const typed = arg as Record<string, unknown>
+        if (typed.__type === 'undefined') return undefined
+        if (typed.__type === 'binary') {
+          return new Uint8Array(Buffer.from(typed.data as string, 'base64'))
+        }
       }
       return arg
     })
@@ -559,7 +566,7 @@ export interface ServerStartOptions {
 
 export async function startServer(port: number, options?: ServerStartOptions): Promise<{ url: string; token: string }> {
   // Early return if already running
-  if (httpServer) {
+  if (tcpServer) {
     const ip = getLanIp()
     const url = serverShortCode
       ? `https://${ip}:${serverPort}/s/${serverShortCode}`
@@ -701,10 +708,37 @@ export async function startServer(port: number, options?: ServerStartOptions): P
       reject(err)
     })
 
-    httpServer.listen(port, '0.0.0.0', () => {
+    // HTTP→HTTPS redirect server (never exposed on its own port)
+    const redirectServer = http.createServer((req, res) => {
+      const host = req.headers.host || `localhost:${port}`
+      // Strip port from host if present, re-add the same port for HTTPS
+      const hostname = host.replace(/:\d+$/, '')
+      res.writeHead(301, { Location: `https://${hostname}:${port}${req.url || '/'}` })
+      res.end()
+    })
+
+    // TCP wrapper: peek first byte to detect TLS (0x16) vs plain HTTP
+    tcpServer = net.createServer((socket) => {
+      socket.once('readable', () => {
+        const buf = socket.read(1)
+        if (!buf || buf.length === 0) return
+        socket.unshift(buf)
+        // TLS handshake starts with 0x16 (ContentType.Handshake)
+        const target = buf[0] === 0x16 ? httpServer! : redirectServer
+        target.emit('connection', socket)
+      })
+      socket.on('error', () => {}) // ignore connection resets
+    })
+
+    tcpServer.on('error', (err) => {
+      console.error('[webServer] TCP server error:', err.message)
+      reject(err)
+    })
+
+    tcpServer.listen(port, '0.0.0.0', () => {
       const ip = getLanIp()
       const shortUrl = `https://${ip}:${port}/s/${serverShortCode}`
-      console.log(`[webServer] Listening on ${shortUrl}`)
+      console.log(`[webServer] Listening on ${shortUrl} (HTTP→HTTPS redirect enabled)`)
       resolve({ url: shortUrl, token: serverToken! })
     })
   })
@@ -727,10 +761,13 @@ export async function stopServer(): Promise<void> {
     wss = null
   }
 
-  if (httpServer) {
+  // httpServer never calls .listen() (tcpServer owns the port) — just null it
+  httpServer = null
+
+  if (tcpServer) {
     await new Promise<void>((resolve) => {
-      httpServer!.close(() => {
-        httpServer = null
+      tcpServer!.close(() => {
+        tcpServer = null
         serverToken = null
         serverPort = null
         serverShortCode = null

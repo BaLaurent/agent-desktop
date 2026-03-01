@@ -192,6 +192,41 @@ describe('webServer', () => {
     ws.close()
   })
 
+  it('preserves undefined args through JSON roundtrip', async () => {
+    const { token } = await startServer(port)
+
+    ipcDispatch.set('test:optionalArgs', async (...args: unknown[]) => {
+      return { args, types: args.map(a => typeof a) }
+    })
+
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
+    const messages: any[] = []
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'auth', token }))
+      })
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString())
+        messages.push(msg)
+        if (msg.type === 'auth_result' && msg.success) {
+          // Simulate what the shim sends: undefined encoded as { __type: 'undefined' }
+          ws.send(JSON.stringify({
+            type: 'invoke', id: '1', channel: 'test:optionalArgs',
+            args: [{ __type: 'undefined' }, 42, { __type: 'undefined' }],
+          }))
+        }
+        if (msg.type === 'result') resolve()
+      })
+      ws.on('error', reject)
+    })
+
+    const result = messages.find(m => m.type === 'result')
+    // undefined args should arrive as undefined (not null)
+    expect(result.result.types).toEqual(['undefined', 'number', 'undefined'])
+    ws.close()
+  })
+
   it('returns error for unknown channel', async () => {
     const { token } = await startServer(port)
 
@@ -279,6 +314,27 @@ describe('webServer', () => {
       // Will 404 in test env but validates the route is not blocked
       expect(res.status).toBeDefined()
       expect(res.status).not.toBe(403)
+    })
+  })
+
+  describe('HTTP to HTTPS redirect', () => {
+    it('redirects plain HTTP requests to HTTPS', async () => {
+      await startServer(port)
+
+      // Plain HTTP request to the same port — should get 301 redirect
+      const res = await fetch(`http://127.0.0.1:${port}/`, { redirect: 'manual' })
+      expect(res.status).toBe(301)
+      const location = res.headers.get('location')
+      expect(location).toBe(`https://127.0.0.1:${port}/`)
+    })
+
+    it('preserves path in HTTP to HTTPS redirect', async () => {
+      await startServer(port, { shortCode: 'redir' })
+
+      const res = await fetch(`http://127.0.0.1:${port}/s/redir`, { redirect: 'manual' })
+      expect(res.status).toBe(301)
+      const location = res.headers.get('location')
+      expect(location).toBe(`https://127.0.0.1:${port}/s/redir`)
     })
   })
 
