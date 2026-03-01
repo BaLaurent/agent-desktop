@@ -54,10 +54,11 @@ export function ContextMenu({
     items[nextIndex].focus()
   }, [])
 
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
+  const handleDragStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
+    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
     dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       if (!dragRef.current.active) return
       setPos({
         x: dragRef.current.origX + ev.clientX - dragRef.current.startX,
@@ -66,11 +67,11 @@ export function ContextMenu({
     }
     const onUp = () => {
       dragRef.current.active = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
     }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
   }, [pos.x, pos.y])
 
   return (
@@ -91,8 +92,8 @@ export function ContextMenu({
     >
       {draggable && (
         <div
-          className="cursor-grab active:cursor-grabbing px-3 py-1 select-none"
-          onMouseDown={handleDragStart}
+          className="cursor-grab active:cursor-grabbing px-3 py-1 select-none touch-none"
+          onPointerDown={handleDragStart}
           data-testid="drag-handle"
         >
           <div className="w-8 h-0.5 mx-auto rounded-full" style={{ backgroundColor: 'var(--color-text-muted)', opacity: 0.4 }} />

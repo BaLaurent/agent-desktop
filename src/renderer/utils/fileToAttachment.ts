@@ -1,5 +1,29 @@
 import type { Attachment } from '../../shared/types'
 
+const MAX_WEB_IMAGE_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_WEB_TEXT_SIZE = 10 * 1024 * 1024  // 10MB
+
+const EXT_TO_TYPE_MAP: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+  json: 'application/json',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  js: 'text/javascript',
+  ts: 'text/typescript',
+  py: 'text/x-python',
+  csv: 'text/csv',
+  yaml: 'text/yaml',
+  yml: 'text/yaml',
+}
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'])
+
 /**
  * Converts a browser File object to an Attachment.
  *
@@ -12,6 +36,15 @@ export async function fileToAttachment(file: File): Promise<Attachment | null> {
   const mime = file.type || extToType(file.name)
 
   if (isWebMode) {
+    // Size guard — prevent OOM on large files
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const maxSize = IMAGE_EXTS.has(ext) ? MAX_WEB_IMAGE_SIZE : MAX_WEB_TEXT_SIZE
+    if (file.size > maxSize) {
+      const limitMB = maxSize / 1024 / 1024
+      console.error(`[fileToAttachment] File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB exceeds ${limitMB}MB limit`)
+      throw new Error(`File "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size: ${limitMB}MB`)
+    }
+
     // Web mode: read file into memory, upload to server
     try {
       const buffer = await file.arrayBuffer()
@@ -30,23 +63,5 @@ export async function fileToAttachment(file: File): Promise<Attachment | null> {
 
 function extToType(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-  const map: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    svg: 'image/svg+xml',
-    webp: 'image/webp',
-    pdf: 'application/pdf',
-    json: 'application/json',
-    txt: 'text/plain',
-    md: 'text/markdown',
-    js: 'text/javascript',
-    ts: 'text/typescript',
-    py: 'text/x-python',
-    csv: 'text/csv',
-    yaml: 'text/yaml',
-    yml: 'text/yaml',
-  }
-  return map[ext] ?? 'application/octet-stream'
+  return EXT_TO_TYPE_MAP[ext] ?? 'application/octet-stream'
 }

@@ -21,6 +21,24 @@ function setChildrenInTree(tree: FileNode[], dirPath: string, children: FileNode
   })
 }
 
+/** Apply multiple dirPath→children updates in a single tree traversal (O(Nodes) instead of O(Nodes×Updates)) */
+function setMultipleChildrenInTree(tree: FileNode[], updates: Map<string, FileNode[]>): FileNode[] {
+  if (updates.size === 0) return tree
+  return tree.map(node => {
+    const newChildren = updates.get(node.path)
+    if (newChildren !== undefined) {
+      // Recurse into fresh children to apply nested updates (e.g. /a and /a/b both expanded)
+      const recursed = setMultipleChildrenInTree(newChildren, updates)
+      return { ...node, children: recursed }
+    }
+    if (node.isDirectory && node.children) {
+      const updated = setMultipleChildrenInTree(node.children, updates)
+      return updated !== node.children ? { ...node, children: updated } : node
+    }
+    return node
+  })
+}
+
 // ── Types ────────────────────────────────────────────────────
 
 type ViewMode = 'preview' | 'source'
@@ -124,18 +142,22 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
   },
 
   loadTree: async (cwd) => {
-    set({ loading: true, error: null })
+    // Clear old state immediately to prevent stale data from the previous conversation
+    set({
+      loading: true, error: null,
+      tree: [], cwd,
+      expandedPaths: new Set(),
+      multiSelectedPaths: new Set(), lastClickedPath: null,
+      selectedFilePath: null, fileContent: null, fileLanguage: null, fileWarning: null,
+      editorContent: null, isDirty: false,
+    })
     try {
       const tree = await window.agent.files.listDir(cwd)
-      set({
-        tree, cwd,
-        expandedPaths: new Set(),
-        multiSelectedPaths: new Set(), lastClickedPath: null,
-        selectedFilePath: null, fileContent: null, fileLanguage: null, fileWarning: null,
-        editorContent: null, isDirty: false,
-        loading: false,
-      })
+      // Guard against stale results: another loadTree may have been called while we awaited
+      if (get().cwd !== cwd) return
+      set({ tree, loading: false })
     } catch (err) {
+      if (get().cwd !== cwd) return
       set({ tree: [], loading: false, error: err instanceof Error ? err.message : 'Failed to load file tree' })
     }
   },
@@ -203,19 +225,26 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
         pathsToFetch.map(p => window.agent.files.listDir(p).catch(() => null))
       )
 
-      // Build tree: start with root
-      let tree = results[0] || []
+      // Build tree: start with root, then apply all expanded dirs in one pass
+      let tree: FileNode[] = results[0] || []
 
-      // Apply expanded dirs' children in depth order (parents before children)
-      const sortedPaths = [...expandedPaths].sort(
-        (a, b) => a.split('/').length - b.split('/').length
-      )
-      const stillExpanded = new Set<string>()
-      for (const dirPath of sortedPaths) {
+      // Collect all successful fetches — don't check tree existence yet
+      // (nested dirs aren't in the root tree before updates are applied)
+      const updates = new Map<string, FileNode[]>()
+      for (const dirPath of expandedPaths) {
         const idx = pathsToFetch.indexOf(dirPath)
         const children = results[idx]
-        if (children !== null && fileExistsInTree(tree, dirPath)) {
-          tree = setChildrenInTree(tree, dirPath, children)
+        if (children !== null) {
+          updates.set(dirPath, children)
+        }
+      }
+      // Single tree traversal applies all updates (parents before children via recursion)
+      tree = setMultipleChildrenInTree(tree, updates)
+
+      // Derive stillExpanded from the final tree
+      const stillExpanded = new Set<string>()
+      for (const dirPath of updates.keys()) {
+        if (fileExistsInTree(tree, dirPath)) {
           stillExpanded.add(dirPath)
         }
       }

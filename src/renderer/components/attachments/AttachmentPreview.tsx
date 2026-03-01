@@ -1,3 +1,4 @@
+import React from 'react'
 import type { Attachment } from '../../../shared/types'
 
 interface AttachmentPreviewProps {
@@ -17,7 +18,7 @@ function getExt(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
 }
 
-export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewProps) {
+export const AttachmentPreview = React.memo(function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewProps) {
   if (attachments.length === 0) return null
 
   return (
@@ -57,4 +58,4 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
       })}
     </div>
   )
-}
+})

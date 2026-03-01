@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { mockAgent, capturedStreamListener, capturedConversationUpdatedListener } from '../__tests__/setup'
-import { useChatStore } from './chatStore'
+import { useChatStore, _streamBuffersMap, _streamTextMap } from './chatStore'
 import type { StreamChunk } from '../../shared/types'
 import { useSettingsStore } from './settingsStore'
 import { DEFAULT_NOTIFICATION_CONFIG } from '../../shared/constants'
@@ -18,12 +18,13 @@ function getStreamListener(): (chunk: StreamChunk) => void {
 }
 
 beforeEach(() => {
+  _streamBuffersMap.clear()
+  _streamTextMap.clear()
   useChatStore.setState({
     messages: [],
     isStreaming: false,
     streamParts: [],
     streamingContent: '',
-    streamBuffers: {},
     isLoading: false,
     error: null,
     activeConversationId: null,
@@ -62,9 +63,8 @@ describe('chatStore', () => {
     const promise = useChatStore.getState().sendMessage(1, 'Hello')
 
     // Buffer should be initialized immediately (before await)
-    const state = useChatStore.getState()
-    expect(state.streamBuffers).toHaveProperty('1')
-    expect(state.streamBuffers[1]).toEqual([])
+    expect(_streamBuffersMap.has(1)).toBe(true)
+    expect(_streamBuffersMap.get(1)).toEqual([])
 
     await promise
   })
@@ -74,7 +74,7 @@ describe('chatStore', () => {
 
     await useChatStore.getState().sendMessage(1, 'Hello')
 
-    expect(useChatStore.getState().streamBuffers).not.toHaveProperty('1')
+    expect(_streamBuffersMap.has(1)).toBe(false)
   })
 
   it('stopGeneration calls window.agent.messages.stop with conversationId', async () => {
@@ -103,12 +103,12 @@ describe('chatStore', () => {
   })
 
   it('clearChat resets all state including streamBuffers', () => {
+    _streamBuffersMap.set(1, [{ type: 'text', content: 'data' }])
     useChatStore.setState({
       messages: [{ id: 1, conversation_id: 1, role: 'user', content: 'x', attachments: '[]', created_at: '', updated_at: '' }],
       isStreaming: true,
       error: 'some error',
       activeConversationId: 1,
-      streamBuffers: { 1: [{ type: 'text', content: 'data' }] },
     })
 
     useChatStore.getState().clearChat()
@@ -118,7 +118,7 @@ describe('chatStore', () => {
     expect(state.isStreaming).toBe(false)
     expect(state.error).toBeNull()
     expect(state.activeConversationId).toBeNull()
-    expect(state.streamBuffers).toEqual({})
+    expect(_streamBuffersMap.size).toBe(0)
   })
 
   it('clearContext updates clearedAt state and calls conversations.update', async () => {
@@ -341,7 +341,8 @@ describe('chatStore', () => {
 
   describe('stream listener', () => {
     it('drops text chunks from a conversation without a buffer', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'text', content: 'leaked text', conversationId: 99 })
@@ -349,11 +350,12 @@ describe('chatStore', () => {
       const state = useChatStore.getState()
       expect(state.streamParts).toEqual([])
       expect(state.streamingContent).toBe('')
-      expect(state.streamBuffers[1]).toEqual([])
+      expect(_streamBuffersMap.get(1)).toEqual([])
     })
 
     it('accepts text chunks matching an active buffer and updates buffer + view', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'text', content: 'hello', conversationId: 1 })
@@ -363,13 +365,14 @@ describe('chatStore', () => {
       expect(state.streamParts).toHaveLength(1)
       expect(state.streamParts[0]).toEqual({ type: 'text', content: 'hello' })
       // Buffer matches view
-      expect(state.streamBuffers[1]).toHaveLength(1)
-      expect(state.streamBuffers[1][0]).toEqual({ type: 'text', content: 'hello' })
+      expect(_streamBuffersMap.get(1)).toHaveLength(1)
+      expect(_streamBuffersMap.get(1)![0]).toEqual({ type: 'text', content: 'hello' })
     })
 
     it('accumulates chunks in buffer for background conv without updating view', () => {
       // User is on conv 2, but conv 1 is streaming in background
-      useChatStore.setState({ activeConversationId: 2, isStreaming: false, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 2, isStreaming: false })
 
       const listener = getStreamListener()
       listener({ type: 'text', content: 'background text', conversationId: 1 })
@@ -380,24 +383,26 @@ describe('chatStore', () => {
       expect(state.streamParts).toEqual([])
       expect(state.streamingContent).toBe('')
       // Buffer has the data
-      expect(state.streamBuffers[1]).toHaveLength(2)
-      expect(state.streamBuffers[1][0]).toEqual({ type: 'text', content: 'background text' })
-      expect(state.streamBuffers[1][1].type).toBe('tool')
+      expect(_streamBuffersMap.get(1)).toHaveLength(2)
+      expect(_streamBuffersMap.get(1)![0]).toEqual({ type: 'text', content: 'background text' })
+      expect(_streamBuffersMap.get(1)![1].type).toBe('tool')
     })
 
     it('accepts chunks without conversationId (backward compat, falls back to activeConversationId)', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'text', content: 'legacy chunk' })
 
       const state = useChatStore.getState()
       expect(state.streamParts).toHaveLength(1)
-      expect(state.streamBuffers[1]).toHaveLength(1)
+      expect(_streamBuffersMap.get(1)).toHaveLength(1)
     })
 
     it('drops done event from a conversation without a buffer', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'done', conversationId: 99 })
@@ -407,7 +412,8 @@ describe('chatStore', () => {
     })
 
     it('drops error event from a conversation without a buffer', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'error', content: 'something failed', conversationId: 99 })
@@ -418,7 +424,8 @@ describe('chatStore', () => {
     })
 
     it('drops tool_start from a conversation without a buffer', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'tool_start', toolName: 'Bash', toolId: 't1', conversationId: 99 })
@@ -427,7 +434,8 @@ describe('chatStore', () => {
     })
 
     it('tool_approval chunk creates tool_approval StreamPart in buffer and view', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -446,11 +454,12 @@ describe('chatStore', () => {
         toolName: 'Bash',
         toolInput: { command: 'ls' },
       })
-      expect(state.streamBuffers[1]).toHaveLength(1)
+      expect(_streamBuffersMap.get(1)).toHaveLength(1)
     })
 
     it('ask_user chunk creates ask_user StreamPart in buffer and view', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const questions = [
         { question: 'Which?', header: 'Choice', options: [{ label: 'A', description: 'Option A' }], multiSelect: false },
@@ -470,11 +479,12 @@ describe('chatStore', () => {
         requestId: 'req_2',
         questions,
       })
-      expect(state.streamBuffers[1]).toHaveLength(1)
+      expect(_streamBuffersMap.get(1)).toHaveLength(1)
     })
 
     it('mcp_status chunk creates mcp_status StreamPart in buffer and view', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const servers = [
         { name: 'spotify', status: 'connected' },
@@ -493,11 +503,12 @@ describe('chatStore', () => {
         type: 'mcp_status',
         servers,
       })
-      expect(state.streamBuffers[1]).toHaveLength(1)
+      expect(_streamBuffersMap.get(1)).toHaveLength(1)
     })
 
     it('mcp_status chunk with invalid JSON is ignored', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -511,7 +522,8 @@ describe('chatStore', () => {
     })
 
     it('mcp_status chunk without mcpServers field is ignored', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -523,7 +535,8 @@ describe('chatStore', () => {
     })
 
     it('drops tool_approval chunk from a conversation without a buffer', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -538,7 +551,8 @@ describe('chatStore', () => {
     })
 
     it('system_message chunk creates system_message StreamPart in buffer and view', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -557,11 +571,12 @@ describe('chatStore', () => {
         hookName: 'pre-commit',
         hookEvent: 'PreToolUse',
       })
-      expect(state.streamBuffers[1]).toHaveLength(1)
+      expect(_streamBuffersMap.get(1)).toHaveLength(1)
     })
 
     it('system_message chunk without content is ignored', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -570,11 +585,12 @@ describe('chatStore', () => {
       } as StreamChunk)
 
       expect(useChatStore.getState().streamParts).toEqual([])
-      expect(useChatStore.getState().streamBuffers[1]).toEqual([])
+      expect(_streamBuffersMap.get(1)).toEqual([])
     })
 
     it('system_message chunk without hookName/hookEvent still works', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [] } })
+      _streamBuffersMap.set(1, [])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({
@@ -630,18 +646,20 @@ describe('chatStore', () => {
     })
 
     it('done chunk removes buffer entry and clears isStreaming for active conv', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [{ type: 'text', content: 'data' }] } })
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'data' }])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'done', conversationId: 1 })
 
       const state = useChatStore.getState()
       expect(state.isStreaming).toBe(false)
-      expect(state.streamBuffers).not.toHaveProperty('1')
+      expect(_streamBuffersMap.has(1)).toBe(false)
     })
 
     it('error chunk removes buffer entry and sets error for active conv', () => {
-      useChatStore.setState({ activeConversationId: 1, isStreaming: true, streamBuffers: { 1: [{ type: 'text', content: 'data' }] } })
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'data' }])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true })
 
       const listener = getStreamListener()
       listener({ type: 'error', content: 'fail', conversationId: 1 })
@@ -649,20 +667,18 @@ describe('chatStore', () => {
       const state = useChatStore.getState()
       expect(state.isStreaming).toBe(false)
       expect(state.error).toBe('fail')
-      expect(state.streamBuffers).not.toHaveProperty('1')
+      expect(_streamBuffersMap.has(1)).toBe(false)
     })
 
     it('done for background conv removes its buffer but preserves isStreaming for active conv', () => {
       // Two conversations streaming simultaneously — view must match active buffer
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'active stream' }])
+      _streamBuffersMap.set(2, [{ type: 'text', content: 'background stream' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
         streamParts: [{ type: 'text', content: 'active stream' }],
         streamingContent: 'active stream',
-        streamBuffers: {
-          1: [{ type: 'text', content: 'active stream' }],
-          2: [{ type: 'text', content: 'background stream' }],
-        },
       })
 
       const listener = getStreamListener()
@@ -671,9 +687,9 @@ describe('chatStore', () => {
       const state = useChatStore.getState()
       // Conv 1 is still streaming
       expect(state.isStreaming).toBe(true)
-      expect(state.streamBuffers).toHaveProperty('1')
+      expect(_streamBuffersMap.has(1)).toBe(true)
       // Conv 2 buffer removed
-      expect(state.streamBuffers).not.toHaveProperty('2')
+      expect(_streamBuffersMap.has(2)).toBe(false)
       // View unchanged (still shows conv 1)
       expect(state.streamParts).toHaveLength(1)
       expect(state.streamParts[0]).toEqual({ type: 'text', content: 'active stream' })
@@ -681,10 +697,11 @@ describe('chatStore', () => {
 
     it('two conversations stream simultaneously without interference', () => {
       // Both conv 1 and conv 2 have active buffers
+      _streamBuffersMap.set(1, [])
+      _streamBuffersMap.set(2, [])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: { 1: [], 2: [] },
       })
 
       const listener = getStreamListener()
@@ -703,16 +720,16 @@ describe('chatStore', () => {
       expect(state.streamParts[1].type).toBe('tool')
 
       // Both buffers have their own data
-      expect(state.streamBuffers[1]).toHaveLength(2)
-      expect(state.streamBuffers[2]).toHaveLength(2)
-      expect(state.streamBuffers[2][0]).toEqual({ type: 'text', content: 'conv2 text' })
+      expect(_streamBuffersMap.get(1)).toHaveLength(2)
+      expect(_streamBuffersMap.get(2)).toHaveLength(2)
+      expect(_streamBuffersMap.get(2)![0]).toEqual({ type: 'text', content: 'conv2 text' })
     })
 
     it('tool_input chunk attaches input to the running tool part', () => {
+      _streamBuffersMap.set(1, [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: { 1: [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }] },
         streamParts: [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }],
       })
 
@@ -731,10 +748,10 @@ describe('chatStore', () => {
     })
 
     it('tool_input with invalid JSON is silently ignored', () => {
+      _streamBuffersMap.set(1, [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: { 1: [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }] },
         streamParts: [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }],
       })
 
@@ -752,10 +769,10 @@ describe('chatStore', () => {
     })
 
     it('tool_result carries output data from enhanced chunk', () => {
+      _streamBuffersMap.set(1, [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: { 1: [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }] },
         streamParts: [{ type: 'tool', name: 'Bash', id: 't1', status: 'running' }],
       })
 
@@ -778,10 +795,10 @@ describe('chatStore', () => {
     })
 
     it('tool_result without toolOutput falls back to content for output', () => {
+      _streamBuffersMap.set(1, [{ type: 'tool', name: 'Read', id: 't2', status: 'running' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: { 1: [{ type: 'tool', name: 'Read', id: 't2', status: 'running' }] },
         streamParts: [{ type: 'tool', name: 'Read', id: 't2', status: 'running' }],
       })
 
@@ -812,7 +829,7 @@ describe('chatStore', () => {
       ]
       mockAgent.conversations.get.mockResolvedValueOnce({ id: 5, title: 'Test', messages: reloadedMsgs })
 
-      useChatStore.setState({ activeConversationId: 5, streamBuffers: {} })
+      useChatStore.setState({ activeConversationId: 5 })
 
       getListener()(5)
 
@@ -822,7 +839,7 @@ describe('chatStore', () => {
     })
 
     it('does not reload when viewing a different conversation', () => {
-      useChatStore.setState({ activeConversationId: 3, streamBuffers: {} })
+      useChatStore.setState({ activeConversationId: 3 })
 
       getListener()(5)
 
@@ -830,7 +847,8 @@ describe('chatStore', () => {
     })
 
     it('does not reload when the conversation is currently streaming (has buffer)', () => {
-      useChatStore.setState({ activeConversationId: 5, streamBuffers: { 5: [] } })
+      _streamBuffersMap.set(5, [])
+      useChatStore.setState({ activeConversationId: 5 })
 
       getListener()(5)
 
@@ -840,12 +858,12 @@ describe('chatStore', () => {
 
   describe('setActiveConversation', () => {
     it('shows empty view when switching away from streaming conversation', () => {
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'partial' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
         streamParts: [{ type: 'text', content: 'partial' }],
         streamingContent: 'partial',
-        streamBuffers: { 1: [{ type: 'text', content: 'partial' }] },
       })
 
       useChatStore.getState().setActiveConversation(2)
@@ -857,16 +875,17 @@ describe('chatStore', () => {
       expect(state.streamParts).toEqual([])
       expect(state.streamingContent).toBe('')
       // Buffer for conv 1 is preserved
-      expect(state.streamBuffers[1]).toEqual([{ type: 'text', content: 'partial' }])
+      expect(_streamBuffersMap.get(1)).toEqual([{ type: 'text', content: 'partial' }])
     })
 
     it('restores isStreaming and view from buffer when switching back', () => {
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'accumulated' }])
+      _streamTextMap.set(1, 'accumulated')
       useChatStore.setState({
         activeConversationId: 2,
         isStreaming: false,
         streamParts: [],
         streamingContent: '',
-        streamBuffers: { 1: [{ type: 'text', content: 'accumulated' }] },
       })
 
       useChatStore.getState().setActiveConversation(1)
@@ -881,12 +900,13 @@ describe('chatStore', () => {
 
     it('full round-trip: switch away, chunks accumulate in buffer, switch back shows all', () => {
       // 1. Streaming on conv 1
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'before ' }])
+      _streamTextMap.set(1, 'before ')
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
         streamParts: [{ type: 'text', content: 'before ' }],
         streamingContent: 'before ',
-        streamBuffers: { 1: [{ type: 'text', content: 'before ' }] },
       })
 
       // 2. Switch to conv 2
@@ -903,7 +923,7 @@ describe('chatStore', () => {
       // View is still empty (we're on conv 2)
       expect(useChatStore.getState().streamParts).toEqual([])
       // But buffer has everything
-      expect(useChatStore.getState().streamBuffers[1]).toHaveLength(2)
+      expect(_streamBuffersMap.get(1)).toHaveLength(2)
 
       // 4. Switch back to conv 1
       useChatStore.getState().setActiveConversation(1)
@@ -933,11 +953,11 @@ describe('chatStore', () => {
     })
 
     it('shows empty view when switching to null during active stream', () => {
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'keep' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
         streamParts: [{ type: 'text', content: 'keep' }],
-        streamBuffers: { 1: [{ type: 'text', content: 'keep' }] },
       })
 
       useChatStore.getState().setActiveConversation(null)
@@ -948,18 +968,18 @@ describe('chatStore', () => {
       // View is empty (null conv has no buffer)
       expect(state.streamParts).toEqual([])
       // Buffer is preserved
-      expect(state.streamBuffers[1]).toEqual([{ type: 'text', content: 'keep' }])
+      expect(_streamBuffersMap.get(1)).toEqual([{ type: 'text', content: 'keep' }])
     })
 
     it('switches between two streaming conversations correctly', () => {
       // Both conv 1 and 2 are streaming
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'conv1 data' }])
+      _streamBuffersMap.set(2, [{ type: 'text', content: 'conv2 data' }])
+      _streamTextMap.set(1, 'conv1 data')
+      _streamTextMap.set(2, 'conv2 data')
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: {
-          1: [{ type: 'text', content: 'conv1 data' }],
-          2: [{ type: 'text', content: 'conv2 data' }],
-        },
         streamParts: [{ type: 'text', content: 'conv1 data' }],
         streamingContent: 'conv1 data',
       })
@@ -996,10 +1016,10 @@ describe('chatStore', () => {
           notificationConfig: JSON.stringify(DEFAULT_NOTIFICATION_CONFIG),
         },
       })
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'data' }])
       useChatStore.setState({
         activeConversationId: 1,
         isStreaming: true,
-        streamBuffers: { 1: [{ type: 'text', content: 'data' }] },
       })
     })
 
@@ -1335,9 +1355,9 @@ describe('chatStore', () => {
     })
 
     it('streamOperation drains queue after stream completes', async () => {
+      _streamBuffersMap.set(1, [])
       useChatStore.setState({
         activeConversationId: 1,
-        streamBuffers: { 1: [] },
         messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
         queuePaused: {},
       })
@@ -1429,9 +1449,9 @@ describe('chatStore', () => {
     it('resumeQueue sends next queued message if not streaming', async () => {
       vi.useFakeTimers()
       try {
+        // _streamBuffersMap already clear from beforeEach — NOT streaming
         useChatStore.setState({
           activeConversationId: 1,
-          streamBuffers: {},  // NOT streaming
           messageQueues: { 1: [{ id: 'q1', content: 'queued msg', createdAt: Date.now() }] },
           queuePaused: { 1: true },
         })
@@ -1454,9 +1474,9 @@ describe('chatStore', () => {
     })
 
     it('resumeQueue does not send if currently streaming', () => {
+      _streamBuffersMap.set(1, [])  // currently streaming
       useChatStore.setState({
         activeConversationId: 1,
-        streamBuffers: { 1: [] },  // currently streaming
         messageQueues: { 1: [{ id: 'q1', content: 'queued', createdAt: Date.now() }] },
         queuePaused: { 1: true },
       })

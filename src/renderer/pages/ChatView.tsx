@@ -12,6 +12,7 @@ import { QueuePanel } from '../components/chat/QueuePanel'
 import { useMobileMode, useCompactMode } from '../hooks/useMobileMode'
 import { useUiStore } from '../stores/uiStore'
 import { useChatStore } from '../stores/chatStore'
+import { useShallow } from 'zustand/react/shallow'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAuthStore } from '../stores/authStore'
 import { useConversationsStore } from '../stores/conversationsStore'
@@ -22,7 +23,7 @@ import { parseOverrides, resolveEffectiveSettings, getInheritanceSource } from '
 import { parseMcpDisabledList } from '../utils/mcpUtils'
 import { useVoiceInputStore } from '../stores/voiceInputStore'
 import type { Attachment, AIOverrides, KnowledgeSelection } from '../../shared/types'
-import type { TaskNotification } from '../stores/chatStore'
+import type { TaskNotification, QueuedMessage } from '../stores/chatStore'
 import { DEFAULT_MODEL, DEFAULT_EXCLUDE_PATTERNS, shortenModelName } from '../../shared/constants'
 import { usePiExtensionUI } from '../hooks/usePiExtensionUI'
 import { usePiExtensionUIStore } from '../stores/piExtensionUIStore'
@@ -31,6 +32,7 @@ import { ExtensionToast } from '../components/extensions/ExtensionToast'
 import { ExtensionWidget } from '../components/extensions/ExtensionWidget'
 
 const EMPTY_TASK_NOTIFICATIONS: TaskNotification[] = []
+const EMPTY_QUEUE: QueuedMessage[] = []
 
 interface ChatViewProps {
   conversationId: number | null
@@ -42,39 +44,54 @@ interface ChatViewProps {
 export function ChatView({ conversationId, conversationTitle, conversationModel, conversationCwd }: ChatViewProps) {
   const mobile = useMobileMode()
   const compact = useCompactMode()
+
+  // Task 1.1: Granular selectors — data selectors (re-render only when specific data changes)
+  const messages = useChatStore((s) => s.messages)
+  const clearedAt = useChatStore((s) => s.clearedAt)
+  const compactSummary = useChatStore((s) => s.compactSummary)
+  const isCompacting = useChatStore((s) => s.isCompacting)
+  const isStreaming = useChatStore((s) => s.isStreaming)
+  const streamParts = useChatStore((s) => s.streamParts)
+  const streamingContent = useChatStore((s) => s.streamingContent)
+  const isLoading = useChatStore((s) => s.isLoading)
+  const error = useChatStore((s) => s.error)
+
+  // Task 1.1: Action selectors — stable refs, grouped with useShallow to avoid new object on every render
+  const actions = useChatStore(useShallow((s) => ({
+    loadMessages: s.loadMessages,
+    sendMessage: s.sendMessage,
+    stopGeneration: s.stopGeneration,
+    regenerateLastResponse: s.regenerateLastResponse,
+    editMessage: s.editMessage,
+    clearChat: s.clearChat,
+    setActiveConversation: s.setActiveConversation,
+    addToQueue: s.addToQueue,
+    removeFromQueue: s.removeFromQueue,
+    editQueuedMessage: s.editQueuedMessage,
+    reorderQueue: s.reorderQueue,
+    clearQueue: s.clearQueue,
+    resumeQueue: s.resumeQueue,
+    lockQueueForEdit: s.lockQueueForEdit,
+    unlockQueueForEdit: s.unlockQueueForEdit,
+  })))
   const {
-    messages,
-    clearedAt,
-    compactSummary,
-    isCompacting,
-    isStreaming,
-    streamParts,
-    streamingContent,
-    isLoading,
-    error,
-    loadMessages,
-    sendMessage,
-    stopGeneration,
-    regenerateLastResponse,
-    editMessage,
-    clearChat,
-    setActiveConversation,
-  } = useChatStore()
+    loadMessages, sendMessage, stopGeneration, regenerateLastResponse, editMessage,
+    clearChat, setActiveConversation, addToQueue, removeFromQueue, editQueuedMessage,
+    reorderQueue, clearQueue, resumeQueue, lockQueueForEdit, unlockQueueForEdit,
+  } = actions
 
   const taskNotificationsRaw = useChatStore((s) =>
     conversationId != null ? s.taskNotifications[conversationId] : undefined
   )
   const taskNotifications = taskNotificationsRaw ?? EMPTY_TASK_NOTIFICATIONS
-  const messageQueues = useChatStore((s) => s.messageQueues)
-  const queuePaused = useChatStore((s) => s.queuePaused)
-  const addToQueue = useChatStore((s) => s.addToQueue)
-  const removeFromQueue = useChatStore((s) => s.removeFromQueue)
-  const editQueuedMessage = useChatStore((s) => s.editQueuedMessage)
-  const reorderQueue = useChatStore((s) => s.reorderQueue)
-  const clearQueue = useChatStore((s) => s.clearQueue)
-  const resumeQueue = useChatStore((s) => s.resumeQueue)
-  const lockQueueForEdit = useChatStore((s) => s.lockQueueForEdit)
-  const unlockQueueForEdit = useChatStore((s) => s.unlockQueueForEdit)
+
+  // Task 1.1: Select only current conversation's queue data, not entire maps
+  const currentQueue = useChatStore((s) =>
+    conversationId != null ? s.messageQueues[conversationId] ?? EMPTY_QUEUE : EMPTY_QUEUE
+  )
+  const currentQueuePaused = useChatStore((s) =>
+    conversationId != null ? !!s.queuePaused[conversationId] : false
+  )
 
   const { isAuthenticated } = useAuthStore()
   const globalSettings = useSettingsStore((s) => s.settings)
@@ -357,8 +374,6 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
     setAttachments([])
   }
 
-  const currentQueue = conversationId != null ? messageQueues[conversationId] ?? [] : []
-  const currentQueuePaused = conversationId != null ? !!queuePaused[conversationId] : false
   const hasQueuedMessages = currentQueue.length > 0
 
   const handleQueue = useCallback((content: string) => {

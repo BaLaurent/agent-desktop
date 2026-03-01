@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import type { Conversation, Folder } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
+import { useShallow } from 'zustand/react/shallow'
 import { useSchedulerStore } from '../../stores/schedulerStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
 import { ContextMenu, ContextMenuItem, ContextMenuDivider } from '../shared/ContextMenu'
@@ -22,11 +23,35 @@ interface Props {
   folderColor?: string | null
 }
 
-export function ConversationItem({ conversation, isActive, isSelected, visibleOrder, depth = 0, folderColor }: Props) {
+// Stable action selector — useShallow prevents new object reference on every render
+const useActions = () => useConversationsStore(useShallow((s) => ({
+  setActiveConversation: s.setActiveConversation,
+  updateConversation: s.updateConversation,
+  deleteConversation: s.deleteConversation,
+  moveToFolder: s.moveToFolder,
+  exportConversation: s.exportConversation,
+  handleSelect: s.handleSelect,
+  deleteSelected: s.deleteSelected,
+  moveSelectedToFolder: s.moveSelectedToFolder,
+  colorSelected: s.colorSelected,
+  clearSelection: s.clearSelection,
+})))
+
+export const ConversationItem = memo(function ConversationItem({ conversation, isActive, isSelected, visibleOrder, depth = 0, folderColor }: Props) {
   const isMobile = useMobileMode()
-  const { setActiveConversation, updateConversation, deleteConversation, moveToFolder, exportConversation, folders, handleSelect, selectedIds, deleteSelected, moveSelectedToFolder, colorSelected, clearSelection } =
-    useConversationsStore()
-  const hasScheduledTask = useSchedulerStore((s) => s.tasks.some((t) => t.conversation_id === conversation.id))
+
+  // Granular data selectors — only re-render when these specific values change
+  const folders = useConversationsStore((s) => s.folders)
+  const selectedIds = useConversationsStore((s) => s.selectedIds)
+  const {
+    setActiveConversation, updateConversation, deleteConversation, moveToFolder,
+    exportConversation, handleSelect, deleteSelected, moveSelectedToFolder,
+    colorSelected, clearSelection,
+  } = useActions()
+
+  // O(1) scheduled task lookup via derived Set (Task 2.5)
+  const hasScheduledTask = useSchedulerStore((s) => s.taskConversationIds.has(conversation.id))
+
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(conversation.title)
   const [showMenu, setShowMenu] = useState(false)
@@ -49,11 +74,11 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
     setShowFolderSubmenu(false)
   }, [])
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     setMenuPos({ x: e.clientX, y: e.clientY })
     setShowMenu(true)
-  }
+  }, [])
 
   const openMenuAt = useCallback((x: number, y: number) => {
     setMenuPos({ x, y })
@@ -91,30 +116,30 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
     }
   }, [])
 
-  const handleRenameSubmit = () => {
+  const handleRenameSubmit = useCallback(() => {
     const trimmed = renameValue.trim()
     if (trimmed && trimmed !== conversation.title) {
       updateConversation(conversation.id, { title: trimmed })
     }
     setIsRenaming(false)
-  }
+  }, [renameValue, conversation.title, conversation.id, updateConversation])
 
-  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+  const handleRenameKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleRenameSubmit()
     if (e.key === 'Escape') {
       setRenameValue(conversation.title)
       setIsRenaming(false)
     }
-  }
+  }, [handleRenameSubmit, conversation.title])
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     setShowMenu(false)
     if (confirm(`Delete "${conversation.title}"?`)) {
       deleteConversation(conversation.id)
     }
-  }
+  }, [conversation.title, conversation.id, deleteConversation])
 
-  const handleExport = async (format: 'markdown' | 'json') => {
+  const handleExport = useCallback(async (format: 'markdown' | 'json') => {
     setShowMenu(false)
     const data = await exportConversation(conversation.id, format)
     const ext = format === 'markdown' ? 'md' : 'json'
@@ -125,18 +150,27 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
     a.download = `${conversation.title}.${ext}`
     a.click()
     URL.revokeObjectURL(url)
-  }
+  }, [conversation.id, conversation.title, exportConversation])
 
-  const handleMoveToFolder = (folderId: number | null) => {
+  const handleMoveToFolder = useCallback((folderId: number | null) => {
     setShowMenu(false)
     setShowFolderSubmenu(false)
     moveToFolder(conversation.id, folderId)
-  }
+  }, [conversation.id, moveToFolder])
 
-  const handleGenerateTitle = async () => {
+  const handleGenerateTitle = useCallback(async () => {
     setShowMenu(false)
     await window.agent.conversations.generateTitle(conversation.id)
-  }
+  }, [conversation.id])
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      e.preventDefault()
+      handleSelect(conversation.id, e.ctrlKey || e.metaKey, e.shiftKey, visibleOrder)
+    } else {
+      handleSelect(conversation.id, false, false, visibleOrder)
+    }
+  }, [conversation.id, handleSelect, visibleOrder])
 
   const timeAgo = formatTimeAgo(conversation.updated_at)
   const effectiveColor = conversation.color || folderColor || null
@@ -160,14 +194,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
           },
           onDoubleClick: () => setIsRenaming(true),
         } : {})}
-        onClick={(e: React.MouseEvent) => {
-          if (e.ctrlKey || e.metaKey || e.shiftKey) {
-            e.preventDefault()
-            handleSelect(conversation.id, e.ctrlKey || e.metaKey, e.shiftKey, visibleOrder)
-          } else {
-            handleSelect(conversation.id, false, false, visibleOrder)
-          }
-        }}
+        onClick={handleClick}
         onContextMenu={!isMobile ? handleContextMenu : undefined}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -411,7 +438,7 @@ export function ConversationItem({ conversation, isActive, isSelected, visibleOr
       )}
     </>
   )
-}
+})
 
 function formatTimeAgo(dateStr: string): string {
   const now = Date.now()

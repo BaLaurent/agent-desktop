@@ -1,9 +1,36 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import DOMPurify from 'dompurify'
-import Editor from '@monaco-editor/react'
 import { MarkdownArtifact } from './MarkdownArtifact'
 import { useFileExplorerStore } from '../../stores/fileExplorerStore'
 import type { JupyterOutputChunk } from '../../../shared/types'
+
+// Lazy-load Monaco editor (~2-5MB bundle) — deferred until a code cell enters edit mode
+let _MonacoEditorComponent: React.ComponentType<any> | null = null
+let _monacoLoadPromise: Promise<void> | null = null
+
+function loadMonacoEditor(): Promise<void> {
+  if (_MonacoEditorComponent) return Promise.resolve()
+  if (!_monacoLoadPromise) {
+    _monacoLoadPromise = import('@monaco-editor/react').then((mod) => {
+      _MonacoEditorComponent = mod.default
+    })
+  }
+  return _monacoLoadPromise
+}
+
+function useMonacoEditor(): React.ComponentType<any> | null {
+  const [Editor, setEditor] = useState<React.ComponentType<any> | null>(() => _MonacoEditorComponent)
+  useEffect(() => {
+    if (_MonacoEditorComponent) {
+      setEditor(() => _MonacoEditorComponent)
+      return
+    }
+    loadMonacoEditor().then(() => {
+      setEditor(() => _MonacoEditorComponent)
+    })
+  }, [])
+  return Editor
+}
 
 // ── Types ──────────────────────────────────────
 
@@ -164,7 +191,7 @@ function CollapsibleOutput({ text }: { text: string }) {
 
 // ── CellOutputView ─────────────────────────────
 
-function CellOutputView({ output }: { output: CellOutput }) {
+const CellOutputView = React.memo(function CellOutputView({ output }: { output: CellOutput }) {
   if (output.output_type === 'stream') {
     const text = normalizeSource(output.text || '')
     const isStderr = output.name === 'stderr'
@@ -241,7 +268,7 @@ function CellOutputView({ output }: { output: CellOutput }) {
   }
 
   return null
-}
+})
 
 // ── Kernel Toolbar ────────────────────────────
 
@@ -457,21 +484,7 @@ function CellToolbar({
 
 // ── NotebookCellView ───────────────────────────
 
-function NotebookCellView({
-  cell,
-  liveOutputs,
-  liveExecCount,
-  isExecuting,
-  kernelStatus,
-  onRun,
-  isEditing,
-  isReadOnly,
-  onStartEdit,
-  onSourceChange,
-  onCommitEdit,
-  onSave,
-  language,
-}: {
+interface NotebookCellViewProps {
   cell: EditableCell
   liveOutputs: CellOutput[] | null
   liveExecCount: number | null
@@ -485,8 +498,55 @@ function NotebookCellView({
   onCommitEdit: () => void
   onSave: () => void
   language: string
-}) {
+}
+
+function notebookCellViewAreEqual(prev: NotebookCellViewProps, next: NotebookCellViewProps): boolean {
+  if (prev.cell !== next.cell) return false
+  if (prev.liveExecCount !== next.liveExecCount) return false
+  if (prev.isExecuting !== next.isExecuting) return false
+  if (prev.kernelStatus !== next.kernelStatus) return false
+  if (prev.isEditing !== next.isEditing) return false
+  if (prev.isReadOnly !== next.isReadOnly) return false
+  if (prev.language !== next.language) return false
+  if (prev.onRun !== next.onRun) return false
+  if (prev.onStartEdit !== next.onStartEdit) return false
+  if (prev.onSourceChange !== next.onSourceChange) return false
+  if (prev.onCommitEdit !== next.onCommitEdit) return false
+  if (prev.onSave !== next.onSave) return false
+  // Compare liveOutputs by length and last item rather than reference
+  const prevOut = prev.liveOutputs
+  const nextOut = next.liveOutputs
+  if (prevOut === nextOut) return true
+  if (prevOut == null || nextOut == null) return false
+  if (prevOut.length !== nextOut.length) return false
+  if (prevOut.length > 0 && prevOut[prevOut.length - 1] !== nextOut[nextOut.length - 1]) return false
+  return true
+}
+
+const NotebookCellView = React.memo(function NotebookCellView({
+  cell,
+  liveOutputs,
+  liveExecCount,
+  isExecuting,
+  kernelStatus,
+  onRun,
+  isEditing,
+  isReadOnly,
+  onStartEdit,
+  onSourceChange,
+  onCommitEdit,
+  onSave,
+  language,
+}: NotebookCellViewProps) {
   const source = cell.source
+  const MonacoEditor = useMonacoEditor()
+
+  // Trigger Monaco load when editing a code cell
+  useEffect(() => {
+    if (isEditing && cell.cell_type === 'code') {
+      loadMonacoEditor()
+    }
+  }, [isEditing, cell.cell_type])
 
   if (cell.cell_type === 'markdown') {
     if (isEditing) {
@@ -625,44 +685,56 @@ function NotebookCellView({
             className="flex-1 rounded overflow-hidden"
             style={{ backgroundColor: 'var(--color-surface)' }}
           >
-            <Editor
-              height={`${Math.min(Math.max(lineCount * 19, 57), 400)}px`}
-              language={language === 'python' ? 'python' : language}
-              theme="vs-dark"
-              value={source}
-              onChange={(val) => onSourceChange(val ?? '')}
-              onMount={(editor, monaco) => {
-                editor.focus()
-                editor.addCommand(monaco.KeyCode.Escape, () => {
-                  onCommitEdit()
-                })
-                editor.addCommand(
-                  monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-                  () => {
+            {MonacoEditor ? (
+              <MonacoEditor
+                height={`${Math.min(Math.max(lineCount * 19, 57), 400)}px`}
+                language={language === 'python' ? 'python' : language}
+                theme="vs-dark"
+                value={source}
+                onChange={(val: string | undefined) => onSourceChange(val ?? '')}
+                onMount={(editor: any, monaco: any) => {
+                  editor.focus()
+                  editor.addCommand(monaco.KeyCode.Escape, () => {
                     onCommitEdit()
-                    onRun()
-                  },
-                )
-                editor.addCommand(
-                  monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-                  () => {
-                    onSave()
-                  },
-                )
-              }}
-              options={{
-                minimap: { enabled: false },
-                wordWrap: 'on',
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                fontSize: 12,
-                tabSize: 4,
-                renderLineHighlight: 'none',
-                overviewRulerLanes: 0,
-                hideCursorInOverviewRuler: true,
-                scrollbar: { vertical: 'hidden', horizontal: 'auto' },
-              }}
-            />
+                  })
+                  editor.addCommand(
+                    monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+                    () => {
+                      onCommitEdit()
+                      onRun()
+                    },
+                  )
+                  editor.addCommand(
+                    monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                    () => {
+                      onSave()
+                    },
+                  )
+                }}
+                options={{
+                  minimap: { enabled: false },
+                  wordWrap: 'on',
+                  lineNumbers: 'on',
+                  scrollBeyondLastLine: false,
+                  fontSize: 12,
+                  tabSize: 4,
+                  renderLineHighlight: 'none',
+                  overviewRulerLanes: 0,
+                  hideCursorInOverviewRuler: true,
+                  scrollbar: { vertical: 'hidden', horizontal: 'auto' },
+                }}
+              />
+            ) : (
+              <div
+                className="flex items-center justify-center text-xs"
+                style={{
+                  height: `${Math.min(Math.max(lineCount * 19, 57), 400)}px`,
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                Loading editor...
+              </div>
+            )}
           </div>
         ) : (
           <pre
@@ -695,7 +767,7 @@ function NotebookCellView({
       )}
     </div>
   )
-}
+}, notebookCellViewAreEqual)
 
 // ── NotebookPreview (main export) ──────────────
 
@@ -715,26 +787,33 @@ export function NotebookPreview({ content, filePath }: NotebookPreviewProps) {
   const notebookMetaRef = useRef<NotebookMeta>({})
 
   // ── Parse & init cells from content ──────
-  const [cells, setCells] = useState<EditableCell[]>(() => {
+  const initialParseRef = useRef<{ cells: EditableCell[]; ok: boolean } | null>(null)
+  if (initialParseRef.current === null) {
     const parsed = parseNotebook(content)
-    if (!parsed) return []
-    notebookMetaRef.current = {
-      metadata: parsed.metadata,
-      nbformat: parsed.nbformat,
-      nbformat_minor: parsed.nbformat_minor,
+    if (!parsed) {
+      initialParseRef.current = { cells: [], ok: false }
+    } else {
+      notebookMetaRef.current = {
+        metadata: parsed.metadata,
+        nbformat: parsed.nbformat,
+        nbformat_minor: parsed.nbformat_minor,
+      }
+      initialParseRef.current = {
+        cells: parsed.cells.map((c) => ({
+          _id: nextId(),
+          cell_type: c.cell_type,
+          source: normalizeSource(c.source),
+          outputs: c.outputs,
+          execution_count: c.execution_count,
+          metadata: c.metadata,
+        })),
+        ok: true,
+      }
     }
-    return parsed.cells.map((c) => ({
-      _id: nextId(),
-      cell_type: c.cell_type,
-      source: normalizeSource(c.source),
-      outputs: c.outputs,
-      execution_count: c.execution_count,
-      metadata: c.metadata,
-    }))
-  })
+  }
 
-  // Track whether the initial parse failed
-  const [parseOk, setParseOk] = useState(() => parseNotebook(content) !== null)
+  const [cells, setCells] = useState<EditableCell[]>(() => initialParseRef.current!.cells)
+  const [parseOk, setParseOk] = useState(() => initialParseRef.current!.ok)
 
   // ── Loop prevention refs ─────────────────
   const lastSerializedRef = useRef<string | null>(null)
@@ -929,6 +1008,7 @@ export function NotebookPreview({ content, filePath }: NotebookPreviewProps) {
   const reqToCellRef = useRef<Map<string, number>>(new Map())
   const kernelStatusRef = useRef<KernelStatus>('off')
   kernelStatusRef.current = kernelStatus
+  const runAllAbortRef = useRef<AbortController | null>(null)
 
   // ── Jupyter output listener ─────────────
   useEffect(() => {
@@ -1004,9 +1084,10 @@ export function NotebookPreview({ content, filePath }: NotebookPreviewProps) {
     return unsub
   }, [filePath])
 
-  // Cleanup kernel on unmount only
+  // Cleanup kernel and abort runAll polling on unmount
   useEffect(() => {
     return () => {
+      runAllAbortRef.current?.abort()
       if (filePath && kernelStatusRef.current !== 'off') {
         window.agent.jupyter.shutdownKernel(filePath).catch(() => {})
       }
@@ -1081,11 +1162,15 @@ export function NotebookPreview({ content, filePath }: NotebookPreviewProps) {
   )
 
   const handleRunAll = useCallback(async () => {
+    runAllAbortRef.current?.abort()
+    const controller = new AbortController()
+    runAllAbortRef.current = controller
     const currentCells = cellsRef.current
     for (const cell of currentCells) {
+      if (controller.signal.aborted) break
       if (cell.cell_type === 'code') {
         await handleRunCell(cell._id)
-        await waitForIdle(filePath!)
+        await waitForIdle(filePath!, controller.signal)
       }
     }
   }, [handleRunCell, filePath])
@@ -1276,13 +1361,15 @@ function chunkToCellOutput(chunk: JupyterOutputChunk): CellOutput {
 
 // ── Utility: wait for kernel to become idle ──
 
-function waitForIdle(filePath: string): Promise<void> {
+function waitForIdle(filePath: string, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
+    if (signal?.aborted) { resolve(); return }
     const check = () => {
+      if (signal?.aborted) { resolve(); return }
       window.agent.jupyter
         .getStatus(filePath)
         .then((status) => {
-          if (status === 'idle' || status === null) {
+          if (signal?.aborted || status === 'idle' || status === null) {
             resolve()
           } else {
             setTimeout(check, 200)

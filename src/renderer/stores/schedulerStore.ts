@@ -3,6 +3,8 @@ import type { ScheduledTask, CreateScheduledTask } from '../../shared/types'
 
 interface SchedulerState {
   tasks: ScheduledTask[]
+  /** Derived set of conversation IDs that have at least one scheduled task — O(1) lookup */
+  taskConversationIds: Set<number>
   loading: boolean
   error: string | null
 
@@ -14,8 +16,16 @@ interface SchedulerState {
   runNow: (id: number) => Promise<void>
 }
 
+/** Build derived set from tasks array */
+function buildTaskConversationIds(tasks: ScheduledTask[]): Set<number> {
+  const ids = new Set<number>()
+  for (const t of tasks) ids.add(t.conversation_id)
+  return ids
+}
+
 export const useSchedulerStore = create<SchedulerState>((set, get) => ({
   tasks: [],
+  taskConversationIds: new Set(),
   loading: false,
   error: null,
 
@@ -23,7 +33,7 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const tasks = await window.agent.scheduler.list()
-      set({ tasks, loading: false })
+      set({ tasks, taskConversationIds: buildTaskConversationIds(tasks), loading: false })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err), loading: false })
     }
@@ -31,7 +41,10 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
 
   createTask: async (data) => {
     const task = await window.agent.scheduler.create(data)
-    set((s) => ({ tasks: [task, ...s.tasks] }))
+    set((s) => {
+      const tasks = [task, ...s.tasks]
+      return { tasks, taskConversationIds: buildTaskConversationIds(tasks) }
+    })
     return task
   },
 
@@ -42,7 +55,10 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
 
   deleteTask: async (id) => {
     await window.agent.scheduler.delete(id)
-    set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }))
+    set((s) => {
+      const tasks = s.tasks.filter((t) => t.id !== id)
+      return { tasks, taskConversationIds: buildTaskConversationIds(tasks) }
+    })
   },
 
   toggleTask: async (id, enabled) => {
@@ -62,8 +78,9 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
 // Listen for real-time task updates from the scheduler engine
 if (typeof window !== 'undefined' && window.agent?.scheduler?.onTaskUpdate) {
   window.agent.scheduler.onTaskUpdate((task) => {
-    useSchedulerStore.setState((s) => ({
-      tasks: s.tasks.map((t) => (t.id === task.id ? task : t)),
-    }))
+    useSchedulerStore.setState((s) => {
+      const tasks = s.tasks.map((t) => (t.id === task.id ? task : t))
+      return { tasks, taskConversationIds: buildTaskConversationIds(tasks) }
+    })
   })
 }

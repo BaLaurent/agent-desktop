@@ -86,9 +86,9 @@ async function listTree(basePath: string, depth = 0, fileCount = { value: 0 }, e
 // Flat single-level listing (used by file explorer lazy loading)
 // No recursion, no budget, no skip list — only hides hidden files (. prefix)
 async function listDir(basePath: string): Promise<FileNode[]> {
-  let entries: string[]
+  let entries: import('fs').Dirent[]
   try {
-    entries = await fsp.readdir(basePath)
+    entries = await fsp.readdir(basePath, { withFileTypes: true })
   } catch {
     return []
   }
@@ -96,17 +96,9 @@ async function listDir(basePath: string): Promise<FileNode[]> {
   const nodes: FileNode[] = []
 
   for (const entry of entries) {
-    if (entry.startsWith('.')) continue
-
-    const fullPath = join(basePath, entry)
-    let stat: Awaited<ReturnType<typeof fsp.stat>>
-    try {
-      stat = await fsp.stat(fullPath)
-    } catch {
-      continue
-    }
-
-    nodes.push({ name: entry, path: fullPath, isDirectory: stat.isDirectory() })
+    if (entry.name.startsWith('.')) continue
+    const fullPath = join(basePath, entry.name)
+    nodes.push({ name: entry.name, path: fullPath, isDirectory: entry.isDirectory() })
   }
 
   nodes.sort((a, b) => {
@@ -408,7 +400,9 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     const destDir = join(sessionsBase, String(conversationId))
     await fsp.mkdir(destDir, { recursive: true })
 
-    let count = 0
+    // Validate all source paths and resolve names upfront (must be sequential for dedup)
+    const items: { resolvedSrc: string; dest: string }[] = []
+    const assignedDests = new Set<string>()
     for (const src of sourcePaths) {
       validateString(src, 'sourcePath', 2000)
       const resolvedSrc = expandTilde(src)
@@ -417,27 +411,41 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
       const name = (renames && renames[src]) ? renames[src].trim() : basename(resolvedSrc)
       let dest = join(destDir, name)
 
-      // Inline dedup: try name, then name_1, name_2...
-      if (await fsp.access(dest).then(() => true, () => false)) {
+      // Inline dedup: check both filesystem and already-assigned names
+      const existsOnDiskOrAssigned = async (p: string) =>
+        assignedDests.has(p) || await fsp.access(p).then(() => true, () => false)
+
+      if (await existsOnDiskOrAssigned(dest)) {
         const ext = extname(name)
         const base = basename(name, ext)
         for (let i = 1; i < 1000; i++) {
           dest = join(destDir, `${base}_${i}${ext}`)
-          if (!await fsp.access(dest).then(() => true, () => false)) break
+          if (!await existsOnDiskOrAssigned(dest)) break
         }
       }
 
-      if (method === 'copy') {
-        const stat = await fsp.stat(resolvedSrc)
-        if (stat.isDirectory()) {
-          await fsp.cp(resolvedSrc, dest, { recursive: true })
+      assignedDests.add(dest)
+      items.push({ resolvedSrc, dest })
+    }
+
+    // Process file copy/symlink operations in batches for concurrency
+    const BATCH_SIZE = 16
+    let count = 0
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE)
+      await Promise.all(batch.map(async ({ resolvedSrc, dest }) => {
+        if (method === 'copy') {
+          const stat = await fsp.stat(resolvedSrc)
+          if (stat.isDirectory()) {
+            await fsp.cp(resolvedSrc, dest, { recursive: true })
+          } else {
+            await fsp.copyFile(resolvedSrc, dest)
+          }
         } else {
-          await fsp.copyFile(resolvedSrc, dest)
+          await fsp.symlink(resolvedSrc, dest)
         }
-      } else {
-        await fsp.symlink(resolvedSrc, dest)
-      }
-      count++
+        count++
+      }))
     }
 
     return { cwd: destDir, count }

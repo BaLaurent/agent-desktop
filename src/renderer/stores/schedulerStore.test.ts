@@ -26,7 +26,7 @@ describe('schedulerStore', () => {
       onTaskUpdate: vi.fn().mockReturnValue(() => {}),
     }
     act(() => {
-      useSchedulerStore.setState({ tasks: [], loading: false, error: null })
+      useSchedulerStore.setState({ tasks: [], taskConversationIds: new Set(), loading: false, error: null })
     })
   })
 

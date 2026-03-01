@@ -27,7 +27,6 @@ interface ChatState {
   isStreaming: boolean
   streamParts: StreamPart[]
   streamingContent: string
-  streamBuffers: Record<number, StreamPart[]>
   isLoading: boolean
   error: string | null
   activeConversationId: number | null
@@ -56,16 +55,30 @@ interface ChatState {
   unlockQueueForEdit: (conversationId: number) => void
 }
 
+// --- Module-level stream buffer map (non-reactive) ---
+// Only the active conversation's streamParts/streamingContent are in Zustand state.
+// Background conversation buffers live here and never trigger renders.
+const streamBuffersMap = new Map<number, StreamPart[]>()
+
+/** Accumulated text content per conversation — avoids O(n) recomputation on every chunk */
+const streamTextMap = new Map<number, string>()
+
+/** Check if a conversation has an active stream buffer */
+export function hasStreamBuffer(conversationId: number): boolean {
+  return streamBuffersMap.has(conversationId)
+}
+
 function getTextFromParts(parts: StreamPart[]): string {
   return parts.filter((p) => p.type === 'text').map((p) => p.content).join('')
 }
 
 function syncViewFromBuffer(
   convId: number | null,
-  buffers: Record<number, StreamPart[]>
 ): { streamParts: StreamPart[]; streamingContent: string } {
-  const parts = (convId != null && buffers[convId]) ? buffers[convId] : []
-  return { streamParts: parts, streamingContent: getTextFromParts(parts) }
+  if (convId == null) return { streamParts: [], streamingContent: '' }
+  const parts = streamBuffersMap.get(convId)
+  if (!parts) return { streamParts: [], streamingContent: '' }
+  return { streamParts: parts, streamingContent: streamTextMap.get(convId) ?? getTextFromParts(parts) }
 }
 
 function getNotificationConfig(settings: Record<string, string>): NotificationConfig {
@@ -103,20 +116,20 @@ function shouldShowDesktopNotification(mode: string): boolean {
 }
 
 function randomQueueDelay(): Promise<void> {
-  const ms = 1000 + Math.random() * 4000 // 1–5 seconds
+  const ms = 1000 + Math.random() * 4000 // 1-5 seconds
   return new Promise((r) => setTimeout(r, ms))
 }
 
 function cleanupStreamBuffer(
-  state: { streamBuffers: Record<number, StreamPart[]>; activeConversationId: number | null },
+  activeConversationId: number | null,
   conversationId: number
 ) {
-  const { [conversationId]: _, ...rest } = state.streamBuffers
-  const isStreaming = state.activeConversationId != null && state.activeConversationId in rest
+  streamBuffersMap.delete(conversationId)
+  streamTextMap.delete(conversationId)
+  const isStreaming = activeConversationId != null && streamBuffersMap.has(activeConversationId)
   return {
-    streamBuffers: rest,
     isStreaming,
-    ...(state.activeConversationId === conversationId ? { streamParts: [], streamingContent: '' } : {}),
+    ...(activeConversationId === conversationId ? { streamParts: [], streamingContent: '' } : {}),
   }
 }
 
@@ -144,7 +157,7 @@ async function processQueuedMessage(
 ): Promise<void> {
   const trimmed = content.trim()
 
-  // Client-side slash commands — don't start a stream, so must continue drain
+  // Client-side slash commands -- don't start a stream, so must continue drain
   if (trimmed === '/clear' || trimmed === '/compact') {
     if (trimmed === '/clear') {
       await get().clearContext(conversationId)
@@ -162,7 +175,7 @@ async function processQueuedMessage(
     return
   }
 
-  // Macro expansion: /name → load macro → prepend messages to queue
+  // Macro expansion: /name -> load macro -> prepend messages to queue
   if (/^\/[\w-]+$/.test(trimmed) && typeof window !== 'undefined' && window.agent?.macros?.load) {
     const messages = await window.agent.macros.load(trimmed.slice(1))
     if (messages) {
@@ -187,7 +200,7 @@ async function processQueuedMessage(
     }
   }
 
-  // Regular message — send to AI (streamOperation will drain the rest)
+  // Regular message -- send to AI (streamOperation will drain the rest)
   await get().sendMessage(conversationId, content, attachments)
 }
 
@@ -204,7 +217,7 @@ async function streamOperation(
     if (get().activeConversationId === conversationId) {
       await get().loadMessages(conversationId)
     }
-    set(cleanupStreamBuffer(get(), conversationId))
+    set(cleanupStreamBuffer(get().activeConversationId, conversationId))
 
     // Drain queue: process next queued message if not paused
     const next = popQueue(get, conversationId)
@@ -216,7 +229,7 @@ async function streamOperation(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : errorLabel
-    const cleanup = cleanupStreamBuffer(get(), conversationId)
+    const cleanup = cleanupStreamBuffer(get().activeConversationId, conversationId)
     set(get().activeConversationId === conversationId
       ? { error: msg, ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
       : { ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
@@ -232,7 +245,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isStreaming: false,
   streamParts: [],
   streamingContent: '',
-  streamBuffers: {},
   isLoading: false,
   error: null,
   activeConversationId: null,
@@ -263,6 +275,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       updated_at: new Date().toISOString(),
     }
 
+    streamBuffersMap.set(conversationId, [])
+    streamTextMap.set(conversationId, '')
     set((s) => {
       const { [conversationId]: _, ...restNotifs } = s.taskNotifications
       return {
@@ -270,7 +284,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isStreaming: true,
         streamParts: [],
         streamingContent: '',
-        streamBuffers: { ...s.streamBuffers, [conversationId]: [] },
         error: null,
         activeConversationId: conversationId,
         taskNotifications: restNotifs,
@@ -294,6 +307,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   regenerateLastResponse: async (conversationId: number) => {
     // Remove last assistant message optimistically
+    streamBuffersMap.set(conversationId, [])
+    streamTextMap.set(conversationId, '')
     set((s) => ({
       messages: s.messages.filter(
         (m, i) =>
@@ -302,7 +317,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: true,
       streamParts: [],
       streamingContent: '',
-      streamBuffers: { ...get().streamBuffers, [conversationId]: [] },
       error: null,
       queuePaused: { ...get().queuePaused, [conversationId]: true },
     }))
@@ -316,6 +330,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   editMessage: async (messageId: number, content: string) => {
     const convId = get().activeConversationId
+    if (convId != null) {
+      streamBuffersMap.set(convId, [])
+      streamTextMap.set(convId, '')
+    }
     set((s) => {
       const editIdx = s.messages.findIndex((m) => m.id === messageId)
       const truncatedMessages =
@@ -330,7 +348,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isStreaming: true,
         streamParts: [],
         streamingContent: '',
-        streamBuffers: convId != null ? { ...s.streamBuffers, [convId]: [] } : s.streamBuffers,
         error: null,
         queuePaused: convId != null ? { ...s.queuePaused, [convId]: true } : s.queuePaused,
       }
@@ -354,19 +371,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setActiveConversation: (id: number | null) => {
-    const { activeConversationId: prevId, streamBuffers } = get()
-    const isActiveStreaming = id != null && id in streamBuffers
+    const { activeConversationId: prevId } = get()
+    const isActiveStreaming = id != null && streamBuffersMap.has(id)
     set({
       activeConversationId: id,
       isStreaming: isActiveStreaming,
-      // Clear stale messages when switching conversations to prevent showing wrong conv's data
-      ...(id !== prevId ? { messages: [] } : {}),
-      ...syncViewFromBuffer(id, streamBuffers),
+      // Clear stale data when switching conversations to prevent showing wrong conv's data
+      ...(id !== prevId ? { messages: [], clearedAt: null, compactSummary: null } : {}),
+      ...syncViewFromBuffer(id),
     })
   },
 
   clearChat: () => {
-    set({ messages: [], clearedAt: null, compactSummary: null, isCompacting: false, streamParts: [], streamingContent: '', streamBuffers: {}, isStreaming: false, error: null, activeConversationId: null })
+    streamBuffersMap.clear()
+    streamTextMap.clear()
+    set({ messages: [], clearedAt: null, compactSummary: null, isCompacting: false, streamParts: [], streamingContent: '', isStreaming: false, error: null, activeConversationId: null })
   },
 
   clearContext: async (conversationId: number) => {
@@ -452,7 +471,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ queuePaused: rest })
 
     // If not currently streaming, drain immediately
-    const isConvStreaming = conversationId in get().streamBuffers
+    const isConvStreaming = streamBuffersMap.has(conversationId)
     if (!isConvStreaming) {
       const next = popQueue(get, conversationId)
       if (next) {
@@ -475,7 +494,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Drain if not paused and not streaming
     if (!get().queuePaused[conversationId]) {
-      const isConvStreaming = conversationId in get().streamBuffers
+      const isConvStreaming = streamBuffersMap.has(conversationId)
       if (!isConvStreaming) {
         const next = popQueue(get, conversationId)
         if (next) {
@@ -490,17 +509,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }))
 
-// Conversation-updated listener — reload messages when another window finishes streaming
+// Expose streamBuffersMap for tests and external checks (e.g. conversation-updated listener)
+export { streamBuffersMap as _streamBuffersMap, streamTextMap as _streamTextMap }
+
+// Conversation-updated listener -- reload messages when another window finishes streaming
 if (typeof window !== 'undefined' && window.agent?.events?.onConversationUpdated) {
   window.agent.events.onConversationUpdated((conversationId: number) => {
     const store = useChatStore.getState()
-    if (store.activeConversationId === conversationId && !(conversationId in store.streamBuffers)) {
+    if (store.activeConversationId === conversationId && !streamBuffersMap.has(conversationId)) {
       store.loadMessages(conversationId)
     }
   })
 }
 
-// Stream listener — guarded against preload not being ready
+// Stream listener -- guarded against preload not being ready
 if (typeof window !== 'undefined' && window.agent?.messages?.onStream) {
 window.agent.messages.onStream((chunk: StreamChunk) => {
   const store = useChatStore.getState()
@@ -521,12 +543,13 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
         receivedAt: Date.now(),
       }
       const existing = store.taskNotifications[convId] || []
-      useChatStore.setState({
+      // Task 1.4: Batch setState — build full update, then call setState once
+      const stateUpdate: Partial<ChatState> = {
         taskNotifications: { ...store.taskNotifications, [convId]: [...existing, notification] },
-      })
+      }
       // Also add inline if streaming
-      if (convId in store.streamBuffers) {
-        const parts = [...(store.streamBuffers[convId] || [])]
+      if (streamBuffersMap.has(convId)) {
+        const parts = [...(streamBuffersMap.get(convId) || [])]
         parts.push({
           type: 'task_notification',
           summary: notification.summary,
@@ -534,13 +557,14 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
           taskStatus: chunk.taskStatus,
           outputFile: chunk.outputFile,
         })
-        const buffers = { ...store.streamBuffers, [convId]: parts }
+        streamBuffersMap.set(convId, parts)
+        // streamTextMap unchanged — task_notification is not text
         if (convId === store.activeConversationId) {
-          useChatStore.setState({ streamBuffers: buffers, streamParts: parts, streamingContent: getTextFromParts(parts) })
-        } else {
-          useChatStore.setState({ streamBuffers: buffers })
+          stateUpdate.streamParts = parts
+          stateUpdate.streamingContent = streamTextMap.get(convId) ?? getTextFromParts(parts)
         }
       }
+      useChatStore.setState(stateUpdate)
       // Trigger notification sound + desktop notification
       const notifSettings = useSettingsStore.getState().settings
       if (notifSettings.notificationSounds === 'true') {
@@ -556,38 +580,40 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
   }
 
   // Drop chunks for conversations without an active buffer (not streaming)
-  if (bufferKey == null || !(bufferKey in store.streamBuffers)) {
+  if (bufferKey == null || !streamBuffersMap.has(bufferKey)) {
     return
   }
 
   const isActiveView = bufferKey === store.activeConversationId
 
-  // Helper: update buffer and optionally sync the view
-  function commitParts(parts: StreamPart[]) {
-    const buffers = { ...store.streamBuffers, [bufferKey]: parts }
+  // Helper: update module-level buffer and optionally sync the reactive view
+  function commitParts(parts: StreamPart[], textContent?: string) {
+    streamBuffersMap.set(bufferKey, parts)
+    const text = textContent ?? (streamTextMap.get(bufferKey) ?? getTextFromParts(parts))
+    streamTextMap.set(bufferKey, text)
     if (isActiveView) {
-      useChatStore.setState({ streamBuffers: buffers, streamParts: parts, streamingContent: getTextFromParts(parts) })
-    } else {
-      useChatStore.setState({ streamBuffers: buffers })
+      useChatStore.setState({ streamParts: parts, streamingContent: text })
     }
   }
 
   switch (chunk.type) {
     case 'text':
       if (chunk.content) {
-        const parts = [...(store.streamBuffers[bufferKey] || [])]
+        const parts = [...(streamBuffersMap.get(bufferKey) || [])]
         const lastPart = parts[parts.length - 1]
         if (lastPart && lastPart.type === 'text') {
           parts[parts.length - 1] = { type: 'text', content: lastPart.content + chunk.content }
         } else {
           parts.push({ type: 'text', content: chunk.content })
         }
-        commitParts(parts)
+        // Task 1.3: Incremental text accumulation instead of filter+map+join
+        const prevText = streamTextMap.get(bufferKey) ?? ''
+        commitParts(parts, prevText + chunk.content)
       }
       break
 
     case 'tool_start': {
-      const parts = [...(store.streamBuffers[bufferKey] || [])]
+      const parts = [...(streamBuffersMap.get(bufferKey) || [])]
       const toolName = chunk.toolName || chunk.content || 'tool'
       const toolId = chunk.toolId || `tool_${Date.now()}`
       parts.push({ type: 'tool', name: toolName, id: toolId, status: 'running' })
@@ -596,7 +622,7 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
     }
 
     case 'tool_input': {
-      const parts = [...(store.streamBuffers[bufferKey] || [])]
+      const parts = [...(streamBuffersMap.get(bufferKey) || [])]
       const toolId = chunk.toolId
       let toolInput: Record<string, unknown> = {}
       if (chunk.toolInput) {
@@ -615,7 +641,7 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
     }
 
     case 'tool_result': {
-      const parts = [...(store.streamBuffers[bufferKey] || [])]
+      const parts = [...(streamBuffersMap.get(bufferKey) || [])]
       const toolId = chunk.toolId
       let found = false
       for (let i = parts.length - 1; i >= 0; i--) {
@@ -658,7 +684,7 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'tool_approval': {
       if (chunk.requestId && chunk.toolName) {
-        const parts = [...(store.streamBuffers[bufferKey] || [])]
+        const parts = [...(streamBuffersMap.get(bufferKey) || [])]
         let toolInput: Record<string, unknown> = {}
         if (chunk.toolInput) {
           try { toolInput = JSON.parse(chunk.toolInput) as Record<string, unknown> } catch { /* invalid JSON */ }
@@ -671,7 +697,7 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'ask_user': {
       if (chunk.requestId && chunk.questions) {
-        const parts = [...(store.streamBuffers[bufferKey] || [])]
+        const parts = [...(streamBuffersMap.get(bufferKey) || [])]
         let questions: AskUserQuestion[] = []
         try { questions = JSON.parse(chunk.questions) as AskUserQuestion[] } catch { /* invalid JSON */ }
         parts.push({ type: 'ask_user', requestId: chunk.requestId, questions })
@@ -682,7 +708,7 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'mcp_status': {
       if (chunk.mcpServers) {
-        const parts = [...(store.streamBuffers[bufferKey] || [])]
+        const parts = [...(streamBuffersMap.get(bufferKey) || [])]
         let servers: McpConnectionStatus[] = []
         try { servers = JSON.parse(chunk.mcpServers) as McpConnectionStatus[] } catch { /* invalid JSON */ }
         if (servers.length > 0) {
@@ -695,7 +721,7 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
 
     case 'system_message': {
       if (chunk.content) {
-        const parts = [...(store.streamBuffers[bufferKey] || [])]
+        const parts = [...(streamBuffersMap.get(bufferKey) || [])]
         parts.push({
           type: 'system_message',
           content: chunk.content,
@@ -708,37 +734,32 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
     }
 
     case 'retry': {
-      const parts = [...(store.streamBuffers[bufferKey] || [])]
+      const parts = [...(streamBuffersMap.get(bufferKey) || [])]
       parts.push({
         type: 'retry',
         message: chunk.content || 'Retrying...',
         attempt: chunk.retryAttempt || 0,
         maxAttempts: chunk.retryMaxAttempts || 0,
       })
-      // Clear error state — no flash between attempts
+      streamBuffersMap.set(bufferKey, parts)
+      // streamTextMap unchanged — retry is not text
+      // Clear error state -- no flash between attempts
       if (isActiveView) {
-        const buffers = { ...store.streamBuffers, [bufferKey]: parts }
         useChatStore.setState({
-          streamBuffers: buffers,
           streamParts: parts,
-          streamingContent: getTextFromParts(parts),
+          streamingContent: streamTextMap.get(bufferKey) ?? getTextFromParts(parts),
           error: null,
         })
-      } else {
-        commitParts(parts)
       }
       break
     }
 
     case 'done': {
       const doneSettings = useSettingsStore.getState().settings
-      console.log('[notif:done] master toggle notificationSounds =', doneSettings.notificationSounds, '| stopReason =', chunk.stopReason)
       if (doneSettings.notificationSounds === 'true' && chunk.stopReason !== 'aborted') {
         const event = mapToNotificationEvent(chunk.stopReason, chunk.resultSubtype)
-        console.log('[notif:done] event =', event, '| stopReason =', chunk.stopReason, '| resultSubtype =', chunk.resultSubtype)
         const config = getNotificationConfig(doneSettings)
         const eventConfig = config[event]
-        console.log('[notif:done] eventConfig =', JSON.stringify(eventConfig))
         if (eventConfig.sound) {
           if (event === 'success') {
             playCompletionSound()
@@ -747,36 +768,30 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
           }
         }
         const doneDesktopMode = doneSettings.notificationDesktopMode ?? 'unfocused'
-        console.log('[notif:done] desktop =', eventConfig.desktop, '| mode =', doneDesktopMode, '| shouldShow =', shouldShowDesktopNotification(doneDesktopMode))
         if (eventConfig.desktop && shouldShowDesktopNotification(doneDesktopMode)) {
-          console.log('[notif:done] >>> showNotification called:', getEventLabel(event))
           window.agent.system.showNotification('Agent Desktop', getEventLabel(event)).catch(() => {})
         }
       }
-      useChatStore.setState(cleanupStreamBuffer(store, bufferKey))
+      useChatStore.setState(cleanupStreamBuffer(store.activeConversationId, bufferKey))
       break
     }
 
     case 'error': {
       const errSettings = useSettingsStore.getState().settings
-      console.log('[notif:error] master toggle notificationSounds =', errSettings.notificationSounds)
       if (errSettings.notificationSounds === 'true') {
         const config = getNotificationConfig(errSettings)
         const eventConfig = config.error_js
-        console.log('[notif:error] eventConfig =', JSON.stringify(eventConfig))
         if (eventConfig.sound) {
           playErrorSound()
         }
         const errDesktopMode = errSettings.notificationDesktopMode ?? 'unfocused'
-        console.log('[notif:error] desktop =', eventConfig.desktop, '| mode =', errDesktopMode, '| shouldShow =', shouldShowDesktopNotification(errDesktopMode))
         if (eventConfig.desktop && shouldShowDesktopNotification(errDesktopMode)) {
-          console.log('[notif:error] >>> showNotification called')
           window.agent.system.showNotification('Agent Desktop', getEventLabel('error_js')).catch(() => {})
         }
       }
       useChatStore.setState({
         error: chunk.content ?? 'Stream error',
-        ...cleanupStreamBuffer(store, bufferKey),
+        ...cleanupStreamBuffer(store.activeConversationId, bufferKey),
       })
       break
     }

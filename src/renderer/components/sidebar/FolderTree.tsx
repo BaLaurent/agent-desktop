@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import type { Folder } from '../../../shared/types'
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react'
+import type { Folder, Conversation } from '../../../shared/types'
 import { useConversationsStore } from '../../stores/conversationsStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useMobileMode } from '../../hooks/useMobileMode'
@@ -10,6 +10,306 @@ import type { McpServerName } from '../settings/FolderSettingsPopover'
 import { useMcpStore } from '../../stores/mcpStore'
 import { ContextMenu, ContextMenuItem, ContextMenuDivider } from '../shared/ContextMenu'
 import { ColorSwatches, ColorPicker as ColorPickerPanel, hsvToHex } from '../shared/ColorPicker'
+
+// --- FolderRow: memoized extracted component (Task 2.1) ---
+
+interface FolderRowProps {
+  folder: Folder
+  depth: number
+  isExpanded: boolean
+  isSearching: boolean
+  childFolderIds: number[]
+  convCount: number
+  folderConversations: Conversation[]
+  isDragOver: boolean
+  isBeingDragged: boolean
+  dropIndicator: 'before' | 'after' | 'inside' | null
+  effectiveColor: string | null
+  isDraggableFolder: boolean
+  isRenaming: boolean
+  renameValue: string
+  activeConversationId: number | null
+  selectedIds: Set<number>
+  visibleOrder: number[]
+  colorPickerTarget: number | null
+  colorPickerLive: string | null
+  // Handlers (stable via useCallback in parent)
+  onToggleExpand: (id: number) => void
+  onContextMenu: (e: React.MouseEvent, folderId: number) => void
+  onFolderDropOnFolder: (e: React.DragEvent, folder: Folder) => void
+  onDrop: (e: React.DragEvent, folderId: number | null) => void
+  onFolderDragOver: (e: React.DragEvent, folder: Folder) => void
+  onDragOver: (e: React.DragEvent) => void
+  onFolderDragEnter: (e: React.DragEvent, folderId: number) => void
+  onDragLeave: (e: React.DragEvent) => void
+  onFolderDragStart: (e: React.DragEvent, folderId: number) => void
+  onFolderDragEnd: () => void
+  onFolderTouchStart: (e: React.TouchEvent, folderId: number) => void
+  onFolderTouchEnd: () => void
+  onFolderTouchMove: () => void
+  onFolderThreeDotClick: (e: React.MouseEvent, folderId: number) => void
+  onNewConversationInFolder: (folderId: number, e: React.MouseEvent) => void
+  onRenameChange: (value: string) => void
+  onRenameSubmit: (folderId: number) => void
+  onRenamingCancel: () => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+  isMobile: boolean
+  // For recursive rendering
+  childrenByParent: Map<number | null, Folder[]>
+  convsByFolder: Map<number, Conversation[]>
+  convCountByFolder: Map<number, number>
+  heatmapColors: Map<number, string> | null
+  draggingFolderId: number | null
+  folderDropIndicator: { targetId: number; position: 'before' | 'after' | 'inside' } | null
+  dragOverFolderId: number | null
+  expandedIds: Set<number>
+  renamingId: number | null
+}
+
+const FolderRow = memo(function FolderRow(props: FolderRowProps) {
+  const {
+    folder, depth, isExpanded, isSearching, childFolderIds, convCount,
+    folderConversations, isDragOver, isBeingDragged, dropIndicator,
+    effectiveColor, isDraggableFolder, isRenaming, renameValue,
+    activeConversationId, selectedIds, visibleOrder,
+    onToggleExpand, onContextMenu, onFolderDropOnFolder, onDrop,
+    onFolderDragOver, onDragOver, onFolderDragEnter, onDragLeave,
+    onFolderDragStart, onFolderDragEnd, onFolderTouchStart, onFolderTouchEnd,
+    onFolderTouchMove, onFolderThreeDotClick, onNewConversationInFolder,
+    onRenameChange, onRenameSubmit, onRenamingCancel, inputRef, isMobile,
+    // Recursive rendering data
+    childrenByParent, convsByFolder, convCountByFolder, heatmapColors,
+    draggingFolderId, folderDropIndicator: parentFolderDropIndicator,
+    dragOverFolderId, expandedIds, renamingId, colorPickerTarget, colorPickerLive,
+  } = props
+
+  const dropClass = dropIndicator === 'before' ? ' folder-drop-before'
+    : dropIndicator === 'after' ? ' folder-drop-after'
+    : dropIndicator === 'inside' ? ' sidebar-drop-active'
+    : ''
+
+  const children = childFolderIds.length > 0
+    ? (childrenByParent.get(folder.id) ?? [])
+    : []
+
+  return (
+    <div>
+      <div
+        className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${dropClass}${isBeingDragged ? ' sidebar-dragging' : ''}${!isDragOver && !dropIndicator && !effectiveColor ? ' hover:bg-[var(--color-bg)]' : ''}`}
+        style={{
+          paddingLeft: `${depth * 16 + (isDraggableFolder ? 0 : 8)}px`,
+          color: 'var(--color-text)',
+          ...(effectiveColor && !dropClass ? {
+            borderLeft: `3px solid ${effectiveColor}`,
+            backgroundColor: `color-mix(in srgb, ${effectiveColor} 15%, transparent)`,
+          } : {}),
+        }}
+        onClick={() => onToggleExpand(folder.id)}
+        onContextMenu={!isMobile ? (e) => onContextMenu(e, folder.id) : undefined}
+        {...(!isMobile ? {
+          onDrop: (e: React.DragEvent) => {
+            if (e.dataTransfer.types.includes('application/x-folder-id')) {
+              onFolderDropOnFolder(e, folder)
+            } else {
+              onDrop(e, folder.id)
+            }
+          },
+          onDragOver: (e: React.DragEvent) => {
+            if (e.dataTransfer.types.includes('application/x-folder-id')) {
+              onFolderDragOver(e, folder)
+            } else {
+              onDragOver(e)
+            }
+          },
+          onDragEnter: (e: React.DragEvent) => onFolderDragEnter(e, folder.id),
+          onDragLeave: (e: React.DragEvent) => onDragLeave(e),
+        } : {})}
+        onTouchStart={(e) => onFolderTouchStart(e, folder.id)}
+        onTouchEnd={onFolderTouchEnd}
+        onTouchMove={onFolderTouchMove}
+        role="treeitem"
+        aria-expanded={isExpanded}
+        aria-label={`Folder: ${folder.name}`}
+      >
+        {/* Drag grip handle -- non-default folders only, desktop only */}
+        {isDraggableFolder && (
+          <span
+            className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab flex-shrink-0"
+            style={{ color: 'var(--color-text-muted)' }}
+            draggable
+            onDragStart={(e) => onFolderDragStart(e, folder.id)}
+            onDragEnd={onFolderDragEnd}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Drag folder ${folder.name}`}
+          >
+            <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+              <circle cx="3" cy="2" r="1.2" />
+              <circle cx="7" cy="2" r="1.2" />
+              <circle cx="3" cy="7" r="1.2" />
+              <circle cx="7" cy="7" r="1.2" />
+              <circle cx="3" cy="12" r="1.2" />
+              <circle cx="7" cy="12" r="1.2" />
+            </svg>
+          </span>
+        )}
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          {childFolderIds.length > 0 || convCount > 0 ? (isExpanded ? '\u25BE' : '\u25B8') : '\u2022'}
+        </span>
+        {isRenaming ? (
+          <input
+            ref={inputRef}
+            value={renameValue}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onBlur={() => onRenameSubmit(folder.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onRenameSubmit(folder.id)
+              if (e.key === 'Escape') onRenamingCancel()
+            }}
+            className="flex-1 text-sm mobile:text-base px-1 rounded outline-none"
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              color: 'var(--color-text)',
+              border: '1px solid var(--color-primary)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Rename folder"
+          />
+        ) : (
+          <>
+            <span className="flex-1 truncate">{folder.name}</span>
+            {convCount > 0 && (
+              <span
+                className="text-xs px-1.5 rounded-full"
+                style={{
+                  backgroundColor: 'var(--color-bg)',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                {convCount}
+              </span>
+            )}
+            <button
+              className="opacity-0 group-hover:opacity-100 p-0.5 mobile:opacity-100 mobile:p-2 transition-opacity rounded hover:bg-[var(--color-surface)]"
+              onClick={(e) => onNewConversationInFolder(folder.id, e)}
+              title="New conversation in this folder"
+              aria-label={`New conversation in ${folder.name}`}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <line x1="12" y1="8" x2="12" y2="14" />
+                <line x1="9" y1="11" x2="15" y2="11" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => onFolderThreeDotClick(e, folder.id)}
+              className="hidden mobile:block p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
+              style={{ color: 'var(--color-text-muted)' }}
+              aria-label="Folder actions"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <circle cx="10" cy="4" r="1.5" />
+                <circle cx="10" cy="10" r="1.5" />
+                <circle cx="10" cy="16" r="1.5" />
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+      {isExpanded && (
+        <>
+          {folderConversations.map((conv) => (
+            <ConversationItem
+              key={conv.id}
+              conversation={conv}
+              isActive={conv.id === activeConversationId}
+              isSelected={selectedIds.has(conv.id)}
+              visibleOrder={visibleOrder}
+              depth={depth + 1}
+              folderColor={effectiveColor}
+            />
+          ))}
+          {children.map((child) => {
+            const childIsExpanded = isSearching || expandedIds.has(child.id)
+            const childChildren = childrenByParent.get(child.id) ?? []
+            const childConvCount = convCountByFolder.get(child.id) ?? 0
+            const childConvs = convsByFolder.get(child.id) ?? []
+            const childIsDragOver = dragOverFolderId === child.id
+            const childIsBeingDragged = draggingFolderId === child.id
+            const childDropIndicator = parentFolderDropIndicator?.targetId === child.id ? parentFolderDropIndicator.position : null
+            const childManualColor = (colorPickerTarget === child.id && colorPickerLive) ? colorPickerLive : child.color
+            const childEffectiveColor = childManualColor || (heatmapColors?.get(child.id) ?? null)
+            const childIsRenaming = renamingId === child.id
+            return (
+              <FolderRow
+                key={child.id}
+                folder={child}
+                depth={depth + 1}
+                isExpanded={childIsExpanded}
+                isSearching={isSearching}
+                childFolderIds={childChildren.map(f => f.id)}
+                convCount={childConvCount}
+                folderConversations={childConvs}
+                isDragOver={childIsDragOver}
+                isBeingDragged={childIsBeingDragged}
+                dropIndicator={childDropIndicator}
+                effectiveColor={childEffectiveColor}
+                isDraggableFolder={isDraggableFolder}
+                isRenaming={childIsRenaming}
+                renameValue={childIsRenaming ? renameValue : ''}
+                activeConversationId={activeConversationId}
+                selectedIds={selectedIds}
+                visibleOrder={visibleOrder}
+                colorPickerTarget={colorPickerTarget}
+                colorPickerLive={colorPickerLive}
+                onToggleExpand={onToggleExpand}
+                onContextMenu={onContextMenu}
+                onFolderDropOnFolder={onFolderDropOnFolder}
+                onDrop={onDrop}
+                onFolderDragOver={onFolderDragOver}
+                onDragOver={onDragOver}
+                onFolderDragEnter={onFolderDragEnter}
+                onDragLeave={onDragLeave}
+                onFolderDragStart={onFolderDragStart}
+                onFolderDragEnd={onFolderDragEnd}
+                onFolderTouchStart={onFolderTouchStart}
+                onFolderTouchEnd={onFolderTouchEnd}
+                onFolderTouchMove={onFolderTouchMove}
+                onFolderThreeDotClick={onFolderThreeDotClick}
+                onNewConversationInFolder={onNewConversationInFolder}
+                onRenameChange={onRenameChange}
+                onRenameSubmit={onRenameSubmit}
+                onRenamingCancel={onRenamingCancel}
+                inputRef={inputRef}
+                isMobile={isMobile}
+                childrenByParent={childrenByParent}
+                convsByFolder={convsByFolder}
+                convCountByFolder={convCountByFolder}
+                heatmapColors={heatmapColors}
+                draggingFolderId={draggingFolderId}
+                folderDropIndicator={parentFolderDropIndicator}
+                dragOverFolderId={dragOverFolderId}
+                expandedIds={expandedIds}
+                renamingId={renamingId}
+              />
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+})
+
+// --- SidebarTree: main component ---
 
 export function SidebarTree() {
   const isMobile = useMobileMode()
@@ -49,6 +349,73 @@ export function SidebarTree() {
   const inputRef = useRef<HTMLInputElement>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [colorPickerPos, setColorPickerPos] = useState({ x: 200, y: 200 })
+
+  // --- Task 2.4: Pre-build index maps for O(1) lookups ---
+  const childrenByParent = useMemo(() => {
+    const map = new Map<number | null, Folder[]>()
+    for (const f of folders) {
+      const pid = f.parent_id ?? null
+      const arr = map.get(pid)
+      if (arr) arr.push(f)
+      else map.set(pid, [f])
+    }
+    return map
+  }, [folders])
+
+  const convCountByFolder = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const c of conversations) {
+      const fid = c.folder_id
+      if (fid !== null) {
+        map.set(fid, (map.get(fid) || 0) + 1)
+      }
+    }
+    return map
+  }, [conversations])
+
+  const convsByFolder = useMemo(() => {
+    const map = new Map<number, Conversation[]>()
+    for (const c of conversations) {
+      const fid = c.folder_id
+      if (fid !== null) {
+        const arr = map.get(fid)
+        if (arr) arr.push(c)
+        else map.set(fid, [c])
+      }
+    }
+    return map
+  }, [conversations])
+
+  const foldersById = useMemo(() => new Map(folders.map(f => [f.id, f])), [folders])
+
+  // Recursive conversation count using index maps (replaces O(N^2) scans)
+  const recursiveConvCounts = useMemo(() => {
+    const result = new Map<number, number>()
+    const compute = (folderId: number): number => {
+      if (result.has(folderId)) return result.get(folderId)!
+      const direct = convCountByFolder.get(folderId) || 0
+      const children = childrenByParent.get(folderId) ?? []
+      const total = direct + children.reduce((sum, f) => sum + compute(f.id), 0)
+      result.set(folderId, total)
+      return total
+    }
+    for (const f of folders) compute(f.id)
+    return result
+  }, [folders, convCountByFolder, childrenByParent])
+
+  // Recursive child folder count using index maps
+  const recursiveChildFolderCounts = useMemo(() => {
+    const result = new Map<number, number>()
+    const compute = (folderId: number): number => {
+      if (result.has(folderId)) return result.get(folderId)!
+      const children = childrenByParent.get(folderId) ?? []
+      const total = children.length + children.reduce((sum, f) => sum + compute(f.id), 0)
+      result.set(folderId, total)
+      return total
+    }
+    for (const f of folders) compute(f.id)
+    return result
+  }, [folders, childrenByParent])
 
   const openFolderMenuAt = useCallback((folderId: number, x: number, y: number) => {
     setMenuPos({ x, y })
@@ -115,24 +482,24 @@ export function SidebarTree() {
     setColorPickerLive(null)
   }, [colorPickerTarget, updateFolder])
 
-  // Compute flat visible order of conversation IDs for shift+click range selection
+  // Compute flat visible order using index maps
   const visibleOrder = useMemo(() => {
     const order: number[] = []
     const isSearchMode = searchQuery.trim().length > 0
     const collectFolder = (parentId: number) => {
-      const folderConvs = conversations.filter((c) => c.folder_id === parentId)
+      const folderConvs = convsByFolder.get(parentId) ?? []
       for (const c of folderConvs) order.push(c.id)
-      const children = folders.filter((f) => f.parent_id === parentId)
+      const children = childrenByParent.get(parentId) ?? []
       for (const child of children) collectFolder(child.id)
     }
-    const rootFolders = folders.filter((f) => f.parent_id === null)
+    const rootFolders = childrenByParent.get(null) ?? []
     for (const folder of rootFolders) {
       if (isSearchMode || expandedIds.has(folder.id)) {
         collectFolder(folder.id)
       }
     }
     return order
-  }, [conversations, folders, expandedIds, searchQuery])
+  }, [convsByFolder, childrenByParent, expandedIds, searchQuery])
 
   // Escape clears selection
   useEffect(() => {
@@ -147,69 +514,62 @@ export function SidebarTree() {
 
   const isSearching = searchQuery.trim().length > 0
 
-  const toggleExpand = (id: number) => {
+  const toggleExpand = useCallback((id: number) => {
     setExpandedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
-  const handleContextMenu = (e: React.MouseEvent, folderId: number) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, folderId: number) => {
     e.preventDefault()
     setMenuPos({ x: e.clientX, y: e.clientY })
     setMenuFolderId(folderId)
-  }
+  }, [])
 
-  const handleRenameSubmit = (folderId: number) => {
+  const handleRenameSubmit = useCallback((folderId: number) => {
     const trimmed = renameValue.trim()
     if (trimmed) {
       updateFolder(folderId, { name: trimmed })
     }
     setRenamingId(null)
-  }
+  }, [renameValue, updateFolder])
 
-  const handleDelete = (folderId: number) => {
+  const handleDelete = useCallback((folderId: number) => {
     setMenuFolderId(null)
-    const folder = folders.find((f) => f.id === folderId)
+    const folder = foldersById.get(folderId)
     if (folder) {
       setDeleteTarget({ id: folder.id, name: folder.name })
     }
-  }
+  }, [foldersById])
 
-  const getRecursiveConversationCount = (folderId: number): number => {
-    const direct = conversations.filter((c) => c.folder_id === folderId).length
-    const children = folders.filter((f) => f.parent_id === folderId)
-    return direct + children.reduce((sum, f) => sum + getRecursiveConversationCount(f.id), 0)
-  }
-
-  const getRecursiveChildFolderCount = (folderId: number): number => {
-    const children = folders.filter((f) => f.parent_id === folderId)
-    return children.length + children.reduce((sum, f) => sum + getRecursiveChildFolderCount(f.id), 0)
-  }
-
-  const handleCreateSubfolder = (parentId: number) => {
+  const handleCreateSubfolder = useCallback((parentId: number) => {
     setMenuFolderId(null)
     createFolder('New Folder', parentId)
-  }
+  }, [createFolder])
 
-  const handleNewConversationInFolder = async (folderId: number, e: React.MouseEvent) => {
+  const handleNewConversationInFolder = useCallback(async (folderId: number, e: React.MouseEvent) => {
     e.stopPropagation()
     const conv = await createConversation(undefined, folderId)
     // Apply folder's default CWD to new conversation
-    const folder = folders.find((f) => f.id === folderId)
+    const folder = foldersById.get(folderId)
     if (folder?.default_cwd) {
       await updateConversation(conv.id, { cwd: folder.default_cwd } as any)
     }
     setExpandedIds((prev) => new Set(prev).add(folderId))
-  }
+  }, [createConversation, foldersById, updateConversation])
 
-  const getConversationCount = (folderId: number): number => {
-    return conversations.filter((c) => c.folder_id === folderId).length
-  }
+  const handleRenameChange = useCallback((value: string) => {
+    setRenameValue(value)
+  }, [])
 
-  // Heatmap: compute automatic folder colors based on conversation count
+  const handleRenamingCancel = useCallback(() => {
+    setRenamingId(null)
+  }, [])
+
+  // Heatmap: compute automatic folder colors based on conversation count using index maps
   const heatmapColors = useMemo(() => {
     if (globalSettings.heatmap_enabled !== 'true') return null
 
@@ -217,14 +577,9 @@ export function SidebarTree() {
     const fixedMin = parseInt(globalSettings.heatmap_min || '0', 10)
     const fixedMax = parseInt(globalSettings.heatmap_max || '50', 10)
 
-    const counts = new Map<number, number>()
-    for (const folder of folders) {
-      counts.set(folder.id, getRecursiveConversationCount(folder.id))
-    }
-
     let minCount: number, maxCount: number
     if (mode === 'relative') {
-      const allCounts = [...counts.values()]
+      const allCounts = [...recursiveConvCounts.values()]
       minCount = allCounts.length > 0 ? Math.min(...allCounts) : 0
       maxCount = allCounts.length > 0 ? Math.max(...allCounts) : 1
       if (maxCount === minCount) maxCount = minCount + 1
@@ -234,21 +589,21 @@ export function SidebarTree() {
     }
 
     const colors = new Map<number, string>()
-    for (const [folderId, count] of counts) {
+    for (const [folderId, count] of recursiveConvCounts) {
       const t = Math.max(0, Math.min(1, (count - minCount) / (maxCount - minCount)))
       colors.set(folderId, hsvToHex(120 * (1 - t), 70, 80))
     }
     return colors
-  }, [globalSettings.heatmap_enabled, globalSettings.heatmap_mode, globalSettings.heatmap_min, globalSettings.heatmap_max, folders, conversations])
+  }, [globalSettings.heatmap_enabled, globalSettings.heatmap_mode, globalSettings.heatmap_min, globalSettings.heatmap_max, recursiveConvCounts])
 
   const isDescendant = useCallback((folderId: number, ancestorId: number): boolean => {
-    let current = folders.find((f) => f.id === folderId)
+    let current = foldersById.get(folderId)
     while (current) {
       if (current.parent_id === ancestorId) return true
-      current = folders.find((f) => f.id === current!.parent_id)
+      current = current.parent_id !== null ? foldersById.get(current.parent_id) : undefined
     }
     return false
-  }, [folders])
+  }, [foldersById])
 
   const handleFolderDragStart = useCallback((e: React.DragEvent, folderId: number) => {
     e.stopPropagation()
@@ -301,14 +656,14 @@ export function SidebarTree() {
     } else {
       // Reorder: move to same parent as target, insert before/after
       const newParentId = targetFolder.parent_id
-      const draggedFolder = folders.find((f) => f.id === draggedId)
+      const draggedFolder = foldersById.get(draggedId)
       // Update parent if needed
       if (draggedFolder && draggedFolder.parent_id !== newParentId) {
         await updateFolder(draggedId, { parent_id: newParentId })
       }
-      // Compute new sibling order
-      const siblings = folders
-        .filter((f) => f.parent_id === newParentId && f.id !== draggedId)
+      // Compute new sibling order using index map
+      const siblings = (childrenByParent.get(newParentId) ?? [])
+        .filter((f) => f.id !== draggedId)
         .sort((a, b) => a.position - b.position)
       const targetIndex = siblings.findIndex((f) => f.id === targetFolder.id)
       const insertIndex = indicator.position === 'before' ? targetIndex : targetIndex + 1
@@ -316,16 +671,12 @@ export function SidebarTree() {
       newOrder.splice(insertIndex, 0, { id: draggedId } as Folder)
       await reorderFolders(newOrder.map((f) => f.id))
     }
-  }, [folderDropIndicator, folders, isDescendant, updateFolder, reorderFolders])
+  }, [folderDropIndicator, foldersById, childrenByParent, isDescendant, updateFolder, reorderFolders])
 
-  const buildTree = (parentId: number | null): Folder[] => {
-    return folders.filter((f) => f.parent_id === parentId)
-  }
-
-  const handleDrop = (e: React.DragEvent, folderId: number | null) => {
+  const handleDrop = useCallback((e: React.DragEvent, folderId: number | null) => {
     e.preventDefault()
     setDragOverFolderId(null)
-    // Ignore folder drags — those are handled by handleFolderDropOnFolder
+    // Ignore folder drags -- those are handled by handleFolderDropOnFolder
     if (e.dataTransfer.types.includes('application/x-folder-id')) return
     const raw = e.dataTransfer.getData('text/plain')
 
@@ -352,201 +703,27 @@ export function SidebarTree() {
     if (folderId !== null) {
       setExpandedIds((prev) => new Set(prev).add(folderId))
     }
-  }
+  }, [conversations, moveToFolder, moveSelectedToFolder])
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-  }
+  }, [])
 
-  const handleFolderDragEnter = (e: React.DragEvent, folderId: number) => {
+  const handleFolderDragEnter = useCallback((e: React.DragEvent, folderId: number) => {
     e.preventDefault()
     // Only highlight for conversation drags, not folder drags
     if (!e.dataTransfer.types.includes('application/x-folder-id')) {
       setDragOverFolderId(folderId)
     }
-  }
+  }, [])
 
-  const handleFolderDragLeave = (e: React.DragEvent) => {
+  const handleFolderDragLeave = useCallback((e: React.DragEvent) => {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDragOverFolderId(null)
+      setFolderDropIndicator(null)
     }
-  }
-
-  const renderFolder = (folder: Folder, depth: number) => {
-    const isExpanded = isSearching || expandedIds.has(folder.id)
-    const children = buildTree(folder.id)
-    const count = getConversationCount(folder.id)
-    const folderConversations = conversations.filter((c) => c.folder_id === folder.id)
-    const isDragOver = dragOverFolderId === folder.id
-    const isBeingDragged = draggingFolderId === folder.id
-    const dropIndicator = folderDropIndicator?.targetId === folder.id ? folderDropIndicator.position : null
-    const manualColor = (colorPickerTarget === folder.id && colorPickerLive) ? colorPickerLive : folder.color
-    const effectiveColor = manualColor || (heatmapColors?.get(folder.id) ?? null)
-    const isDraggableFolder = !isMobile
-
-    const dropClass = dropIndicator === 'before' ? ' folder-drop-before'
-      : dropIndicator === 'after' ? ' folder-drop-after'
-      : dropIndicator === 'inside' ? ' sidebar-drop-active'
-      : ''
-
-    return (
-      <div key={folder.id}>
-        <div
-          className={`group flex items-center gap-1 px-2 py-1 mobile:py-2 cursor-pointer rounded mx-1 text-sm${isDragOver ? ' sidebar-drop-active' : ''}${dropClass}${isBeingDragged ? ' sidebar-dragging' : ''}${!isDragOver && !dropIndicator && !effectiveColor ? ' hover:bg-[var(--color-bg)]' : ''}`}
-          style={{
-            paddingLeft: `${depth * 16 + (isDraggableFolder ? 0 : 8)}px`,
-            color: 'var(--color-text)',
-            ...(effectiveColor && !dropClass ? {
-              borderLeft: `3px solid ${effectiveColor}`,
-              backgroundColor: `color-mix(in srgb, ${effectiveColor} 15%, transparent)`,
-            } : {}),
-          }}
-          onClick={() => toggleExpand(folder.id)}
-          onContextMenu={!isMobile ? (e) => handleContextMenu(e, folder.id) : undefined}
-          {...(!isMobile ? {
-            onDrop: (e: React.DragEvent) => {
-              if (e.dataTransfer.types.includes('application/x-folder-id')) {
-                handleFolderDropOnFolder(e, folder)
-              } else {
-                handleDrop(e, folder.id)
-              }
-            },
-            onDragOver: (e: React.DragEvent) => {
-              if (e.dataTransfer.types.includes('application/x-folder-id')) {
-                handleFolderDragOver(e, folder)
-              } else {
-                handleDragOver(e)
-              }
-            },
-            onDragEnter: (e: React.DragEvent) => handleFolderDragEnter(e, folder.id),
-            onDragLeave: (e: React.DragEvent) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setDragOverFolderId(null)
-                setFolderDropIndicator(null)
-              }
-            },
-          } : {})}
-          onTouchStart={(e) => handleFolderTouchStart(e, folder.id)}
-          onTouchEnd={handleFolderTouchEnd}
-          onTouchMove={handleFolderTouchMove}
-          role="treeitem"
-          aria-expanded={isExpanded}
-          aria-label={`Folder: ${folder.name}`}
-        >
-          {/* Drag grip handle — non-default folders only, desktop only */}
-          {isDraggableFolder && (
-            <span
-              className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab flex-shrink-0"
-              style={{ color: 'var(--color-text-muted)' }}
-              draggable
-              onDragStart={(e) => handleFolderDragStart(e, folder.id)}
-              onDragEnd={handleFolderDragEnd}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Drag folder ${folder.name}`}
-            >
-              <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
-                <circle cx="3" cy="2" r="1.2" />
-                <circle cx="7" cy="2" r="1.2" />
-                <circle cx="3" cy="7" r="1.2" />
-                <circle cx="7" cy="7" r="1.2" />
-                <circle cx="3" cy="12" r="1.2" />
-                <circle cx="7" cy="12" r="1.2" />
-              </svg>
-            </span>
-          )}
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            {children.length > 0 || count > 0 ? (isExpanded ? '\u25BE' : '\u25B8') : '\u2022'}
-          </span>
-          {renamingId === folder.id ? (
-            <input
-              ref={inputRef}
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={() => handleRenameSubmit(folder.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenameSubmit(folder.id)
-                if (e.key === 'Escape') setRenamingId(null)
-              }}
-              className="flex-1 text-sm mobile:text-base px-1 rounded outline-none"
-              style={{
-                backgroundColor: 'var(--color-bg)',
-                color: 'var(--color-text)',
-                border: '1px solid var(--color-primary)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-              aria-label="Rename folder"
-            />
-          ) : (
-            <>
-              <span className="flex-1 truncate">{folder.name}</span>
-              {count > 0 && (
-                <span
-                  className="text-xs px-1.5 rounded-full"
-                  style={{
-                    backgroundColor: 'var(--color-bg)',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
-                  {count}
-                </span>
-              )}
-              <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 mobile:opacity-100 mobile:p-2 transition-opacity rounded hover:bg-[var(--color-surface)]"
-                onClick={(e) => handleNewConversationInFolder(folder.id, e)}
-                title="New conversation in this folder"
-                aria-label={`New conversation in ${folder.name}`}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ color: 'var(--color-text-muted)' }}
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  <line x1="12" y1="8" x2="12" y2="14" />
-                  <line x1="9" y1="11" x2="15" y2="11" />
-                </svg>
-              </button>
-              <button
-                onClick={(e) => handleFolderThreeDotClick(e, folder.id)}
-                className="hidden mobile:block p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
-                style={{ color: 'var(--color-text-muted)' }}
-                aria-label="Folder actions"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <circle cx="10" cy="4" r="1.5" />
-                  <circle cx="10" cy="10" r="1.5" />
-                  <circle cx="10" cy="16" r="1.5" />
-                </svg>
-              </button>
-            </>
-          )}
-        </div>
-        {isExpanded && (
-          <>
-            {folderConversations.map((conv) => (
-              <ConversationItem
-                key={conv.id}
-                conversation={conv}
-                isActive={conv.id === activeConversationId}
-                isSelected={selectedIds.has(conv.id)}
-                visibleOrder={visibleOrder}
-                depth={depth + 1}
-                folderColor={effectiveColor}
-              />
-            ))}
-            {children.map((child) => renderFolder(child, depth + 1))}
-          </>
-        )}
-      </div>
-    )
-  }
+  }, [])
 
   if (isLoading) {
     return (
@@ -560,14 +737,78 @@ export function SidebarTree() {
     return <EmptyState />
   }
 
-  const rootFolders = buildTree(null)
+  const rootFolders = childrenByParent.get(null) ?? []
 
   return (
     <div className="flex-1 overflow-y-auto pb-2" role="tree" aria-label="Conversations tree">
-      {rootFolders.map((folder) => renderFolder(folder, 0))}
+      {rootFolders.map((folder) => {
+        const isExpanded = isSearching || expandedIds.has(folder.id)
+        const children = childrenByParent.get(folder.id) ?? []
+        const convCount = convCountByFolder.get(folder.id) ?? 0
+        const folderConvs = convsByFolder.get(folder.id) ?? []
+        const isDragOver = dragOverFolderId === folder.id
+        const isBeingDragged = draggingFolderId === folder.id
+        const dropIndicator = folderDropIndicator?.targetId === folder.id ? folderDropIndicator.position : null
+        const manualColor = (colorPickerTarget === folder.id && colorPickerLive) ? colorPickerLive : folder.color
+        const effectiveColor = manualColor || (heatmapColors?.get(folder.id) ?? null)
+        const folderIsRenaming = renamingId === folder.id
+        return (
+          <FolderRow
+            key={folder.id}
+            folder={folder}
+            depth={0}
+            isExpanded={isExpanded}
+            isSearching={isSearching}
+            childFolderIds={children.map(f => f.id)}
+            convCount={convCount}
+            folderConversations={folderConvs}
+            isDragOver={isDragOver}
+            isBeingDragged={isBeingDragged}
+            dropIndicator={dropIndicator}
+            effectiveColor={effectiveColor}
+            isDraggableFolder={!isMobile}
+            isRenaming={folderIsRenaming}
+            renameValue={folderIsRenaming ? renameValue : ''}
+            activeConversationId={activeConversationId}
+            selectedIds={selectedIds}
+            visibleOrder={visibleOrder}
+            colorPickerTarget={colorPickerTarget}
+            colorPickerLive={colorPickerLive}
+            onToggleExpand={toggleExpand}
+            onContextMenu={handleContextMenu}
+            onFolderDropOnFolder={handleFolderDropOnFolder}
+            onDrop={handleDrop}
+            onFolderDragOver={handleFolderDragOver}
+            onDragOver={handleDragOver}
+            onFolderDragEnter={handleFolderDragEnter}
+            onDragLeave={handleFolderDragLeave}
+            onFolderDragStart={handleFolderDragStart}
+            onFolderDragEnd={handleFolderDragEnd}
+            onFolderTouchStart={handleFolderTouchStart}
+            onFolderTouchEnd={handleFolderTouchEnd}
+            onFolderTouchMove={handleFolderTouchMove}
+            onFolderThreeDotClick={handleFolderThreeDotClick}
+            onNewConversationInFolder={handleNewConversationInFolder}
+            onRenameChange={handleRenameChange}
+            onRenameSubmit={handleRenameSubmit}
+            onRenamingCancel={handleRenamingCancel}
+            inputRef={inputRef}
+            isMobile={isMobile}
+            childrenByParent={childrenByParent}
+            convsByFolder={convsByFolder}
+            convCountByFolder={convCountByFolder}
+            heatmapColors={heatmapColors}
+            draggingFolderId={draggingFolderId}
+            folderDropIndicator={folderDropIndicator}
+            dragOverFolderId={dragOverFolderId}
+            expandedIds={expandedIds}
+            renamingId={renamingId}
+          />
+        )
+      })}
 
       {overrideFolderId !== null && (() => {
-        const targetFolder = folders.find((f) => f.id === overrideFolderId)
+        const targetFolder = foldersById.get(overrideFolderId)
         if (!targetFolder) return null
         return (
           <FolderSettingsPopover
@@ -586,7 +827,7 @@ export function SidebarTree() {
       {menuFolderId !== null && (
         <ContextMenu position={menuPos} onClose={() => setMenuFolderId(null)} className="min-w-[160px]">
           <ContextMenuItem onClick={() => {
-            const folder = folders.find((f) => f.id === menuFolderId)
+            const folder = foldersById.get(menuFolderId)
             if (folder) {
               setRenameValue(folder.name)
               setRenamingId(menuFolderId)
@@ -606,19 +847,18 @@ export function SidebarTree() {
           </ContextMenuItem>
           <ContextMenuDivider />
           <ColorSwatches
-            currentColor={folders.find((f) => f.id === menuFolderId)?.color ?? null}
+            currentColor={foldersById.get(menuFolderId)?.color ?? null}
             onColorChange={(color) => {
               updateFolder(menuFolderId!, { color })
               setMenuFolderId(null)
             }}
             onOpenPicker={() => {
-              const currentColor = folders.find(f => f.id === menuFolderId)?.color || '#3b82f6'
               setColorPickerPos({ x: menuPos.x, y: menuPos.y })
               setColorPickerTarget(menuFolderId!)
               setMenuFolderId(null)
             }}
           />
-          {folders.find(f => f.id === menuFolderId)?.is_default !== 1 && (
+          {foldersById.get(menuFolderId)?.is_default !== 1 && (
             <>
               <ContextMenuDivider />
               <ContextMenuItem danger onClick={() => handleDelete(menuFolderId!)}>
@@ -630,8 +870,8 @@ export function SidebarTree() {
       )}
 
       {deleteTarget && (() => {
-        const convCount = getRecursiveConversationCount(deleteTarget.id)
-        const childCount = getRecursiveChildFolderCount(deleteTarget.id)
+        const convCount = recursiveConvCounts.get(deleteTarget.id) ?? 0
+        const childCount = recursiveChildFolderCounts.get(deleteTarget.id) ?? 0
         return (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-overlay"
@@ -706,10 +946,10 @@ export function SidebarTree() {
         )
       })()}
 
-      {/* Custom HSV color picker — draggable, styled like context menus */}
+      {/* Custom HSV color picker -- draggable, styled like context menus */}
       {colorPickerTarget !== null && (
         <ColorPickerPanel
-          currentColor={folders.find(f => f.id === colorPickerTarget)?.color ?? null}
+          currentColor={foldersById.get(colorPickerTarget)?.color ?? null}
           onColorChange={handleColorPickerChange}
           onClose={() => {
             setColorPickerTarget(null)

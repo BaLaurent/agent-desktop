@@ -155,7 +155,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         )}
 
         {/* Content */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Header with close button (desktop only — mobile has it in the tab band) */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-text-muted)]/10 compact:hidden">
             <h2

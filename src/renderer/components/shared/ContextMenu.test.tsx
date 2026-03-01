@@ -185,9 +185,9 @@ describe('ContextMenu', () => {
       </ContextMenu>
     )
     const handle = screen.getByTestId('drag-handle')
-    fireEvent.mouseDown(handle, { clientX: 100, clientY: 100 })
-    fireEvent.mouseMove(document, { clientX: 150, clientY: 120 })
-    fireEvent.mouseUp(document)
+    fireEvent.pointerDown(handle, { clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(document, { clientX: 150, clientY: 120 })
+    fireEvent.pointerUp(document)
 
     const menu = screen.getByRole('menu')
     expect(menu.style.left).toBe('150px')

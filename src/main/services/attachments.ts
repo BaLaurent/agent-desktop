@@ -7,22 +7,28 @@ import { IMAGE_EXTENSIONS_DOTTED, TEXT_EXTENSIONS, getMimeType } from '../utils/
 
 export { getMimeType } from '../utils/mime'
 
+const MAX_IMAGE_FILE_SIZE = 100_000_000 // 100MB — images/binary
+const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024 // 10MB — text files freeze the renderer at larger sizes
+
 export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void {
   ipcMain.handle('attachments:readFile', async (_e, filePath: string) => {
     // Validate path safety before any fs access
     validatePathSafe(filePath)
 
     const stats = await fs.promises.stat(filePath)
-
-    // Enforce 100MB file size limit
-    if (stats.size > 100_000_000) {
-      throw new Error('File size exceeds 100MB limit')
-    }
-
     const ext = path.extname(filePath).toLowerCase()
     const name = path.basename(filePath)
     const type = getMimeType(ext)
     const size = stats.size
+
+    // Apply appropriate size limit based on file type
+    if (TEXT_EXTENSIONS.has(ext)) {
+      if (size > MAX_TEXT_FILE_SIZE) {
+        throw new Error(`Text file size exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`)
+      }
+    } else if (size > MAX_IMAGE_FILE_SIZE) {
+      throw new Error('File size exceeds 100MB limit')
+    }
 
     let content: string
     if (IMAGE_EXTENSIONS_DOTTED.has(ext)) {
@@ -42,13 +48,17 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     validatePathSafe(filePath)
 
     const stats = await fs.promises.stat(filePath)
+    const ext = path.extname(filePath).toLowerCase()
 
-    // Enforce 100MB file size limit
-    if (stats.size > 100_000_000) {
+    // Apply appropriate size limit based on file type
+    if (TEXT_EXTENSIONS.has(ext)) {
+      if (stats.size > MAX_TEXT_FILE_SIZE) {
+        throw new Error(`Text file size exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`)
+      }
+    } else if (stats.size > MAX_IMAGE_FILE_SIZE) {
       throw new Error('File size exceeds 100MB limit')
     }
 
-    const ext = path.extname(filePath).toLowerCase()
     return {
       name: path.basename(filePath),
       size: stats.size,
