@@ -1,16 +1,19 @@
 import * as http from 'http'
+import * as https from 'https'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as crypto from 'crypto'
 import type { IpcMain } from 'electron'
+import { app } from 'electron'
+import { ensureSelfSignedCert } from '../utils/cert'
 import { WebSocketServer, WebSocket } from 'ws'
 import { ipcDispatch } from '../ipc'
 import { setBroadcastHandler } from '../utils/broadcast'
 
 // ─── State ───────────────────────────────────────────
 
-let httpServer: http.Server | null = null
+let httpServer: http.Server | https.Server | null = null
 let wss: WebSocketServer | null = null
 let serverToken: string | null = null
 let serverPort: number | null = null
@@ -148,16 +151,21 @@ function generateShim(token: string): string {
       create: function(title, folderId) { return invoke('conversations:create', [title, folderId]); },
       update: function(id, data) { return invoke('conversations:update', [id, data]); },
       delete: function(id) { return invoke('conversations:delete', [id]); },
+      deleteMany: function(ids) { return invoke('conversations:deleteMany', [ids]); },
+      moveMany: function(ids, folderId) { return invoke('conversations:moveMany', [ids, folderId]); },
+      colorMany: function(ids, color) { return invoke('conversations:colorMany', [ids, color]); },
       export: function(id, format) { return invoke('conversations:export', [id, format]); },
       import: function(data) { return invoke('conversations:import', [data]); },
       search: function(query) { return invoke('conversations:search', [query]); },
       generateTitle: function(id) { return invoke('conversations:generateTitle', [id]); },
+      fork: function(cid, mid) { return invoke('conversations:fork', [cid, mid]); },
     },
     messages: {
       send: function(cid, content, attachments) { return invoke('messages:send', [cid, content, attachments]); },
       stop: function(cid) { return invoke('messages:stop', [cid]); },
       regenerate: function(cid) { return invoke('messages:regenerate', [cid]); },
       edit: function(mid, content) { return invoke('messages:edit', [mid, content]); },
+      compact: function(cid) { return invoke('messages:compact', [cid]); },
       respondToApproval: function(rid, resp) { return invoke('messages:respondToApproval', [rid, resp]); },
       onStream: function(cb) { return subscribe('messages:stream', cb); },
     },
@@ -168,6 +176,7 @@ function generateShim(token: string): string {
       writeFile: function(fp, c) { return invoke('files:writeFile', [fp, c]); },
       savePastedFile: function(data, mime) { return invoke('files:savePastedFile', [data, mime]); },
       revealInFileManager: function() { return Promise.resolve(); },
+      openTerminalHere: function() { return Promise.resolve(); },
       openWithDefault: function() { return Promise.resolve(); },
       trash: function(fp) { return invoke('files:trash', [fp]); },
       rename: function(fp, nn) { return invoke('files:rename', [fp, nn]); },
@@ -203,6 +212,12 @@ function generateShim(token: string): string {
       getCollectionFiles: function(cn) { return invoke('kb:getCollectionFiles', [cn]); },
       openKnowledgesFolder: function() { return Promise.resolve(); },
     },
+    pi: {
+      listExtensions: function() { return invoke('pi:listExtensions', []); },
+      onUIEvent: function(cb) { return subscribe('pi:uiEvent', cb); },
+      onUIRequest: function(cb) { return subscribe('pi:uiRequest', cb); },
+      respondUI: noop,
+    },
     settings: {
       get: function() { return invoke('settings:get', []); },
       set: function(k, v) { return invoke('settings:set', [k, v]); },
@@ -219,6 +234,9 @@ function generateShim(token: string): string {
     },
     commands: {
       list: function(cwd, sm) { return invoke('commands:list', [cwd, sm]); },
+    },
+    macros: {
+      load: function(name) { return invoke('macros:load', [name]); },
     },
     quickChat: {
       getConversationId: function(m) { return invoke('quickChat:getConversationId', [m]); },
@@ -305,6 +323,7 @@ function generateShim(token: string): string {
       onOverlayStopRecording: function() { return noop; },
       onConversationsRefresh: function(cb) { return subscribe('conversations:refresh', cb); },
       onConversationUpdated: function(cb) { return subscribe('messages:conversationUpdated', cb); },
+      onAutoThemeSwitch: function(cb) { return subscribe('theme:autoSwitch', cb); },
     },
     server: {
       start: noopAsync,
@@ -534,26 +553,30 @@ export interface ServerStartOptions {
   accessMode?: 'lan' | 'all'
 }
 
-export function startServer(port: number, options?: ServerStartOptions): Promise<{ url: string; token: string }> {
+export async function startServer(port: number, options?: ServerStartOptions): Promise<{ url: string; token: string }> {
+  // Early return if already running
+  if (httpServer) {
+    const ip = getLanIp()
+    const url = serverShortCode
+      ? `https://${ip}:${serverPort}/s/${serverShortCode}`
+      : `https://${ip}:${serverPort}?token=${serverToken}`
+    return { url, token: serverToken! }
+  }
+
+  // Load or generate SSL certificate
+  const sslDir = path.join(app.getPath('userData'), 'ssl')
+  const { key, cert: certPem } = await ensureSelfSignedCert(sslDir)
+
+  serverToken = crypto.randomBytes(32).toString('hex')
+  serverPort = port
+  serverShortCode = options?.shortCode || generateShortCode()
+  serverAccessMode = options?.accessMode === 'all' ? 'all' : 'lan'
+  const shimScript = generateShim(serverToken)
+
+  const devUrl = process.env.ELECTRON_RENDERER_URL
+
   return new Promise((resolve, reject) => {
-    if (httpServer) {
-      const ip = getLanIp()
-      const url = serverShortCode
-        ? `http://${ip}:${serverPort}/s/${serverShortCode}`
-        : `http://${ip}:${serverPort}?token=${serverToken}`
-      resolve({ url, token: serverToken! })
-      return
-    }
-
-    serverToken = crypto.randomBytes(32).toString('hex')
-    serverPort = port
-    serverShortCode = options?.shortCode || generateShortCode()
-    serverAccessMode = options?.accessMode === 'all' ? 'all' : 'lan'
-    const shimScript = generateShim(serverToken)
-
-    const devUrl = process.env.ELECTRON_RENDERER_URL
-
-    httpServer = http.createServer((req, res) => {
+    httpServer = https.createServer({ key, cert: certPem }, (req, res) => {
       // Network access check
       if (!isAllowedRemote(req.socket.remoteAddress)) {
         res.writeHead(403)
@@ -622,6 +645,33 @@ export function startServer(port: number, options?: ServerStartOptions): Promise
         wss!.handleUpgrade(req, socket, head, (wsClient) => {
           wss!.emit('connection', wsClient, req)
         })
+      } else if (devUrl) {
+        // Proxy Vite HMR WebSocket to dev server
+        const target = new URL(devUrl)
+        const proxyReq = http.request({
+          hostname: target.hostname,
+          port: target.port,
+          path: req.url,
+          headers: req.headers,
+          method: req.method,
+        })
+        proxyReq.on('upgrade', (_proxyRes, proxySocket, proxyHead) => {
+          // Forward upstream 101 response with correct Sec-WebSocket-Accept
+          let response = 'HTTP/1.1 101 Switching Protocols\r\n'
+          for (let i = 0; i < _proxyRes.rawHeaders.length; i += 2) {
+            response += _proxyRes.rawHeaders[i] + ': ' + _proxyRes.rawHeaders[i + 1] + '\r\n'
+          }
+          response += '\r\n'
+          socket.write(response)
+          if (proxyHead.length) socket.write(proxyHead)
+          if (head.length) proxySocket.write(head)
+          proxySocket.pipe(socket)
+          socket.pipe(proxySocket)
+          socket.on('error', () => proxySocket.destroy())
+          proxySocket.on('error', () => socket.destroy())
+        })
+        proxyReq.on('error', () => socket.destroy())
+        proxyReq.end()
       } else {
         socket.destroy()
       }
@@ -649,7 +699,7 @@ export function startServer(port: number, options?: ServerStartOptions): Promise
 
     httpServer.listen(port, '0.0.0.0', () => {
       const ip = getLanIp()
-      const shortUrl = `http://${ip}:${port}/s/${serverShortCode}`
+      const shortUrl = `https://${ip}:${port}/s/${serverShortCode}`
       console.log(`[webServer] Listening on ${shortUrl}`)
       resolve({ url: shortUrl, token: serverToken! })
     })
@@ -705,11 +755,11 @@ export async function getServerStatus(): Promise<{
   const ip = getLanIp()
   const host = getHostname()
   const shortUrl = serverShortCode
-    ? `http://${ip}:${serverPort}/s/${serverShortCode}`
-    : `http://${ip}:${serverPort}?token=${serverToken}`
+    ? `https://${ip}:${serverPort}/s/${serverShortCode}`
+    : `https://${ip}:${serverPort}?token=${serverToken}`
   const shortUrlHostname = serverShortCode
-    ? `http://${host}:${serverPort}/s/${serverShortCode}`
-    : `http://${host}:${serverPort}?token=${serverToken}`
+    ? `https://${host}:${serverPort}/s/${serverShortCode}`
+    : `https://${host}:${serverPort}?token=${serverToken}`
   return {
     running: true,
     port: serverPort,

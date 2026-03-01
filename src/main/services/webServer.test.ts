@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import WebSocket from 'ws'
+import { execFileSync } from 'child_process'
+import * as fsSync from 'fs'
+import * as path from 'path'
+import * as os from 'os'
 
 // Mock ipc module — avoid loading Electron-dependent import chain.
 // Factory must not reference top-level variables (vi.mock is hoisted).
@@ -13,22 +17,65 @@ vi.mock('../utils/broadcast', () => ({
   broadcast: vi.fn(),
 }))
 
+// Mock electron (app.getPath not available in test)
+vi.mock('electron', () => ({
+  app: { getPath: vi.fn(() => '/tmp/agent-test-data') },
+}))
+
+// Mock cert module — returns pre-generated test cert
+vi.mock('../utils/cert', () => ({
+  ensureSelfSignedCert: vi.fn(),
+}))
+
 // Import AFTER mocks are declared (ES module hoisting handles ordering)
 import { startServer, stopServer, getServerStatus } from './webServer'
 import { ipcDispatch } from '../ipc'
+import { ensureSelfSignedCert } from '../utils/cert'
 
 // We need a free port for tests
 function getRandomPort(): number {
   return 10000 + Math.floor(Math.random() * 50000)
 }
 
+// Generate a real test cert (https.createServer needs valid PEM data)
+let testKey: Buffer
+let testCert: Buffer
+let testSslDir: string
+
+const originalTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+
 describe('webServer', () => {
   let port: number
+
+  beforeAll(() => {
+    // Disable TLS verification for self-signed cert in tests
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
+    // Generate real test cert
+    testSslDir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ws-test-ssl-'))
+    execFileSync('openssl', [
+      'req', '-x509', '-newkey', 'ec',
+      '-pkeyopt', 'ec_paramgen_curve:prime256v1',
+      '-keyout', path.join(testSslDir, 'key.pem'),
+      '-out', path.join(testSslDir, 'cert.pem'),
+      '-days', '1', '-nodes', '-subj', '/CN=Test',
+    ])
+    testKey = fsSync.readFileSync(path.join(testSslDir, 'key.pem'))
+    testCert = fsSync.readFileSync(path.join(testSslDir, 'cert.pem'))
+  })
+
+  afterAll(() => {
+    if (originalTlsReject === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalTlsReject
+
+    fsSync.rmSync(testSslDir, { recursive: true, force: true })
+  })
 
   beforeEach(() => {
     port = getRandomPort()
     // Ensure clean state
     ipcDispatch.clear()
+    vi.mocked(ensureSelfSignedCert).mockResolvedValue({ key: testKey, cert: testCert })
   })
 
   afterEach(async () => {
@@ -53,7 +100,7 @@ describe('webServer', () => {
   it('serves index.html with shim injection', async () => {
     await startServer(port)
 
-    const res = await fetch(`http://127.0.0.1:${port}/`)
+    const res = await fetch(`https://127.0.0.1:${port}/`)
     // Will 404 since out/renderer/index.html doesn't exist in test env,
     // but let's check the server responds
     expect(res.status).toBeDefined()
@@ -62,7 +109,7 @@ describe('webServer', () => {
   it('serves the shim script', async () => {
     await startServer(port)
 
-    const res = await fetch(`http://127.0.0.1:${port}/agent-ws-shim.js`)
+    const res = await fetch(`https://127.0.0.1:${port}/agent-ws-shim.js`)
     expect(res.status).toBe(200)
     const body = await res.text()
     expect(body).toContain('__AGENT_WEB_MODE__')
@@ -72,7 +119,7 @@ describe('webServer', () => {
   it('WebSocket auth succeeds with correct token', async () => {
     const { token } = await startServer(port)
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
     const messages: any[] = []
 
     await new Promise<void>((resolve) => {
@@ -97,7 +144,7 @@ describe('webServer', () => {
   it('WebSocket auth fails with wrong token', async () => {
     await startServer(port)
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
     const messages: any[] = []
 
     await new Promise<void>((resolve) => {
@@ -122,7 +169,7 @@ describe('webServer', () => {
       return { echoed: args }
     })
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
     const messages: any[] = []
 
     await new Promise<void>((resolve, reject) => {
@@ -148,7 +195,7 @@ describe('webServer', () => {
   it('returns error for unknown channel', async () => {
     const { token } = await startServer(port)
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
     const messages: any[] = []
 
     await new Promise<void>((resolve) => {
@@ -191,7 +238,7 @@ describe('webServer', () => {
       const status = await getServerStatus()
       expect(status.shortCode).toBe('testCode')
 
-      const res = await fetch(`http://127.0.0.1:${port}/s/testCode`)
+      const res = await fetch(`https://127.0.0.1:${port}/s/testCode`)
       // Will 404 in test env (no renderer/index.html), but validates the route is handled
       expect(res.status).toBeDefined()
     })
@@ -199,7 +246,7 @@ describe('webServer', () => {
     it('rejects invalid short code with 403', async () => {
       await startServer(port, { shortCode: 'goodCode' })
 
-      const res = await fetch(`http://127.0.0.1:${port}/s/badCode`)
+      const res = await fetch(`https://127.0.0.1:${port}/s/badCode`)
       expect(res.status).toBe(403)
       const body = await res.text()
       expect(body).toBe('Invalid short code')
@@ -228,7 +275,7 @@ describe('webServer', () => {
       await startServer(port)
 
       // The old ?token= URL format goes through normal static file serving
-      const res = await fetch(`http://127.0.0.1:${port}/?token=sometoken`)
+      const res = await fetch(`https://127.0.0.1:${port}/?token=sometoken`)
       // Will 404 in test env but validates the route is not blocked
       expect(res.status).toBeDefined()
       expect(res.status).not.toBe(403)
@@ -251,7 +298,7 @@ describe('webServer', () => {
     it('allows localhost in lan mode', async () => {
       await startServer(port)
       // Requests from 127.0.0.1 should always be allowed
-      const res = await fetch(`http://127.0.0.1:${port}/agent-ws-shim.js`)
+      const res = await fetch(`https://127.0.0.1:${port}/agent-ws-shim.js`)
       expect(res.status).toBe(200)
     })
   })
@@ -299,7 +346,7 @@ describe('webServer', () => {
 
     it('blocks server:start via WebSocket', async () => {
       const { token } = await startServer(port)
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
       const result = await invokeChannel(ws, token, 'server:start', '10')
       expect(result.error).toContain('Channel not available via WebSocket: server:start')
       ws.close()
@@ -307,7 +354,7 @@ describe('webServer', () => {
 
     it('blocks server:stop via WebSocket', async () => {
       const { token } = await startServer(port)
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
       const result = await invokeChannel(ws, token, 'server:stop', '11')
       expect(result.error).toContain('Channel not available via WebSocket: server:stop')
       ws.close()
@@ -315,7 +362,7 @@ describe('webServer', () => {
 
     it('blocks openscad:exportStl via WebSocket', async () => {
       const { token } = await startServer(port)
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
       const result = await invokeChannel(ws, token, 'openscad:exportStl', '12')
       expect(result.error).toContain('Channel not available via WebSocket: openscad:exportStl')
       ws.close()
@@ -326,7 +373,7 @@ describe('webServer', () => {
 
       ipcDispatch.set('test:ping', async () => 'pong')
 
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
       const result = await invokeChannel(ws, token, 'test:ping', '13')
       expect(result.error).toBeUndefined()
       expect(result.result).toBe('pong')
