@@ -55,6 +55,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
   const { playMessage, stopPlayback } = useTtsStore()
   const ttsProvider = useSettingsStore((s) => s.settings.tts_provider)
   const ttsResponseMode = useSettingsStore((s) => s.settings.tts_responseMode)
+  const agentName = useSettingsStore((s) => s.settings.agent_name) || 'Claude'
   const isSpeakingThis = speakingMessageId === message.id
   const showTtsButton = !isUser && !!ttsProvider && ttsProvider !== 'off'
     && !!ttsResponseMode && ttsResponseMode !== 'off'
@@ -137,7 +138,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
           className="text-xs font-medium mb-1"
           style={{ color: isUser ? 'var(--color-primary)' : 'var(--color-accent)' }}
         >
-          {isUser ? 'You' : 'Claude'}
+          {isUser ? 'You' : agentName}
         </div>
 
         {/* Content */}

@@ -61,6 +61,13 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Claude')).toBeInTheDocument()
   })
 
+  it('assistant message shows configured agent name', () => {
+    settingsMock['agent_name'] = 'Jarvis'
+    render(<MessageBubble message={makeMessage({ role: 'assistant' })} isLast={false} />)
+    expect(screen.getByText('Jarvis')).toBeInTheDocument()
+    delete settingsMock['agent_name']
+  })
+
   it('user message content is rendered as text', () => {
     render(<MessageBubble message={makeMessage({ role: 'user', content: 'Hi there' })} isLast={false} />)
     expect(screen.getByText('Hi there')).toBeInTheDocument()
