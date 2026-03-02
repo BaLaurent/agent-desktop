@@ -41,6 +41,9 @@ export function AISettings() {
     try { return JSON.parse(cwdWhitelistRaw) } catch { return [] }
   })()
   const defaultSystemPrompt = settings['ai_defaultSystemPrompt'] ?? ''
+  const agentName = settings['agent_name'] ?? ''
+  const agentPersonality = settings['agent_personality'] ?? ''
+  const agentLanguage = settings['agent_language'] ?? ''
   const skillsEnabled = settings['ai_skillsEnabled'] ?? 'true'
   const disabledSkills: string[] = (() => {
     try { const arr = JSON.parse(settings['ai_disabledSkills'] || '[]'); return Array.isArray(arr) ? arr : [] } catch { return [] }
@@ -78,6 +81,76 @@ export function AISettings() {
 
   return (
     <div className="flex flex-col gap-1">
+      {/* ─── Agent Identity ─────────────────────────────── */}
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Agent Name
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Display name shown in chat bubbles.
+          </span>
+        </div>
+        <input
+          type="text"
+          value={agentName}
+          onChange={(e) => setSetting('agent_name', e.target.value)}
+          placeholder="Claude"
+          className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          aria-label="Agent name"
+        />
+      </div>
+
+      <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5 pr-4">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Language
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Response language injected into the system prompt.
+          </span>
+        </div>
+        <input
+          type="text"
+          value={agentLanguage}
+          onChange={(e) => setSetting('agent_language', e.target.value)}
+          placeholder="e.g. Français, English, Español"
+          className="w-48 px-3 py-1.5 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none mobile:text-base"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          aria-label="Agent language"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2 py-3 border-b border-[var(--color-text-muted)]/10">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Personality
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Personality directive injected into the system prompt.
+          </span>
+        </div>
+        <textarea
+          value={agentPersonality}
+          onChange={(e) => setSetting('agent_personality', e.target.value)}
+          rows={2}
+          placeholder="e.g. concis et technique, chaleureux et pédagogue"
+          className="w-full px-3 py-2 rounded text-sm border border-[var(--color-text-muted)]/20 outline-none resize-y mobile:text-base"
+          style={{
+            backgroundColor: 'var(--color-bg)',
+            color: 'var(--color-text)',
+          }}
+          aria-label="Agent personality"
+        />
+      </div>
+
       {/* Backend */}
       <div className="flex items-center justify-between py-3 border-b border-[var(--color-text-muted)]/10">
         <div className="flex flex-col gap-0.5 pr-4">
