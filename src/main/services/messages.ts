@@ -157,6 +157,32 @@ export async function getSystemPrompt(db: Database.Database, conversationId: num
     prompt = cascadedPrompt ? `${cwdDirective}\n\n${cascadedPrompt}` : cwdDirective
   }
 
+  // ─── Agent personality & language injection ───────────────
+  function cascadeAgentKey(key: string): string | undefined {
+    if (row?.ai_overrides) {
+      const convOv = safeJsonParse<Record<string, string>>(row.ai_overrides, {})
+      if (convOv[key]) return convOv[key]
+    }
+    if (row?.folder_id) {
+      const folderOv = getFolderOverrides(db, row.folder_id)
+      if (folderOv[key]) return folderOv[key]
+    }
+    const globalRow = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get(key) as { value: string } | undefined
+    return globalRow?.value || undefined
+  }
+
+  const agentPersonality = cascadeAgentKey('agent_personality')
+  const agentLanguage = cascadeAgentKey('agent_language')
+
+  if (agentPersonality) {
+    prompt = `Personality: ${agentPersonality}\n\n${prompt}`
+  }
+  if (agentLanguage) {
+    prompt = `Always respond in ${agentLanguage}.\n\n${prompt}`
+  }
+
   // Append knowledge base collections if selected for this conversation
   // Read from cascaded ai_overrides (already merged: global -> folder -> conversation)
   const allOverrides = row?.ai_overrides

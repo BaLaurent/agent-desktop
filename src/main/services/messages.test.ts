@@ -136,6 +136,49 @@ describe('Messages Service', () => {
     expect(prompt).not.toContain('Folder prompt')
   })
 
+  it('getSystemPrompt injects agent_personality from global settings', async () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('agent_personality', 'concis et technique')").run()
+    const prompt = await getSystemPrompt(db, convId, '/tmp/test')
+    expect(prompt).toContain('Personality: concis et technique')
+  })
+
+  it('getSystemPrompt injects agent_language from global settings', async () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('agent_language', 'Français')").run()
+    const prompt = await getSystemPrompt(db, convId, '/tmp/test')
+    expect(prompt).toContain('Always respond in Français.')
+  })
+
+  it('getSystemPrompt cascades agent_personality from conversation overrides', async () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('agent_personality', 'Global personality')").run()
+    db.prepare('UPDATE conversations SET ai_overrides = ? WHERE id = ?').run(
+      JSON.stringify({ agent_personality: 'Conv personality' }),
+      convId
+    )
+    const prompt = await getSystemPrompt(db, convId, '/tmp/test')
+    expect(prompt).toContain('Conv personality')
+    expect(prompt).not.toContain('Global personality')
+  })
+
+  it('getSystemPrompt cascades agent_language from folder overrides', async () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('agent_language', 'English')").run()
+    const folder = db.prepare("INSERT INTO folders (name) VALUES ('Lang Folder')").run()
+    const folderId = folder.lastInsertRowid as number
+    db.prepare('UPDATE folders SET ai_overrides = ? WHERE id = ?').run(
+      JSON.stringify({ agent_language: 'Español' }),
+      folderId
+    )
+    db.prepare('UPDATE conversations SET folder_id = ? WHERE id = ?').run(folderId, convId)
+    const prompt = await getSystemPrompt(db, convId, '/tmp/test')
+    expect(prompt).toContain('Always respond in Español.')
+    expect(prompt).not.toContain('English')
+  })
+
+  it('getSystemPrompt does not inject agent directives when not set', async () => {
+    const prompt = await getSystemPrompt(db, convId, '/tmp/test')
+    expect(prompt).not.toContain('Personality:')
+    expect(prompt).not.toContain('Always respond in')
+  })
+
   it('getAISettings returns defaults from seeded settings', () => {
     const settings = getAISettings(db, convId)
     expect(settings.model).toBe('claude-sonnet-4-6-20250514')
