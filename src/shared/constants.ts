@@ -93,6 +93,9 @@ export interface PIExtensionInfo {
 }
 
 export const SETTING_DEFS: SettingDef[] = [
+  { key: 'agent_name', label: 'Agent Name', type: 'textarea' },
+  { key: 'agent_personality', label: 'Personality', type: 'textarea' },
+  { key: 'agent_language', label: 'Language', type: 'textarea' },
   { key: 'ai_sdkBackend', label: 'Backend', type: 'select', options: SDK_BACKEND_OPTIONS },
   { key: 'ai_model', label: 'Model', type: 'select', options: MODEL_OPTIONS },
   { key: 'ai_maxTurns', label: 'Max Turns', type: 'number', min: 0 },
@@ -130,6 +133,9 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'files_excludePatterns',
   'tts_responseMode',
   'tts_summaryPrompt',
+  'agent_name',
+  'agent_personality',
+  'agent_language',
 ]
 
 // ─── File Exclude Patterns ──────────────────────────────────

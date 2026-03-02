@@ -26,6 +26,9 @@ export interface AIOverrides {
   tts_summaryPrompt?: string   // prompt template with {response} placeholder
   ai_sdkBackend?: string       // 'claude-agent-sdk' | 'pi'
   settings_sharedAcrossBackends?: string  // 'true' | 'false'
+  agent_name?: string             // display name, fallback 'Claude'
+  agent_personality?: string      // free text personality directive
+  agent_language?: string         // free text language directive
 }
 
 export interface Conversation {
