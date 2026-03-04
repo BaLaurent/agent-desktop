@@ -202,6 +202,11 @@ const api: AgentAPI = {
     stop: () => withTimeout(ipcRenderer.invoke('server:stop')),
     getStatus: () => withTimeout(ipcRenderer.invoke('server:getStatus')),
   },
+  discord: {
+    connect: () => withTimeout(ipcRenderer.invoke('discord:connect')),
+    disconnect: () => withTimeout(ipcRenderer.invoke('discord:disconnect')),
+    status: () => withTimeout(ipcRenderer.invoke('discord:status')),
+  },
   jupyter: {
     startKernel: (filePath: string, kernelName?: string) => withTimeout(ipcRenderer.invoke('jupyter:startKernel', filePath, kernelName)),
     executeCell: (filePath: string, code: string) => withTimeout(ipcRenderer.invoke('jupyter:executeCell', filePath, code)),

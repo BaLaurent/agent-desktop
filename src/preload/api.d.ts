@@ -183,6 +183,11 @@ export interface AgentAPI {
     stop(): Promise<void>
     getStatus(): Promise<{ running: boolean; port: number | null; url: string | null; urlHostname: string | null; lanIp: string | null; hostname: string | null; token: string | null; shortCode: string | null; accessMode: string | null; clients: number; firewallWarning: string | null }>
   }
+  discord: {
+    connect(): Promise<void>
+    disconnect(): Promise<void>
+    status(): Promise<{ connected: boolean; username?: string; guildCount?: number }>
+  }
   jupyter: {
     startKernel(filePath: string, kernelName?: string): Promise<{ status: string }>
     executeCell(filePath: string, code: string): Promise<string>

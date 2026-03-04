@@ -193,7 +193,7 @@ export async function streamMessage(
   conversationId?: number,
   sdkSessionId?: string | null,
   persistSession?: boolean
-): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
+): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null; error?: string }> {
   // PI backend: unchanged
   if (aiSettings?.sdkBackend === 'pi') {
     return streamMessagePI(messages, systemPrompt, aiSettings, conversationId)
@@ -215,7 +215,7 @@ async function streamMessageOneShot(
   conversationId?: number,
   sdkSessionId?: string | null,
   persistSession?: boolean
-): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null }> {
+): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null; error?: string }> {
   // Ensure the macOS OAuth token is fresh — skip when using API key auth
   if (!aiSettings?.apiKey) {
     await ensureFreshMacOSToken()
@@ -238,6 +238,7 @@ async function streamMessageOneShot(
   let fullContent = ''
   let aborted = false
   let capturedSessionId: string | null = null
+  let streamError: string | undefined
 
   const convExtra = conversationId != null ? { conversationId } : {}
 
@@ -593,6 +594,7 @@ async function streamMessageOneShot(
     } else {
       const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
       console.error('[streaming] Error:', err)
+      streamError = errorMsg
       sendChunk('error', errorMsg, convExtra)
     }
   } finally {
@@ -605,7 +607,7 @@ async function streamMessageOneShot(
     restoreEnv?.()
   }
 
-  return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted, sessionId: capturedSessionId }
+  return { content: fullContent, toolCalls: Array.from(toolCallsMap.values()), aborted, sessionId: capturedSessionId, error: streamError }
 }
 
 export function notifyConversationUpdated(conversationId: number): void {

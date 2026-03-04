@@ -574,8 +574,9 @@ async function streamAndSave(
 
       if (aborted) return null
 
-      if (!error && responseContent) {
-        // Save the SDK session ID for future resume
+      // Save partial or complete content when available — don't lose what the AI generated
+      if (responseContent) {
+        // Preserve session ID for future resume (even on error — SDK session may be resumable)
         if (newSessionId) {
           saveConversationSdkSessionId(db, conversationId, newSessionId)
         }
@@ -589,16 +590,18 @@ async function streamAndSave(
         const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], toolCalls)
         updateConversationTimestamp(db, conversationId)
         notifyConversationUpdated(conversationId)
-        // Fire-and-forget: TTS for AI response
-        speakResponse(responseContent, db, conversationId, aiSettings)
-          .catch(err => console.error('[tts] Response TTS error:', err))
+        // Fire-and-forget: TTS for AI response (skip on error — incomplete response)
+        if (!error) {
+          speakResponse(responseContent, db, conversationId, aiSettings)
+            .catch(err => console.error('[tts] Response TTS error:', err))
+        }
         return assistantMsg
       }
 
-      // No error but no content — empty response (e.g. stream ended without output), no retry
-      if (!error) return null
+      // No content at all
+      if (!error) return null // Clean finish with no content — nothing to save or retry
 
-      // Error path: retry with backoff or emit final error
+      // Error with no content — retry with backoff or emit final error
       // Clear SDK session on error — it may be corrupted
       if (attemptSessionId) {
         clearConversationSdkSessionId(db, conversationId)

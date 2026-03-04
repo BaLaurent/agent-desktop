@@ -37,18 +37,25 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     const modelRow = db
       .prepare("SELECT value FROM settings WHERE key = 'ai_model'")
       .get() as { value: string } | undefined
-    const model = modelRow?.value || DEFAULT_MODEL
+    const globalModel = modelRow?.value || DEFAULT_MODEL
 
     // Resolve folder: use provided folderId, or fall back to default folder
     const resolvedFolderId = folderId ??
       (db.prepare('SELECT id FROM folders WHERE is_default = 1').get() as { id: number }).id
 
+    // Inherit folder defaults for new conversations
+    const folderRow = db.prepare('SELECT default_cwd, ai_overrides FROM folders WHERE id = ?')
+      .get(resolvedFolderId) as { default_cwd: string | null; ai_overrides: string | null } | undefined
+    const defaultCwd = folderRow?.default_cwd || null
+    const folderOverrides = folderRow?.ai_overrides ? JSON.parse(folderRow.ai_overrides) as Record<string, string> : {}
+    const model = folderOverrides['ai_model'] || globalModel
+
     const result = db
       .prepare(
-        `INSERT INTO conversations (title, folder_id, model, updated_at)
-         VALUES (?, ?, ?, datetime('now'))`
+        `INSERT INTO conversations (title, folder_id, model, cwd, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`
       )
-      .run(title || 'New Conversation', resolvedFolderId, model)
+      .run(title || 'New Conversation', resolvedFolderId, model, defaultCwd)
     return db
       .prepare('SELECT * FROM conversations WHERE id = ?')
       .get(result.lastInsertRowid)

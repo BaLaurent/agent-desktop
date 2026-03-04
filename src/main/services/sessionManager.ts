@@ -14,6 +14,7 @@ export interface TurnResult {
   toolCalls: ToolCall[]
   aborted: boolean
   sessionId: string | null
+  error?: string
 }
 
 interface SDKUserMessage {
@@ -36,6 +37,8 @@ interface TurnState {
   turnEndDeferred: boolean
   /** Polling interval (30s) — pushes synthetic prompt to check agent status */
   pollInterval: ReturnType<typeof setInterval> | null
+  /** Length of turn.content when the last poll was sent — used to extract poll response */
+  pollContentOffset: number
   resolve: (result: TurnResult) => void
   reject: (error: Error) => void
 }
@@ -395,17 +398,38 @@ async function consumeStream(session: ActiveSession): Promise<void> {
               turn.pollInterval = setInterval(() => {
                 pollCount++
                 console.log(`[sessionManager] 🔄 Poll #${pollCount}: ${turn.pendingTaskCount} tasks pending, pushing status check prompt, conv ${session.conversationId}`)
+                turn.pollContentOffset = turn.content.length
                 session.promptController.push({
                   type: 'user',
-                  message: { role: 'user', content: 'Check if your background agents are done using the TaskOutput tool. Reply only "still running" or deliver results. Do not describe what agents are doing.' },
+                  message: { role: 'user', content: 'Use the TaskOutput tool to check if ALL your background agents have finished. If every agent is done, reply with ONLY the single word: fini — nothing else, no explanation. If any agent is still running, reply with ONLY: still running.' },
                   parent_tool_use_id: null,
                   session_id: session.sessionId || '',
                 })
               }, 30_000)
               console.log(`[sessionManager] Turn end deferred: ${turn.pendingTaskCount} background tasks pending, polling every 30s, conv ${session.conversationId}`)
             } else {
-              // Already deferred — poll prompt triggered this result/success, just log
-              console.log(`[sessionManager] Turn end (poll response): pendingTasks=${turn.pendingTaskCount}, still waiting, conv ${session.conversationId}`)
+              // Already deferred — poll prompt triggered this result/success
+              const pollResponse = turn.content.slice(turn.pollContentOffset).trim().toLowerCase()
+              if (pollResponse === 'fini') {
+                // Claude confirmed all agents are done — force completion even if task_notification was missed
+                console.log(`[sessionManager] 🏁 Poll response "fini" — forcing turn completion (pendingTasks=${turn.pendingTaskCount} may be stale), conv ${session.conversationId}`)
+                if (turn.pollInterval) { clearInterval(turn.pollInterval); turn.pollInterval = null }
+                sendChunk('done', undefined, {
+                  ...convExtra,
+                  ...(turn.lastStopReason ? { stopReason: turn.lastStopReason } : {}),
+                  ...(turn.lastResultSubtype ? { resultSubtype: turn.lastResultSubtype } : {}),
+                })
+                turn.resolve({
+                  content: turn.content,
+                  toolCalls: Array.from(turn.toolCallsMap.values()),
+                  aborted: false,
+                  sessionId: session.sessionId,
+                })
+                session.currentTurn = null
+                session.lastActivity = Date.now()
+              } else {
+                console.log(`[sessionManager] Turn end (poll response): pendingTasks=${turn.pendingTaskCount}, still waiting, conv ${session.conversationId}`)
+              }
             }
           } else {
             // No pending tasks — send done (also cleans up any leftover poll from prior deferral)
@@ -473,10 +497,16 @@ async function consumeStream(session: ActiveSession): Promise<void> {
           if (turn.pendingTaskCount === 0 && turn.turnEndDeferred) {
             if (turn.pollInterval) { clearInterval(turn.pollInterval); turn.pollInterval = null }
             turn.turnEndDeferred = false
-            console.log(`[sessionManager] All background tasks done — letting SDK continue to process results, conv ${session.conversationId}`)
-            // DON'T send done here — let the SDK continue.
-            // Claude will process the agent results and generate a response.
-            // The next result/success will send done normally (pendingTaskCount is 0).
+            console.log(`[sessionManager] All background tasks done — prompting agent to aggregate results, conv ${session.conversationId}`)
+            // Push a prompt so the main agent can aggregate sub-agent results.
+            // The turn stays open — the next result/success (with pendingTaskCount=0)
+            // will send done via the normal path (line ~433).
+            session.promptController.push({
+              type: 'user',
+              message: { role: 'user', content: 'All your background agents have completed. Process their results and provide your final response.' },
+              parent_tool_use_id: null,
+              session_id: session.sessionId || '',
+            })
           }
         }
       }
@@ -527,7 +557,15 @@ async function consumeStream(session: ActiveSession): Promise<void> {
         const errorMsg = err instanceof Error ? err.message : 'Unknown streaming error'
         console.error('[sessionManager] Stream error:', err)
         sendChunk('error', errorMsg, { conversationId: session.conversationId })
-        turn.reject(err instanceof Error ? err : new Error(errorMsg))
+        // Resolve with partial content + error instead of rejecting — allows
+        // streamAndSave to save whatever the AI already generated
+        turn.resolve({
+          content: turn.content,
+          toolCalls: Array.from(turn.toolCallsMap.values()),
+          aborted: false,
+          sessionId: session.sessionId,
+          error: errorMsg,
+        })
       }
       session.currentTurn = null
     }
@@ -855,6 +893,7 @@ export async function sendTurn(
       pendingTaskCount: 0,
       turnEndDeferred: false,
       pollInterval: null,
+      pollContentOffset: 0,
       resolve,
       reject,
     }

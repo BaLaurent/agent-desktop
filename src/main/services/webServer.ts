@@ -123,13 +123,6 @@ function generateShim(token: string): string {
         return a;
       });
       ws.send(JSON.stringify({ type: 'invoke', id: id, channel: channel, args: encodedArgs }));
-      // 30s timeout
-      setTimeout(function() {
-        if (pending[id]) {
-          pending[id].reject(new Error('WS invoke timeout after 30000ms'));
-          delete pending[id];
-        }
-      }, 30000);
     });
   }
 
@@ -338,6 +331,11 @@ function generateShim(token: string): string {
       start: noopAsync,
       stop: noopAsync,
       getStatus: function() { return Promise.resolve({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, shortCode: null, accessMode: null, clients: 0, firewallWarning: null }); },
+    },
+    discord: {
+      connect: function() { return invoke('discord:connect', []); },
+      disconnect: function() { return invoke('discord:disconnect', []); },
+      status: function() { return invoke('discord:status', []); },
     },
     window: {
       minimize: noop,

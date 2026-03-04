@@ -80,6 +80,11 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'server_autoStart',
   'server_shortCode',
   'server_accessMode',
+  // Discord bot
+  'discord_enabled',
+  'discord_botToken',
+  'discord_userWhitelist',
+  'discord_channelBindings',
   // Retry settings (global only, not cascadable)
   'retry_enabled',
   'retry_maxAttempts',

@@ -30,6 +30,7 @@ import { registerHandlers as updaterHandlers } from './services/updater'
 import { registerHandlers as jupyterHandlers } from './services/jupyter'
 import { registerHandlers as webServerHandlers } from './services/webServer'
 import { registerHandlers as piExtensionsHandlers } from './services/piExtensions'
+import { registerHandlers as discordHandlers } from './services/discord'
 
 const serviceModules = [
   authHandlers,
@@ -92,6 +93,7 @@ export function registerAllHandlers(ipcMain: IpcMain, db: Database.Database): vo
   updaterHandlers(safeIpc)
   jupyterHandlers(safeIpc)
   webServerHandlers(safeIpc)
+  discordHandlers(safeIpc)
   ensureThemeDir().catch((err) => console.error('[themes] Failed to ensure theme dir:', err))
   ensureKnowledgesDir().catch((err) => console.error('[knowledge] Failed to ensure knowledges dir:', err))
 }

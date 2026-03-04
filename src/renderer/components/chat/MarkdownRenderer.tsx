@@ -24,6 +24,24 @@ interface MarkdownRendererProps {
 const components: Components = {
   code({ children, ...props }) {
     // Only inline code reaches here — block code is handled by pre()
+    const text = typeof children === 'string' ? children : ''
+    const isSeparator = text.startsWith('★') || /^─{3,}$/.test(text)
+    if (isSeparator) {
+      return (
+        <div className="my-2">
+          <code
+            className="px-1.5 py-0.5 rounded text-sm"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              color: 'var(--color-primary)',
+            }}
+            {...props}
+          >
+            {children}
+          </code>
+        </div>
+      )
+    }
     return (
       <code
         className="px-1.5 py-0.5 rounded text-sm"

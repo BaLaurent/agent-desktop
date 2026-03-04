@@ -32,6 +32,7 @@
     "@react-three/fiber": "^8.18.0",
     "@types/dompurify": "^3.0.5",
     "dbus-next": "^0.10.2",
+    "discord.js": "^14.25.1",
     "dompurify": "^3.3.1",
     "electron-updater": "^6.7.3",
     "highlight.js": "^11.11.1",

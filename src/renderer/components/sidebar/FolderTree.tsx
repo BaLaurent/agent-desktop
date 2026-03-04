@@ -553,13 +553,8 @@ export function SidebarTree() {
   const handleNewConversationInFolder = useCallback(async (folderId: number, e: React.MouseEvent) => {
     e.stopPropagation()
     const conv = await createConversation(undefined, folderId)
-    // Apply folder's default CWD to new conversation
-    const folder = foldersById.get(folderId)
-    if (folder?.default_cwd) {
-      await updateConversation(conv.id, { cwd: folder.default_cwd } as any)
-    }
     setExpandedIds((prev) => new Set(prev).add(folderId))
-  }, [createConversation, foldersById, updateConversation])
+  }, [createConversation])
 
   const handleRenameChange = useCallback((value: string) => {
     setRenameValue(value)

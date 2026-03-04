@@ -579,9 +579,22 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
     return
   }
 
-  // Drop chunks for conversations without an active buffer (not streaming)
-  if (bufferKey == null || !streamBuffersMap.has(bufferKey)) {
-    return
+  if (bufferKey == null) return
+
+  // Auto-create buffer for streams initiated elsewhere (e.g., mobile/web client)
+  // This handles the "late joiner" case: another device started streaming and chunks
+  // are broadcast to all clients, but this renderer never called sendMessage().
+  // Skip terminal events (done/error) — the initial empty text chunk sent before every
+  // stream (streaming.ts:254, sessionManager.ts:874) handles buffer creation.
+  if (!streamBuffersMap.has(bufferKey)) {
+    if (chunk.type === 'done' || chunk.type === 'error') return
+    streamBuffersMap.set(bufferKey, [])
+    streamTextMap.set(bufferKey, '')
+    if (bufferKey === store.activeConversationId) {
+      useChatStore.setState({ isStreaming: true, streamParts: [], streamingContent: '' })
+      // Reload messages to show the user message that triggered this stream
+      store.loadMessages(bufferKey)
+    }
   }
 
   const isActiveView = bufferKey === store.activeConversationId
@@ -789,9 +802,15 @@ window.agent.messages.onStream((chunk: StreamChunk) => {
           window.agent.system.showNotification('Agent Desktop', getEventLabel('error_js')).catch(() => {})
         }
       }
+      // Delete buffer maps (stop accumulating) but keep streamParts/streamingContent
+      // in state — the partial response stays visible instead of flashing away.
+      // The backend saves partial content to DB; conversationUpdated will reload messages.
+      streamBuffersMap.delete(bufferKey)
+      streamTextMap.delete(bufferKey)
+      const isStillStreaming = store.activeConversationId != null && streamBuffersMap.has(store.activeConversationId)
       useChatStore.setState({
         error: chunk.content ?? 'Stream error',
-        ...cleanupStreamBuffer(store.activeConversationId, bufferKey),
+        isStreaming: isStillStreaming,
       })
       break
     }

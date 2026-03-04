@@ -13,6 +13,7 @@ import { TTSSettings } from '../components/settings/TTSSettings'
 import { QuickChatSettings } from '../components/settings/QuickChatSettings'
 import { OpenSCADSettings } from '../components/settings/OpenSCADSettings'
 import { WebServerSettings } from '../components/settings/WebServerSettings'
+import { DiscordSettings } from '../components/settings/DiscordSettings'
 import { useMobileMode, useCompactMode } from '../hooks/useMobileMode'
 
 interface SettingsPageProps {
@@ -32,6 +33,7 @@ const categories = [
   'Allowed Tools',
   'Knowledge Base',
   'Web Server',
+  'Discord',
   'Storage',
   'About',
 ] as const
@@ -51,6 +53,7 @@ const categoryComponents: Record<Category, React.FC | null> = {
   'Allowed Tools': ToolList,
   'Knowledge Base': KnowledgeManager,
   'Web Server': WebServerSettings,
+  'Discord': DiscordSettings,
   Storage: StorageSettings,
   About: AboutSection,
 }

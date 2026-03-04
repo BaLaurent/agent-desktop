@@ -14,6 +14,23 @@ function invertHex(hex: string): string {
   return `rgb(${r}, ${g}, ${b})`
 }
 
+/**
+ * Returns a dark or light text color that ensures contrast against the given
+ * hex background color, using the WCAG relative luminance formula.
+ * Used when a card has an explicit background color (effectiveColor) so that
+ * the text is always readable regardless of the current theme (dark/light).
+ */
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  // sRGB linearization
+  const toLinear = (c: number) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
+  // Light background → dark text; dark background → light text
+  return L > 0.35 ? '#1a1a1a' : '#f0f0f0'
+}
+
 interface Props {
   conversation: Conversation & { folder_name?: string }
   isActive: boolean
@@ -174,6 +191,10 @@ export const ConversationItem = memo(function ConversationItem({ conversation, i
 
   const timeAgo = formatTimeAgo(conversation.updated_at)
   const effectiveColor = conversation.color || folderColor || null
+  // When the card has a colored background, always use a contrasted text color
+  // (dark on light cards, light on dark cards) — regardless of the current theme.
+  const cardTextColor = effectiveColor ? getContrastColor(effectiveColor) : undefined
+  const cardTextMutedColor = effectiveColor ? getContrastColor(effectiveColor) + 'aa' : undefined
 
   return (
     <>
@@ -237,7 +258,7 @@ export const ConversationItem = memo(function ConversationItem({ conversation, i
             <div className="flex items-center gap-1.5">
               <div
                 className="text-sm truncate font-medium flex-1"
-                style={{ color: 'var(--color-text)' }}
+                style={{ color: cardTextColor ?? 'var(--color-text)' }}
               >
                 {conversation.title}
               </div>
@@ -256,7 +277,7 @@ export const ConversationItem = memo(function ConversationItem({ conversation, i
               <button
                 onClick={handleThreeDotClick}
                 className="hidden mobile:block p-2.5 rounded flex-shrink-0 hover:bg-[var(--color-surface)]"
-                style={{ color: 'var(--color-text-muted)' }}
+                style={{ color: cardTextMutedColor ?? 'var(--color-text-muted)' }}
                 aria-label="Conversation actions"
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -268,7 +289,7 @@ export const ConversationItem = memo(function ConversationItem({ conversation, i
             </div>
             <div
               className="text-xs mt-0.5 truncate"
-              style={{ color: 'var(--color-text-muted)' }}
+              style={{ color: cardTextMutedColor ?? 'var(--color-text-muted)' }}
             >
               {timeAgo}
             </div>

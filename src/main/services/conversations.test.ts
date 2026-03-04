@@ -84,6 +84,28 @@ describe('Conversations Service', () => {
     expect(conv.folder_id).toBe(folder.id)
   })
 
+  it('create inherits folder default_cwd', async () => {
+    const folder = await ipc.invoke('folders:create', 'WithCwd') as any
+    await ipc.invoke('folders:update', folder.id, { default_cwd: '/home/user/projects' })
+    const conv = await ipc.invoke('conversations:create', 'Inherited CWD', folder.id) as any
+    expect(conv.cwd).toBe('/home/user/projects')
+  })
+
+  it('create has null cwd when folder has no default_cwd', async () => {
+    const folder = await ipc.invoke('folders:create', 'NoCwd') as any
+    const conv = await ipc.invoke('conversations:create', 'No CWD', folder.id) as any
+    expect(conv.cwd).toBeNull()
+  })
+
+  it('create inherits folder ai_model override', async () => {
+    const folder = await ipc.invoke('folders:create', 'ModelFolder') as any
+    await ipc.invoke('folders:update', folder.id, {
+      ai_overrides: JSON.stringify({ ai_model: 'claude-opus-4-5-20250514' }),
+    })
+    const conv = await ipc.invoke('conversations:create', 'Inherited Model', folder.id) as any
+    expect(conv.model).toBe('claude-opus-4-5-20250514')
+  })
+
   it('update title changes title', async () => {
     const conv = await ipc.invoke('conversations:create', 'Old Title') as any
     await ipc.invoke('conversations:update', conv.id, { title: 'New Title' })
