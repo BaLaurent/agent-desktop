@@ -5,6 +5,7 @@ import { ToolApprovalBlock } from './ToolApprovalBlock'
 import { AskUserBlock } from './AskUserBlock'
 import { McpStatusBlock } from './McpStatusBlock'
 import { groupStreamParts } from '../../utils/groupStreamParts'
+import { useAgentDisplayName } from '../../hooks/useAgentDisplayName'
 import type { StreamPart } from '../../../shared/types'
 
 interface StreamingIndicatorProps {
@@ -14,6 +15,7 @@ interface StreamingIndicatorProps {
 
 export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorProps) {
   const hasContent = streamParts.length > 0
+  const agentName = useAgentDisplayName()
 
   return (
     <div className="flex justify-start mb-4">
@@ -22,11 +24,11 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
         style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
         role="status"
         aria-live="polite"
-        aria-label="Claude is responding"
+        aria-label={`${agentName} is responding`}
       >
         {/* Role label */}
         <div className="text-xs font-medium mb-1" style={{ color: 'var(--color-accent)' }}>
-          Claude
+          {agentName}
         </div>
 
         {/* Stream parts or typing indicator */}
@@ -114,7 +116,7 @@ export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorPr
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            <span>Claude is typing</span>
+            <span>{agentName} is typing</span>
             <span className="inline-flex gap-0.5">
               <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
               <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>

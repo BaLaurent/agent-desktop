@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useAgentDisplayName } from '../../hooks/useAgentDisplayName'
 import { FileMentionDropdown, flattenFileTree } from './FileMentionDropdown'
 import { SlashCommandDropdown } from './SlashCommandDropdown'
 import type { FlatFile } from './FileMentionDropdown'
@@ -31,6 +32,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     const [content, setContent] = useState('')
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const sendOnEnter = useSettingsStore((s) => s.settings.sendOnEnter ?? 'true')
+    const agentName = useAgentDisplayName()
     const consumedExternalIdRef = useRef<number>(0)
 
     // Mention state
@@ -429,7 +431,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={onPaste}
-          placeholder={disabled ? 'Sign in to start chatting...' : 'Message Claude... (@ to mention files, / for commands)'}
+          placeholder={disabled ? 'Sign in to start chatting...' : `Message ${agentName}... (@ to mention files, / for commands)`}
           disabled={disabled}
           rows={1}
           className="flex-1 min-w-0 resize-none bg-transparent outline-none leading-6 text-sm mobile:text-base"

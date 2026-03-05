@@ -513,15 +513,22 @@ describe('streamMessagePI', () => {
     expect(opts).toHaveProperty('extensionsOverride')
     expect(typeof opts.extensionsOverride).toBe('function')
 
-    // Verify the filter callback works correctly
+    // Verify the filter callback works correctly — receives LoadExtensionsResult, returns filtered result
     const filter = opts.extensionsOverride as (
-      exts: Array<{ resolvedPath: string }>
-    ) => Array<{ resolvedPath: string }>
-    const filtered = filter([
-      { resolvedPath: '/enabled/ext.ts' },
-      { resolvedPath: '/disabled/ext.ts' },
-    ])
-    expect(filtered).toEqual([{ resolvedPath: '/enabled/ext.ts' }])
+      result: { extensions: Array<{ resolvedPath: string }>; [k: string]: unknown }
+    ) => { extensions: Array<{ resolvedPath: string }>; [k: string]: unknown }
+    const input = {
+      extensions: [
+        { resolvedPath: '/enabled/ext.ts' },
+        { resolvedPath: '/disabled/ext.ts' },
+      ],
+      errors: [],
+      runtime: {},
+    }
+    const filtered = filter(input)
+    expect(filtered.extensions).toEqual([{ resolvedPath: '/enabled/ext.ts' }])
+    expect(filtered.errors).toEqual([])
+    expect(filtered.runtime).toEqual({})
   })
 
   it('does not include extensionsOverride when piDisabledExtensions is empty', async () => {

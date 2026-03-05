@@ -7,6 +7,11 @@ export const SDK_BACKEND_OPTIONS = [
   { value: 'pi', label: 'PI Coding Agent' },
 ] as const
 
+export const BACKEND_DISPLAY_NAMES: Record<string, string> = {
+  'claude-agent-sdk': 'Claude',
+  'pi': 'PI',
+}
+
 // ─── Model Constants ─────────────────────────────────────────
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6-20250514'

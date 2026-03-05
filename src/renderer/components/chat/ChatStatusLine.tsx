@@ -70,7 +70,7 @@ export function ChatStatusLine({ model, permissionMode, mcpServers, onModelChang
 
   return (
     <div
-      className="px-1 mt-1 flex items-center text-[10px] gap-1.5 mobile:gap-1 compact:overflow-x-auto"
+      className="px-1 mt-1 flex items-center text-[10px] gap-1.5 mobile:gap-1 compact:overflow-x-clip"
       style={{ color: 'var(--color-text-muted)' }}
       aria-label="Chat status"
     >

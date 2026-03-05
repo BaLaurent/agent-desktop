@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3'
 import { spawn } from 'child_process'
 import type { McpServer, McpServerConfig, McpTransportType, McpTestResult } from '../../shared/types'
 import { safeJsonParse } from '../utils/json'
+import { syncPiMcpGlobal } from './piMcpSync'
 
 // Dangerous shell metacharacters that could be used for command injection
 const DANGEROUS_CHARS = /[;&|`$(){}[\]<>!#~]/
@@ -241,6 +242,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
         const server = db
           .prepare('SELECT * FROM mcp_servers WHERE id = ?')
           .get(result.lastInsertRowid) as McpServer
+        syncPiMcpGlobal(db)
         return { ...server, type: server.type || 'stdio', status: 'configured' as const }
       } else {
         // http/sse requires url, optional headers
@@ -256,6 +258,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
         const server = db
           .prepare('SELECT * FROM mcp_servers WHERE id = ?')
           .get(result.lastInsertRowid) as McpServer
+        syncPiMcpGlobal(db)
         return { ...server, type: server.type || transport, status: 'configured' as const }
       }
     } catch (err) {
@@ -329,6 +332,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
         db.prepare(`UPDATE mcp_servers SET ${fields.join(', ')} WHERE id = ?`).run(
           ...values
         )
+        syncPiMcpGlobal(db)
       } catch (err) {
         throw new Error(`Failed to update MCP server: ${(err as Error).message}`)
       }
@@ -339,6 +343,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     try {
       validateMcpId(id)
       db.prepare('DELETE FROM mcp_servers WHERE id = ?').run(id)
+      syncPiMcpGlobal(db)
     } catch (err) {
       throw new Error(`Failed to remove MCP server: ${(err as Error).message}`)
     }
@@ -355,6 +360,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       db.prepare(
         "UPDATE mcp_servers SET enabled = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(newEnabled, id)
+      syncPiMcpGlobal(db)
     } catch (err) {
       throw new Error(`Failed to toggle MCP server: ${(err as Error).message}`)
     }

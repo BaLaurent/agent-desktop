@@ -55,8 +55,10 @@ export async function streamMessagePI(
       noThemes: true,
       ...(aiSettings?.piExtensionsDir ? { additionalExtensionPaths: [aiSettings.piExtensionsDir] } : {}),
       ...(disabledPaths.size > 0 ? {
-        extensionsOverride: (extensions: Array<{ resolvedPath: string }>) =>
-          extensions.filter((ext) => !disabledPaths.has(ext.resolvedPath)),
+        extensionsOverride: (result: { extensions: Array<{ resolvedPath: string }>; [k: string]: unknown }) => ({
+          ...result,
+          extensions: result.extensions.filter((ext) => !disabledPaths.has(ext.resolvedPath)),
+        }),
       } : {}),
     })
     await resourceLoader.reload()

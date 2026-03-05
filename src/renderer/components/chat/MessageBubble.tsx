@@ -5,6 +5,7 @@ import { TaskFormModal } from '../scheduler/TaskFormModal'
 import { ContextMenu, ContextMenuItem } from '../shared/ContextMenu'
 import { useTtsStore } from '../../stores/ttsStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useAgentDisplayName } from '../../hooks/useAgentDisplayName'
 import { useMobileMode } from '../../hooks/useMobileMode'
 import type { Message, CreateScheduledTask } from '../../../shared/types'
 
@@ -55,7 +56,7 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
   const { playMessage, stopPlayback } = useTtsStore()
   const ttsProvider = useSettingsStore((s) => s.settings.tts_provider)
   const ttsResponseMode = useSettingsStore((s) => s.settings.tts_responseMode)
-  const agentName = useSettingsStore((s) => s.settings.agent_name) || 'Claude'
+  const agentName = useAgentDisplayName()
   const isSpeakingThis = speakingMessageId === message.id
   const showTtsButton = !isUser && !!ttsProvider && ttsProvider !== 'off'
     && !!ttsResponseMode && ttsResponseMode !== 'off'

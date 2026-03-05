@@ -68,6 +68,13 @@ describe('MessageBubble', () => {
     delete settingsMock['agent_name']
   })
 
+  it('assistant message shows backend display name when no agent_name', () => {
+    settingsMock['ai_sdkBackend'] = 'pi'
+    render(<MessageBubble message={makeMessage({ role: 'assistant' })} isLast={false} />)
+    expect(screen.getByText('PI')).toBeInTheDocument()
+    delete settingsMock['ai_sdkBackend']
+  })
+
   it('user message content is rendered as text', () => {
     render(<MessageBubble message={makeMessage({ role: 'user', content: 'Hi there' })} isLast={false} />)
     expect(screen.getByText('Hi there')).toBeInTheDocument()

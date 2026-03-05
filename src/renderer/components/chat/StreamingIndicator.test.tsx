@@ -1,3 +1,9 @@
+const settingsMock: Record<string, string> = {}
+vi.mock('../../stores/settingsStore', () => ({
+  useSettingsStore: (selector: (s: { settings: Record<string, string> }) => unknown) =>
+    selector({ settings: settingsMock }),
+}))
+
 vi.mock('./MarkdownRenderer', () => ({
   MarkdownRenderer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
 }))
@@ -11,9 +17,26 @@ import { StreamingIndicator } from './StreamingIndicator'
 import type { StreamPart } from '../../../shared/types'
 
 describe('StreamingIndicator', () => {
-  it('shows "Claude is typing" when streamParts is empty', () => {
+  afterEach(() => {
+    delete settingsMock['agent_name']
+    delete settingsMock['ai_sdkBackend']
+  })
+
+  it('shows "Claude is typing" when streamParts is empty (default backend)', () => {
     render(<StreamingIndicator streamParts={[]} onStop={vi.fn()} />)
     expect(screen.getByText('Claude is typing')).toBeInTheDocument()
+  })
+
+  it('shows configured agent name in typing indicator', () => {
+    settingsMock['agent_name'] = 'Jarvis'
+    render(<StreamingIndicator streamParts={[]} onStop={vi.fn()} />)
+    expect(screen.getByText('Jarvis is typing')).toBeInTheDocument()
+  })
+
+  it('shows backend display name when no agent_name is set', () => {
+    settingsMock['ai_sdkBackend'] = 'pi'
+    render(<StreamingIndicator streamParts={[]} onStop={vi.fn()} />)
+    expect(screen.getByText('PI is typing')).toBeInTheDocument()
   })
 
   it('renders text content when text parts present', () => {

@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'
 import { validateString } from '../utils/validate'
 import { SETTING_DEFS, AI_OVERRIDE_KEYS } from '../../shared/constants'
+import { syncPiMcpGlobal } from './piMcpSync'
 
 // Whitelist of allowed setting keys — prevents arbitrary key writes from renderer
 const ALLOWED_SETTING_KEYS = new Set<string>([
@@ -118,6 +119,9 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       db.prepare(
         "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))"
       ).run(key, value)
+      if (key === 'ai_sdkBackend' || key === 'ai_mcpDisabled') {
+        syncPiMcpGlobal(db)
+      }
     } catch (err) {
       throw new Error(`Failed to set setting: ${(err as Error).message}`)
     }

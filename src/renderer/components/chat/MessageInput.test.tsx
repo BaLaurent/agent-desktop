@@ -1,10 +1,34 @@
+const settingsMock: Record<string, string> = {}
+vi.mock('../../stores/settingsStore', () => ({
+  useSettingsStore: (selector: (s: { settings: Record<string, string> }) => unknown) =>
+    selector({ settings: settingsMock }),
+}))
+
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MessageInput } from './MessageInput'
 
 describe('MessageInput', () => {
+  afterEach(() => {
+    delete settingsMock['agent_name']
+    delete settingsMock['ai_sdkBackend']
+    delete settingsMock['sendOnEnter']
+  })
+
   it('shows placeholder with @ hint when not disabled', () => {
     render(<MessageInput onSend={vi.fn()} disabled={false} isStreaming={false} />)
     expect(screen.getByPlaceholderText('Message Claude... (@ to mention files, / for commands)')).toBeInTheDocument()
+  })
+
+  it('shows configured agent name in placeholder', () => {
+    settingsMock['agent_name'] = 'Hal'
+    render(<MessageInput onSend={vi.fn()} disabled={false} isStreaming={false} />)
+    expect(screen.getByPlaceholderText('Message Hal... (@ to mention files, / for commands)')).toBeInTheDocument()
+  })
+
+  it('shows backend display name in placeholder when no agent_name', () => {
+    settingsMock['ai_sdkBackend'] = 'pi'
+    render(<MessageInput onSend={vi.fn()} disabled={false} isStreaming={false} />)
+    expect(screen.getByPlaceholderText('Message PI... (@ to mention files, / for commands)')).toBeInTheDocument()
   })
 
   it('shows "Sign in to start chatting..." when disabled', () => {

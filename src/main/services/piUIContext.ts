@@ -149,7 +149,11 @@ export class PiUIContext {
   getEditorText(): string { return '' }
   pasteToEditor(): void {}
   setEditorComponent(): void {}
-  get theme(): unknown { return {} }
+  get theme(): Record<string, unknown> {
+    // Stub theme — fg/bg/bold/etc. just pass through the text (no ANSI codes in Electron)
+    const passthrough = (_color: string, text: string) => text
+    return { fg: passthrough, bg: passthrough, bold: passthrough, dim: passthrough, italic: passthrough, underline: passthrough, strikethrough: passthrough }
+  }
   getAllThemes(): { name: string; path: string | undefined }[] { return [] }
   getTheme(): unknown { return undefined }
   setTheme(): { success: boolean; error?: string } { return { success: false, error: 'Not supported in Electron' } }

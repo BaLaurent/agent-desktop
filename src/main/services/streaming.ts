@@ -5,6 +5,7 @@ import { loadAgentSDK } from './anthropic'
 import { streamMessagePI } from './streamingPI'
 import { sendTurn, respondToSessionApproval, abortSession, hasActiveSession } from './sessionManager'
 import { buildCwdRestrictionHooks } from './cwdHooks'
+import { syncPiMcpForProject } from './piMcpSync'
 import { findBinaryInPath, ensureFreshMacOSToken } from '../utils/env'
 import { broadcast } from '../utils/broadcast'
 import type { ToolApprovalResponse, AskUserResponse, AskUserQuestion, ToolCall, CwdWhitelistEntry } from '../../shared/types'
@@ -194,8 +195,11 @@ export async function streamMessage(
   sdkSessionId?: string | null,
   persistSession?: boolean
 ): Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null; error?: string }> {
-  // PI backend: unchanged
+  // PI backend: sync MCP config then delegate
   if (aiSettings?.sdkBackend === 'pi') {
+    const convCwd = aiSettings.cwd
+    const isProjectCwd = convCwd && !convCwd.includes('/sessions-folder/')
+    await syncPiMcpForProject(aiSettings.mcpServers, isProjectCwd ? convCwd : undefined)
     return streamMessagePI(messages, systemPrompt, aiSettings, conversationId)
   }
 
