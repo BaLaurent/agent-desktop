@@ -12,6 +12,23 @@ asar: false
 files:
   - out
   - package.json
+  - from: node_modules
+    to: node_modules
+    filter:
+      - discord.js/**
+      - "@discordjs/collection/**"
+      - "@discordjs/ws/**"
+      - "@discordjs/builders/**"
+      - "@discordjs/formatters/**"
+      - "@discordjs/util/**"
+      - "@discordjs/rest/**"
+      - "@sapphire/snowflake/**"
+      - discord-api-types/**
+      - fast-deep-equal/**
+      - lodash.snakecase/**
+      - magic-bytes.js/**
+      - tslib/**
+      - undici/**
 extraResources:
   - from: build/trayTemplate.png
     to: trayTemplate.png

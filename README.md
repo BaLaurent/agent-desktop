@@ -206,6 +206,114 @@ src/
 
 ## Changelog
 
+### v0.9.2
+
+**Discord Integration**
+- Connect a Discord bot to forward messages to any conversation
+- Slash commands: `/set-conversation`, `/get-messages`, `/check-conversation`, `/new-conversation`, `/clear`, `/compact`
+- Autocomplete for conversations and folders, user whitelist, auto-start on launch
+- Long responses automatically split into multiple Discord messages
+
+**Cross-Device Streaming Sync**
+- Streaming responses now sync in real time across all connected devices (web server clients)
+- Partial content recovery on reconnect — no message lost if the connection drops mid-stream
+
+**Agent Identity**
+- Configure agent name, personality, and language per conversation, folder, or globally
+- Injected into the system prompt via the settings cascade
+- Agent name displayed in chat bubbles instead of the generic "Claude" label
+
+**Scheduler Improvements**
+- Tasks can now be linked to a specific conversation
+- Improved task management UI
+
+**HTTPS Web Server**
+- Web server now runs over HTTPS with auto-generated self-signed certificates
+- HTTP requests automatically redirected to HTTPS
+- Fixed base64 encoding stack overflow on large audio buffers
+
+**Bug Fixes**
+- Web server `server_enabled` setting now syncs correctly on auto-start
+
+---
+
+### v0.9.1
+
+**PI Extension UI**
+- Full extension UI support for the PI Coding Agent backend: dialogs (select, confirm, input, editor), widgets, and toasts
+- Extension UI events bridged from backend to renderer via IPC
+- Extension slash commands discovered and exposed in autocomplete regardless of active backend
+
+**Auto Day/Night Theme**
+- Automatically switch between two configured themes at sunrise/sunset
+- Configurable from the Appearance settings
+
+**Conversation Color**
+- Assign a custom color to any conversation via the color picker
+- Color applied as tinting in the sidebar and context menus
+
+**Macros**
+- Define reusable text macros as JSON, invokable via slash commands
+- Full slash command integration with autocomplete
+
+**Code Block Language Detection**
+- Unlabeled code blocks now auto-detect their language for syntax highlighting
+
+**Queue Improvements**
+- Inline edit queued messages directly by clicking on them
+- Queue auto-pauses while editing
+
+**Input**
+- Message bar auto-focuses on any keystroke when no other input has focus
+
+**Performance**
+- Reduced renderer re-renders for smoother UI during streaming
+- Improved backend I/O throughput
+
+**Bug Fixes**
+- Volume ducking now reliably restores after TTS playback in all code paths
+- PI backend: commands now read from `Extension.commands` Map correctly
+- Session invalidation: in-memory session cleared when DB resets `sdk_session_id`
+- Spacing between extension widgets and the chat bar
+
+---
+
+### v0.9.0
+
+**PI Coding Agent Backend**
+- Alternative AI backend alongside the default Claude Agent SDK
+- Per-backend hook isolation — hooks run independently for each backend
+- Claude-only settings hidden when PI backend is active
+- Auth check bypassed when PI backend is active (no Claude login required)
+
+**Syntax Highlighting**
+- Code blocks in chat now rendered with full syntax highlighting
+- Language auto-detected for unlabeled fences
+
+**Automatic Stream Retry**
+- SDK errors trigger automatic retry with exponential backoff
+- Errors delivered as stream chunks for consistent UX
+
+**Settings Redesign**
+- Settings popovers rebuilt with a shared shell, grouped cards, and a 3-column grid layout
+- Shared hook configuration surfaced across both Claude and PI settings
+
+**Short URLs & Network Restriction**
+- Web server now exposes short URLs for quick access
+- Option to restrict network access to local connections only
+
+**Keyboard Navigation in Context Menus**
+- Arrow keys, Enter, and Escape navigate context menus
+
+**Lifecycle**
+- Existing app instances killed at startup to prevent conflicts
+- Zombie process prevention and D-Bus leak fixes on shutdown
+
+**License**
+- Project re-licensed from GPL-3.0 to AGPL-3.0
+
+---
+
 ### v0.8.0
 
 **Message Queue**
