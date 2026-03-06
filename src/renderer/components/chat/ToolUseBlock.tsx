@@ -13,6 +13,25 @@ function truncatePath(filePath: string, segments = 3): string {
   return parts.slice(-(segments + 1)).join('/')
 }
 
+/** Check if tool is an edit tool (Claude SDK "Edit" or PI "edit") */
+function isEditTool(name: string): boolean {
+  return name.toLowerCase() === 'edit'
+}
+
+/** Get the old/new strings from an edit tool, handling both SDK conventions */
+function getEditDiffStrings(input: Record<string, unknown>): { oldStr: string; newStr: string } | null {
+  // Claude SDK: old_str / new_str — PI SDK: oldText / newText
+  const oldStr = (input.old_str ?? input.oldText) as string | undefined
+  const newStr = (input.new_str ?? input.newText) as string | undefined
+  if (oldStr != null && newStr != null) return { oldStr, newStr }
+  return null
+}
+
+/** Get file path from tool input (Claude SDK: file_path, PI SDK: path) */
+function getFilePath(input: Record<string, unknown>): string | null {
+  return (input.file_path ?? input.path) as string | null
+}
+
 /** Extract contextual info to display next to the tool name */
 function getToolContext(tool: ToolPart): string | null {
   if (!tool.input) return null
@@ -21,7 +40,11 @@ function getToolContext(tool: ToolPart): string | null {
       return (tool.input.description as string) || null
     case 'Read':
     case 'Edit':
-      return tool.input.file_path ? truncatePath(tool.input.file_path as string) : null
+    case 'read':
+    case 'edit': {
+      const fp = getFilePath(tool.input)
+      return fp ? truncatePath(fp) : null
+    }
     default:
       return null
   }
@@ -43,7 +66,8 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
   const diffExpandedByDefault = useSettingsStore(
     (s) => (s.settings.diffExpandedByDefault ?? 'false') === 'true',
   )
-  const hasDiff = tool.name === 'Edit' && !!tool.input?.old_str && 'new_str' in (tool.input ?? {})
+  const diffStrings = isEditTool(tool.name) && tool.input ? getEditDiffStrings(tool.input) : null
+  const hasDiff = diffStrings !== null
   const [showDiff, setShowDiff] = useState(hasDiff && diffExpandedByDefault)
 
   // If no input/output, render compact view
@@ -186,11 +210,11 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
       )}
 
       {/* Collapsible Diff */}
-      {showDiff && hasDiff && (
+      {showDiff && diffStrings && (
         <div className="px-3 pb-2">
           <DiffView
-            oldStr={tool.input!.old_str as string}
-            newStr={tool.input!.new_str as string}
+            oldStr={diffStrings.oldStr}
+            newStr={diffStrings.newStr}
           />
         </div>
       )}

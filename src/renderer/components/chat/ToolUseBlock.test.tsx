@@ -235,4 +235,39 @@ describe('ToolUseBlock', () => {
       expect(screen.queryByText(/Before/)).not.toBeInTheDocument()
     })
   })
+
+  describe('PI SDK edit tool compatibility', () => {
+    it('shows Diff button for PI edit tool (lowercase name, oldText/newText)', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'edit', id: 'tool_pi_1', status: 'done',
+        input: { path: '/src/file.ts', oldText: 'foo', newText: 'bar' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+      expect(screen.getByLabelText('Toggle diff view')).toBeInTheDocument()
+    })
+
+    it('expands PI diff view with correct content', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'edit', id: 'tool_pi_2', status: 'done',
+        input: { path: '/src/file.ts', oldText: 'hello', newText: 'world' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+
+      fireEvent.click(screen.getByLabelText('Toggle diff view'))
+      expect(screen.getByTestId('diff-left')).toHaveTextContent('hello')
+      expect(screen.getByTestId('diff-right')).toHaveTextContent('world')
+    })
+
+    it('shows truncated path context for PI edit tool (path instead of file_path)', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'edit', id: 'tool_pi_3', status: 'done',
+        input: { path: '/home/user/deep/nested/folder/file.ts', oldText: 'a', newText: 'b' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+      expect(screen.getByText(/· deep\/nested\/folder\/file\.ts/)).toBeInTheDocument()
+    })
+  })
 })
