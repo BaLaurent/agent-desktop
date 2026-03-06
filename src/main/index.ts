@@ -1,3 +1,4 @@
+import './utils/coloredConsole'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { initDatabase, getDatabase, closeDatabase } from './db/database'

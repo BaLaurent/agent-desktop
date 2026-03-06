@@ -12,6 +12,9 @@ import type { Message, CreateScheduledTask } from '../../../shared/types'
 interface MessageBubbleProps {
   message: Message
   isLast: boolean
+  effectiveTtsResponseMode?: string
+  effectiveAgentName?: string
+  effectiveSdkBackend?: string
   onEdit?: (messageId: number, content: string) => void
   onRegenerate?: () => void
   onFork?: (messageId: number) => void
@@ -31,7 +34,7 @@ function formatRelativeTime(dateStr: string): string {
   return `${diffDay}d ago`
 }
 
-export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }: MessageBubbleProps) {
+export function MessageBubble({ message, isLast, effectiveTtsResponseMode, effectiveAgentName, effectiveSdkBackend, onEdit, onRegenerate, onFork }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [showActions, setShowActions] = useState(false)
@@ -55,11 +58,12 @@ export function MessageBubble({ message, isLast, onEdit, onRegenerate, onFork }:
   const speakingMessageId = useTtsStore((s) => s.speakingMessageId)
   const { playMessage, stopPlayback } = useTtsStore()
   const ttsProvider = useSettingsStore((s) => s.settings.tts_provider)
-  const ttsResponseMode = useSettingsStore((s) => s.settings.tts_responseMode)
-  const agentName = useAgentDisplayName()
+  const globalTtsResponseMode = useSettingsStore((s) => s.settings.tts_responseMode)
+  const agentName = useAgentDisplayName(effectiveAgentName, effectiveSdkBackend)
   const isSpeakingThis = speakingMessageId === message.id
+  const ttsMode = effectiveTtsResponseMode ?? globalTtsResponseMode
   const showTtsButton = !isUser && !!ttsProvider && ttsProvider !== 'off'
-    && !!ttsResponseMode && ttsResponseMode !== 'off'
+    && !!ttsMode && ttsMode !== 'off'
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(isUser ? message.content : cleanContent)

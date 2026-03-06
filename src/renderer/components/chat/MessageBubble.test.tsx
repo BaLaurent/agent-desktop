@@ -177,6 +177,25 @@ describe('MessageBubble', () => {
     expect(ttsStoreMock.stopPlayback).toHaveBeenCalled()
   })
 
+  it('hides Play button when effectiveTtsResponseMode overrides global to off', () => {
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant' })} isLast={false} effectiveTtsResponseMode="off" />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    expect(screen.queryByTitle('Play TTS')).not.toBeInTheDocument()
+  })
+
+  it('shows Play button when effectiveTtsResponseMode overrides global', () => {
+    const origMode = settingsMock.tts_responseMode
+    settingsMock.tts_responseMode = 'off'
+    const { container } = render(
+      <MessageBubble message={makeMessage({ role: 'assistant' })} isLast={false} effectiveTtsResponseMode="full" />,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    expect(screen.getByTitle('Play TTS')).toBeInTheDocument()
+    settingsMock.tts_responseMode = origMode
+  })
+
   // ── Edit mode tests ─────────────────────────────────────────
 
   const enterEditMode = (container: HTMLElement) => {

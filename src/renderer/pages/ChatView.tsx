@@ -522,6 +522,9 @@ export function ChatView({ conversationId, conversationTitle, conversationModel,
           streamingContent={streamingContent}
           isLoading={isLoading}
           taskNotifications={taskNotifications}
+          effectiveTtsResponseMode={effectiveSettings['tts_responseMode']}
+          effectiveAgentName={effectiveSettings['agent_name']}
+          effectiveSdkBackend={effectiveSettings['ai_sdkBackend']}
           onEdit={editMessage}
           onRegenerate={handleRegenerate}
           onFork={handleFork}

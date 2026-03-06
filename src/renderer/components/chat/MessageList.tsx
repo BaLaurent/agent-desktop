@@ -52,6 +52,9 @@ interface MessageListProps {
   streamingContent: string
   isLoading: boolean
   taskNotifications?: TaskNotification[]
+  effectiveTtsResponseMode?: string
+  effectiveAgentName?: string
+  effectiveSdkBackend?: string
   onEdit: (messageId: number, content: string) => void
   onRegenerate: () => void
   onFork: (messageId: number) => void
@@ -68,6 +71,9 @@ export function MessageList({
   streamingContent,
   isLoading,
   taskNotifications,
+  effectiveTtsResponseMode,
+  effectiveAgentName,
+  effectiveSdkBackend,
   onEdit,
   onRegenerate,
   onFork,
@@ -140,6 +146,9 @@ export function MessageList({
                 <MessageBubble
                   message={msg}
                   isLast={idx === messages.length - 1}
+                  effectiveTtsResponseMode={effectiveTtsResponseMode}
+                  effectiveAgentName={effectiveAgentName}
+                  effectiveSdkBackend={effectiveSdkBackend}
                   onEdit={onEdit}
                   onRegenerate={onRegenerate}
                   onFork={onFork}
@@ -190,6 +199,8 @@ export function MessageList({
             <StreamingIndicator
               streamParts={streamParts}
               onStop={onStopGeneration}
+              effectiveAgentName={effectiveAgentName}
+              effectiveSdkBackend={effectiveSdkBackend}
             />
           )}
         </div>

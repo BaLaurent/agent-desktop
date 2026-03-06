@@ -11,11 +11,13 @@ import type { StreamPart } from '../../../shared/types'
 interface StreamingIndicatorProps {
   streamParts: StreamPart[]
   onStop: () => void
+  effectiveAgentName?: string
+  effectiveSdkBackend?: string
 }
 
-export function StreamingIndicator({ streamParts, onStop }: StreamingIndicatorProps) {
+export function StreamingIndicator({ streamParts, onStop, effectiveAgentName, effectiveSdkBackend }: StreamingIndicatorProps) {
   const hasContent = streamParts.length > 0
-  const agentName = useAgentDisplayName()
+  const agentName = useAgentDisplayName(effectiveAgentName, effectiveSdkBackend)
 
   return (
     <div className="flex justify-start mb-4">

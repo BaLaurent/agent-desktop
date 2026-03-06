@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import type { McpServer, McpTransportType } from '../../../shared/types'
 import { useMcpStore } from '../../stores/mcpStore'
+import { parseMcpJson } from '../../utils/mcpUtils'
 
 interface McpServerFormProps {
   server?: McpServer | null
@@ -54,6 +55,32 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
     server ? parseEnv(server.headers) : []
   )
   const [saving, setSaving] = useState(false)
+  const [showJsonInput, setShowJsonInput] = useState(false)
+  const [jsonText, setJsonText] = useState('')
+  const [jsonError, setJsonError] = useState('')
+
+  const handleApplyJson = useCallback(() => {
+    if (!jsonText.trim()) return
+    const result = parseMcpJson(jsonText)
+    if (typeof result === 'string') {
+      setJsonError(result)
+      return
+    }
+    setJsonError('')
+    if (result.name) setName(result.name)
+    if (result.type) setServerType(result.type)
+    if (result.command != null) setCommand(result.command)
+    if (result.args) setArgRows(result.args)
+    if (result.env) {
+      setEnvRows(Object.entries(result.env).map(([key, value]) => ({ key, value })))
+    }
+    if (result.url != null) setUrl(result.url)
+    if (result.headers) {
+      setHeaderRows(Object.entries(result.headers).map(([key, value]) => ({ key, value })))
+    }
+    setShowJsonInput(false)
+    setJsonText('')
+  }, [jsonText])
 
   const handleAddArg = useCallback(() => {
     setArgRows((prev) => [...prev, ''])
@@ -164,9 +191,40 @@ export function McpServerForm({ server, onClose }: McpServerFormProps) {
         className="w-full max-w-md rounded-lg p-5 flex flex-col gap-4 shadow-xl max-h-[90vh] overflow-y-auto compact:max-h-[90dvh]"
         style={{ backgroundColor: 'var(--color-surface)' }}
       >
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-          {isEdit ? 'Edit Server' : 'Add Server'}
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+            {isEdit ? 'Edit Server' : 'Add Server'}
+          </h2>
+          <button
+            onClick={() => { setShowJsonInput((v) => !v); setJsonError('') }}
+            className="text-xs px-2 py-1 rounded transition-opacity hover:opacity-80"
+            style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text-muted)' }}
+          >
+            {showJsonInput ? 'Cancel' : 'Paste JSON'}
+          </button>
+        </div>
+
+        {showJsonInput && (
+          <div className="flex flex-col gap-2">
+            <textarea
+              className={inputClass}
+              style={{ minHeight: '100px', fontFamily: 'monospace', fontSize: '12px' }}
+              value={jsonText}
+              onChange={(e) => { setJsonText(e.target.value); setJsonError('') }}
+              placeholder={'{\n  "mcpServers": {\n    "name": {\n      "command": "...",\n      "env": { "KEY": "VALUE" }\n    }\n  }\n}'}
+            />
+            {jsonError && (
+              <div className="text-xs" style={{ color: 'var(--color-error)' }}>{jsonError}</div>
+            )}
+            <button
+              onClick={handleApplyJson}
+              disabled={!jsonText.trim()}
+              className="self-end px-3 py-1 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-40 bg-primary text-contrast"
+            >
+              Apply
+            </button>
+          </div>
+        )}
 
         {/* Name */}
         <div className="flex flex-col gap-1">
