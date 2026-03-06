@@ -89,7 +89,7 @@ export function ExtensionDialog({ dialog, onRespond }: ExtensionDialogProps) {
     <div style={backdropStyle} data-testid="extension-dialog-backdrop">
       <div style={{
         ...cardStyle,
-        ...(dialog.method === 'custom_tui' ? { maxWidth: 700 } : {}),
+        ...(dialog.method === 'custom_tui' ? { width: 'fit-content', maxWidth: '90vw', maxHeight: '85vh', overflow: 'auto' } : {}),
       }} role="dialog" aria-label={'title' in dialog ? dialog.title : 'Extension dialog'}>
         {'title' in dialog && dialog.title && <h3 style={titleStyle}>{dialog.title}</h3>}
         {dialog.method === 'select' && <SelectBody dialog={dialog} onRespond={onRespond} />}
