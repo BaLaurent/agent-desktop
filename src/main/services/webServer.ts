@@ -219,6 +219,9 @@ function generateShim(token: string): string {
       onUIEvent: function(cb) { return subscribe('pi:uiEvent', cb); },
       onUIRequest: function(cb) { return subscribe('pi:uiRequest', cb); },
       respondUI: noop,
+      sendTuiInput: noop,
+      onTuiRender: function() { return noop; },
+      onTuiDone: function() { return noop; },
     },
     settings: {
       get: function() { return invoke('settings:get', []); },

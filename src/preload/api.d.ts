@@ -106,6 +106,9 @@ export interface AgentAPI {
     onUIEvent(callback: (event: PiUIEvent) => void): () => void
     onUIRequest(callback: (request: PiUIRequest) => void): () => void
     respondUI(id: string, response: PiUIResponse): void
+    sendTuiInput(id: string, data: string): void
+    onTuiRender(callback: (payload: { id: string; html: string }) => void): () => void
+    onTuiDone(callback: (payload: { id: string }) => void): () => void
   }
   settings: {
     get(): Promise<Record<string, string>>

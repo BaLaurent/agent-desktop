@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { PiUIResponse } from '../../shared/piUITypes'
+import { ansiLinesToHtml } from '../utils/ansiToHtml'
 
 interface PendingDialog {
   resolve: (value: unknown) => void
@@ -27,6 +28,10 @@ export class PiUIContext {
   private disposed = false
   private win: WinLike
   private conversationId: number | undefined
+  private tuiBridges = new Map<string, {
+    component: { render(w: number): string[]; handleInput?(data: string): void; dispose?(): void }
+    width: number
+  }>()
 
   constructor(win: WinLike, conversationId?: number) {
     this.win = win
@@ -52,6 +57,13 @@ export class PiUIContext {
     if (!entry) return
     this.pending.delete(response.id)
 
+    // Clean up TUI bridge if any
+    const bridge = this.tuiBridges.get(response.id)
+    if (bridge) {
+      this.tuiBridges.delete(response.id)
+      bridge.component.dispose?.()
+    }
+
     if (response.cancelled) {
       entry.resolve(entry.method === 'confirm' ? false : undefined)
       return
@@ -62,6 +74,12 @@ export class PiUIContext {
     } else {
       entry.resolve(response.value)
     }
+  }
+
+  handleTuiInput(id: string, data: string): void {
+    const bridge = this.tuiBridges.get(id)
+    if (!bridge) return
+    bridge.component.handleInput?.(data)
   }
 
   // ─── Dialog Methods (blocking) ─────────────────────────────
@@ -137,9 +155,48 @@ export class PiUIContext {
     }
   }
 
-  async custom<T>(): Promise<T> {
-    console.log('[PiUIContext] custom() called — TUI components not supported in Electron')
-    return undefined as T
+  async custom<T>(
+    factory: (tui: unknown, theme: unknown, kb: unknown, done: (result: T) => void) => unknown
+  ): Promise<T> {
+    const id = randomUUID()
+    const width = 80
+
+    let component: { render(w: number): string[]; handleInput?(data: string): void; dispose?(): void } | null = null
+    let resolvePromise!: (value: T) => void
+
+    const promise = new Promise<T>((resolve) => { resolvePromise = resolve })
+
+    const sendRender = () => {
+      if (!component || this.disposed) return
+      const lines = component.render(width)
+      const html = ansiLinesToHtml(lines)
+      this.send('pi:tuiRender', { id, html })
+    }
+
+    const mockTui = { requestRender: () => sendRender() }
+
+    const done = (result: T) => {
+      this.pending.delete(id)
+      this.tuiBridges.delete(id)
+      this.send('pi:tuiDone', { id })
+      resolvePromise(result)
+    }
+
+    let created = factory(mockTui, this.theme, {}, done)
+    if (created && typeof (created as Promise<unknown>).then === 'function') {
+      created = await (created as Promise<unknown>)
+    }
+    component = created as typeof component
+
+    this.pending.set(id, { resolve: resolvePromise as (v: unknown) => void, method: 'custom_tui' })
+    this.tuiBridges.set(id, { component: component!, width })
+
+    // Initial render
+    const lines = component!.render(width)
+    const html = ansiLinesToHtml(lines)
+    this.send('pi:uiRequest', { id, method: 'custom_tui', html })
+
+    return promise
   }
 
   // ─── No-op / Stub Methods ─────────────────────────────────
@@ -150,9 +207,10 @@ export class PiUIContext {
   pasteToEditor(): void {}
   setEditorComponent(): void {}
   get theme(): Record<string, unknown> {
-    // Stub theme — fg/bg/bold/etc. just pass through the text (no ANSI codes in Electron)
-    const passthrough = (_color: string, text: string) => text
-    return { fg: passthrough, bg: passthrough, bold: passthrough, dim: passthrough, italic: passthrough, underline: passthrough, strikethrough: passthrough }
+    // fg/bg take (color, text) → text; style methods take (text) → text
+    const colorFn = (_color: string, text: string) => text
+    const styleFn = (text: string) => text
+    return { fg: colorFn, bg: colorFn, bold: styleFn, dim: styleFn, italic: styleFn, underline: styleFn, strikethrough: styleFn }
   }
   getAllThemes(): { name: string; path: string | undefined }[] { return [] }
   getTheme(): unknown { return undefined }
@@ -168,5 +226,9 @@ export class PiUIContext {
       entry.resolve(entry.method === 'confirm' ? false : undefined)
     }
     this.pending.clear()
+    for (const [, bridge] of this.tuiBridges) {
+      bridge.component.dispose?.()
+    }
+    this.tuiBridges.clear()
   }
 }

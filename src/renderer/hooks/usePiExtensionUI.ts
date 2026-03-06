@@ -4,6 +4,7 @@ import type { PiUIRequest, PiUIEvent } from '../../shared/piUITypes'
 
 export function usePiExtensionUI(): void {
   const enqueueDialog = usePiExtensionUIStore((s) => s.enqueueDialog)
+  const dismissDialogById = usePiExtensionUIStore((s) => s.dismissDialogById)
   const addNotification = usePiExtensionUIStore((s) => s.addNotification)
   const setStatusEntry = usePiExtensionUIStore((s) => s.setStatusEntry)
   const clearStatusEntry = usePiExtensionUIStore((s) => s.clearStatusEntry)
@@ -17,6 +18,10 @@ export function usePiExtensionUI(): void {
   useEffect(() => {
     const unsubRequest = window.agent.pi.onUIRequest((request: PiUIRequest) => {
       enqueueDialog(request)
+    })
+
+    const unsubTuiDone = window.agent.pi.onTuiDone((payload: { id: string }) => {
+      dismissDialogById(payload.id)
     })
 
     const unsubEvent = window.agent.pi.onUIEvent((event: PiUIEvent) => {
@@ -50,6 +55,7 @@ export function usePiExtensionUI(): void {
     return () => {
       unsubRequest()
       unsubEvent()
+      unsubTuiDone()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- subscribe once, unsubscribe on unmount
 }

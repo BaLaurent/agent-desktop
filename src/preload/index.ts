@@ -112,6 +112,19 @@ const api: AgentAPI = {
     respondUI: (id, response) => {
       ipcRenderer.send('pi:uiResponse', { id, ...response })
     },
+    sendTuiInput: (id: string, data: string) => {
+      ipcRenderer.send('pi:tuiInput', { id, data })
+    },
+    onTuiRender: (callback) => {
+      const handler = (_e: Electron.IpcRendererEvent, payload: unknown) => callback(payload as never)
+      ipcRenderer.on('pi:tuiRender', handler)
+      return () => { ipcRenderer.removeListener('pi:tuiRender', handler) }
+    },
+    onTuiDone: (callback) => {
+      const handler = (_e: Electron.IpcRendererEvent, payload: unknown) => callback(payload as never)
+      ipcRenderer.on('pi:tuiDone', handler)
+      return () => { ipcRenderer.removeListener('pi:tuiDone', handler) }
+    },
   },
   settings: {
     get: () => withTimeout(ipcRenderer.invoke('settings:get')),

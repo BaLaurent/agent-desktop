@@ -96,4 +96,10 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
       ctx.handleResponse(response)
     }
   })
+
+  ipcMain.on('pi:tuiInput', (_event, payload: { id: string; data: string }) => {
+    for (const ctx of activeContexts.values()) {
+      (ctx as { handleTuiInput?: (id: string, data: string) => void }).handleTuiInput?.(payload.id, payload.data)
+    }
+  })
 }

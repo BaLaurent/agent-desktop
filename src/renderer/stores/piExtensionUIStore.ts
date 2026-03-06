@@ -22,6 +22,7 @@ interface PiExtensionUIState {
   // Actions
   enqueueDialog: (dialog: PiUIDialog) => void
   dismissDialog: () => void
+  dismissDialogById: (id: string) => void
   addNotification: (message: string, level: 'info' | 'warning' | 'error') => void
   removeNotification: (id: string) => void
   setStatusEntry: (key: string, text: string) => void
@@ -60,6 +61,15 @@ export const usePiExtensionUIStore = create<PiExtensionUIState>((set) => ({
     set((s) => {
       const [next, ...rest] = s.dialogQueue
       return { activeDialog: next ?? null, dialogQueue: rest }
+    }),
+
+  dismissDialogById: (id) =>
+    set((s) => {
+      if (s.activeDialog?.id === id) {
+        const [next, ...rest] = s.dialogQueue
+        return { activeDialog: next ?? null, dialogQueue: rest }
+      }
+      return { dialogQueue: s.dialogQueue.filter((d) => d.id !== id) }
     }),
 
   addNotification: (message, level) =>

@@ -82,6 +82,15 @@ export const mockAgent = {
     getCollectionFiles: vi.fn().mockResolvedValue([]),
     openKnowledgesFolder: vi.fn().mockResolvedValue(undefined),
   },
+  pi: {
+    listExtensions: vi.fn().mockResolvedValue([]),
+    onUIEvent: vi.fn().mockReturnValue(() => {}),
+    onUIRequest: vi.fn().mockReturnValue(() => {}),
+    respondUI: vi.fn().mockResolvedValue(undefined),
+    sendTuiInput: vi.fn(),
+    onTuiRender: vi.fn().mockReturnValue(() => {}),
+    onTuiDone: vi.fn().mockReturnValue(() => {}),
+  },
   settings: {
     get: vi.fn().mockResolvedValue({}),
     set: vi.fn().mockResolvedValue(undefined),

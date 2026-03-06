@@ -149,6 +149,27 @@ describe('ExtensionDialog', () => {
     })
   })
 
+  // ─── Custom TUI ───────────────────────────────────────────
+
+  describe('custom_tui variant', () => {
+    const dialog: PiUIDialog = {
+      id: 'dlg-tui',
+      method: 'custom_tui',
+      html: '<div><span style="font-weight:bold">Question</span></div><div>Option A</div>',
+    } as PiUIDialog
+
+    it('renders the provided HTML content', () => {
+      render(<ExtensionDialog dialog={dialog} onRespond={onRespond} />)
+      expect(screen.getByText('Question')).toBeInTheDocument()
+      expect(screen.getByText('Option A')).toBeInTheDocument()
+    })
+
+    it('does not render a title when dialog has no title', () => {
+      render(<ExtensionDialog dialog={dialog} onRespond={onRespond} />)
+      expect(screen.queryByRole('heading')).toBeNull()
+    })
+  })
+
   // ─── ESC key ───────────────────────────────────────────────
 
   it('ESC key sends cancelled response for any variant', () => {

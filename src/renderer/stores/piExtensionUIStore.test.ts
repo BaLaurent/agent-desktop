@@ -150,6 +150,31 @@ describe('piExtensionUIStore', () => {
     })
   })
 
+  describe('dismissDialogById', () => {
+    it('dismisses active dialog if id matches', () => {
+      const { enqueueDialog, dismissDialogById } = usePiExtensionUIStore.getState()
+      enqueueDialog({ id: 'a', method: 'input', title: 'Q1' } as PiUIDialog)
+      dismissDialogById('a')
+      expect(usePiExtensionUIStore.getState().activeDialog).toBeNull()
+    })
+
+    it('removes from queue if id matches queued dialog', () => {
+      const { enqueueDialog, dismissDialogById } = usePiExtensionUIStore.getState()
+      enqueueDialog({ id: 'a', method: 'input', title: 'Q1' } as PiUIDialog)
+      enqueueDialog({ id: 'b', method: 'input', title: 'Q2' } as PiUIDialog)
+      dismissDialogById('b')
+      expect(usePiExtensionUIStore.getState().dialogQueue).toHaveLength(0)
+    })
+
+    it('promotes next queued dialog when active is dismissed', () => {
+      const { enqueueDialog, dismissDialogById } = usePiExtensionUIStore.getState()
+      enqueueDialog({ id: 'a', method: 'input', title: 'Q1' } as PiUIDialog)
+      enqueueDialog({ id: 'b', method: 'input', title: 'Q2' } as PiUIDialog)
+      dismissDialogById('a')
+      expect(usePiExtensionUIStore.getState().activeDialog?.id).toBe('b')
+    })
+  })
+
   describe('reset', () => {
     it('clears everything back to initial state', () => {
       usePiExtensionUIStore.getState().enqueueDialog(dialog('d1'))

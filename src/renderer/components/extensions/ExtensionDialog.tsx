@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react'
 import type { PiUIDialog, PiUIResponse } from '../../../shared/piUITypes'
+import { keyEventToTerminal } from '../../utils/keyToTerminal'
 
 interface ExtensionDialogProps {
   dialog: PiUIDialog
@@ -86,12 +87,16 @@ export function ExtensionDialog({ dialog, onRespond }: ExtensionDialogProps) {
 
   return (
     <div style={backdropStyle} data-testid="extension-dialog-backdrop">
-      <div style={cardStyle} role="dialog" aria-label={dialog.title}>
-        <h3 style={titleStyle}>{dialog.title}</h3>
+      <div style={{
+        ...cardStyle,
+        ...(dialog.method === 'custom_tui' ? { maxWidth: 700 } : {}),
+      }} role="dialog" aria-label={'title' in dialog ? dialog.title : 'Extension dialog'}>
+        {'title' in dialog && dialog.title && <h3 style={titleStyle}>{dialog.title}</h3>}
         {dialog.method === 'select' && <SelectBody dialog={dialog} onRespond={onRespond} />}
         {dialog.method === 'confirm' && <ConfirmBody dialog={dialog} onRespond={onRespond} />}
         {dialog.method === 'input' && <InputBody dialog={dialog} onRespond={onRespond} cancel={cancel} />}
         {dialog.method === 'editor' && <EditorBody dialog={dialog} onRespond={onRespond} cancel={cancel} />}
+        {dialog.method === 'custom_tui' && <CustomTUIBody dialog={dialog} />}
       </div>
     </div>
   )
@@ -217,5 +222,49 @@ function EditorBody({ dialog, onRespond, cancel }: { dialog: EditorDialog; onRes
         <button style={primaryButtonStyle} onClick={submit}>Submit</button>
       </div>
     </>
+  )
+}
+
+// ─── Custom TUI ─────────────────────────────────────────────
+
+type CustomTuiDialog = Extract<PiUIDialog, { method: 'custom_tui' }>
+
+function CustomTUIBody({ dialog }: { dialog: CustomTuiDialog }) {
+  const [html, setHtml] = useState(dialog.html)
+
+  useEffect(() => {
+    const unsub = window.agent.pi.onTuiRender((payload: { id: string; html: string }) => {
+      if (payload.id === dialog.id) setHtml(payload.html)
+    })
+    return unsub
+  }, [dialog.id])
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const data = keyEventToTerminal(e)
+      if (data) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        window.agent.pi.sendTuiInput(dialog.id, data)
+      }
+    }
+    document.addEventListener('keydown', handleKey, true)
+    return () => document.removeEventListener('keydown', handleKey, true)
+  }, [dialog.id])
+
+  return (
+    <pre
+      style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: 13,
+        lineHeight: 1.5,
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        outline: 'none',
+      }}
+      tabIndex={0}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   )
 }

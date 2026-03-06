@@ -18,6 +18,7 @@ export type PiUIDialog =
   | { id: string; method: 'input'; title: string; placeholder?: string; timeout?: number }
   | { id: string; method: 'editor'; title: string; prefill?: string; timeout?: number }
   | { id: string; method: 'custom'; title?: string; component: PiUINode; timeout?: number }
+  | { id: string; method: 'custom_tui'; html: string; timeout?: number }
 
 // ─── Pi Extension UI — Fire-and-Forget Events (main -> renderer)
 
@@ -62,4 +63,16 @@ export interface PiUIWidget {
   key: string
   content: string[]
   placement: 'aboveEditor' | 'belowEditor'
+}
+
+// ─── Pi Extension UI — TUI Bridge IPC (headless TUI) ────────
+
+export interface PiUITuiInput {
+  id: string
+  data: string
+}
+
+export interface PiUITuiRender {
+  id: string
+  html: string
 }

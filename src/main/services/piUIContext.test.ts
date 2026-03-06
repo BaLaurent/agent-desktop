@@ -166,6 +166,114 @@ describe('PiUIContext', () => {
     })
   })
 
+  describe('custom (headless TUI bridge)', () => {
+    it('calls factory with mock TUI, theme, keybindings, and done callback', async () => {
+      const factory = vi.fn((_tui: unknown, _theme: unknown, _kb: unknown, done: (r: string) => void) => {
+        done('result')
+        return { render: () => ['line'], handleInput: vi.fn() }
+      })
+      const result = await ctx.custom(factory)
+      expect(factory).toHaveBeenCalledTimes(1)
+      expect(result).toBe('result')
+    })
+
+    it('sends pi:uiRequest with method custom_tui and rendered html', async () => {
+      const factory = vi.fn((_tui: unknown, _theme: unknown, _kb: unknown, done: (r: string) => void) => {
+        setTimeout(() => done('ok'), 10)
+        return { render: () => ['hello'] }
+      })
+      const promise = ctx.custom(factory)
+      await new Promise(r => setTimeout(r, 0))
+      expect(mockWebContents.send).toHaveBeenCalledWith('pi:uiRequest', expect.objectContaining({
+        method: 'custom_tui',
+      }))
+      const call = mockWebContents.send.mock.calls.find(
+        (c: unknown[]) => (c[1] as { method: string }).method === 'custom_tui'
+      )
+      expect((call![1] as { html: string }).html).toContain('hello')
+      await promise
+    })
+
+    it('handleTuiInput forwards data to component.handleInput', async () => {
+      const handleInput = vi.fn()
+      const factory = vi.fn((_tui: unknown, _theme: unknown, _kb: unknown, done: (r: string) => void) => {
+        setTimeout(() => done('ok'), 50)
+        return { render: () => ['line'], handleInput }
+      })
+      const promise = ctx.custom(factory)
+      await new Promise(r => setTimeout(r, 0))
+      const id = lastRequestId(mockWebContents.send)
+      ctx.handleTuiInput(id, '\x1b[A')
+      expect(handleInput).toHaveBeenCalledWith('\x1b[A')
+      await promise
+    })
+
+    it('requestRender on mock TUI triggers pi:tuiRender', async () => {
+      let mockTui: { requestRender: () => void } | undefined
+      const factory = vi.fn((tui: { requestRender: () => void }, _theme: unknown, _kb: unknown, done: (r: string) => void) => {
+        mockTui = tui
+        setTimeout(() => done('ok'), 50)
+        return { render: () => ['updated'] }
+      })
+      const promise = ctx.custom(factory)
+      await new Promise(r => setTimeout(r, 0))
+      mockTui!.requestRender()
+      expect(mockWebContents.send).toHaveBeenCalledWith('pi:tuiRender', expect.objectContaining({
+        html: expect.stringContaining('updated'),
+      }))
+      await promise
+    })
+
+    it('sends pi:tuiDone when done() fires', async () => {
+      const factory = vi.fn((_tui: unknown, _theme: unknown, _kb: unknown, done: (r: string) => void) => {
+        setTimeout(() => done('result'), 10)
+        return { render: () => ['line'] }
+      })
+      await ctx.custom(factory)
+      expect(mockWebContents.send).toHaveBeenCalledWith('pi:tuiDone', expect.objectContaining({
+        id: expect.any(String),
+      }))
+    })
+
+    it('resolves with undefined on cancel via handleResponse', async () => {
+      const factory = vi.fn((_tui: unknown, _theme: unknown, _kb: unknown, _done: (r: string) => void) => {
+        return { render: () => ['line'] }
+      })
+      const promise = ctx.custom(factory)
+      await new Promise(r => setTimeout(r, 0))
+      const id = lastRequestId(mockWebContents.send)
+      ctx.handleResponse({ id, cancelled: true })
+      expect(await promise).toBeUndefined()
+    })
+
+    it('dispose resolves pending custom with undefined and calls component.dispose', async () => {
+      const disposeFn = vi.fn()
+      const factory = vi.fn((_tui: unknown, _theme: unknown, _kb: unknown, _done: (r: string) => void) => {
+        return { render: () => ['line'], dispose: disposeFn }
+      })
+      const promise = ctx.custom(factory)
+      await new Promise(r => setTimeout(r, 0))
+      ctx.dispose()
+      expect(await promise).toBeUndefined()
+      expect(disposeFn).toHaveBeenCalled()
+    })
+
+    it('handles async factory (returns Promise)', async () => {
+      const factory = vi.fn(async (_tui: unknown, _theme: unknown, _kb: unknown, done: (r: string) => void) => {
+        await new Promise(r => setTimeout(r, 5))
+        done('async-result')
+        return { render: () => ['async'] }
+      })
+      const result = await ctx.custom(factory)
+      expect(result).toBe('async-result')
+    })
+
+    it('ignores handleTuiInput for unknown id', () => {
+      // Should not throw
+      ctx.handleTuiInput('nonexistent', '\x1b[A')
+    })
+  })
+
   describe('dispose', () => {
     it('resolves pending dialogs with defaults', async () => {
       const selectPromise = ctx.select('Pick', ['A'])
