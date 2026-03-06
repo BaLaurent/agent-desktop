@@ -39,6 +39,7 @@ export function MessageBubble({ message, isLast, effectiveTtsResponseMode, effec
   const [editContent, setEditContent] = useState(message.content)
   const [showActions, setShowActions] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const [copiedPos, setCopiedPos] = useState<{ x: number; y: number } | null>(null)
   const mobile = useMobileMode()
 
   const isUser = message.role === 'user'
@@ -65,8 +66,12 @@ export function MessageBubble({ message, isLast, effectiveTtsResponseMode, effec
   const showTtsButton = !isUser && !!ttsProvider && ttsProvider !== 'off'
     && !!ttsMode && ttsMode !== 'off'
 
-  const handleCopy = useCallback(async () => {
+  const handleCopy = useCallback(async (e?: React.MouseEvent) => {
     await navigator.clipboard.writeText(isUser ? message.content : cleanContent)
+    const x = e?.clientX ?? 0
+    const y = e?.clientY ?? 0
+    setCopiedPos({ x, y })
+    setTimeout(() => setCopiedPos(null), 1500)
   }, [message.content, isUser, cleanContent])
 
   const handleStartEdit = useCallback(() => {
@@ -111,10 +116,13 @@ export function MessageBubble({ message, isLast, effectiveTtsResponseMode, effec
 
   const [showContextMenu, setShowContextMenu] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
+  const [selectedText, setSelectedText] = useState('')
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     if (isEditing) return
     e.preventDefault()
+    const sel = window.getSelection()
+    setSelectedText(sel && sel.toString().trim() ? sel.toString() : '')
     setContextMenuPos({ x: e.clientX, y: e.clientY })
     setShowContextMenu(true)
   }, [isEditing])
@@ -294,9 +302,19 @@ export function MessageBubble({ message, isLast, effectiveTtsResponseMode, effec
 
       {showContextMenu && (
         <ContextMenu position={contextMenuPos} onClose={() => setShowContextMenu(false)} className="min-w-[140px]" aria-label="Message actions">
-          <ContextMenuItem onClick={() => { setShowContextMenu(false); handleCopy() }}>
-            Copy
+          <ContextMenuItem onClick={(e) => { setShowContextMenu(false); handleCopy(e) }}>
+            Copy Message
           </ContextMenuItem>
+          {selectedText && (
+            <ContextMenuItem onClick={async (e) => {
+              setShowContextMenu(false)
+              await navigator.clipboard.writeText(selectedText)
+              setCopiedPos({ x: e.clientX, y: e.clientY })
+              setTimeout(() => setCopiedPos(null), 1500)
+            }}>
+              Copy Selection
+            </ContextMenuItem>
+          )}
           {showTtsButton && (
             <ContextMenuItem onClick={() => {
               setShowContextMenu(false)
@@ -331,6 +349,20 @@ export function MessageBubble({ message, isLast, effectiveTtsResponseMode, effec
             </ContextMenuItem>
           )}
         </ContextMenu>
+      )}
+
+      {copiedPos && (
+        <div
+          className="fixed z-50 px-2 py-1 rounded shadow-lg text-[11px] font-medium pointer-events-none -translate-x-1/2 -translate-y-full"
+          style={{
+            left: copiedPos.x,
+            top: copiedPos.y - 8,
+            backgroundColor: 'var(--color-accent)',
+            color: 'var(--color-contrast)',
+          }}
+        >
+          Copied!
+        </div>
       )}
     </div>
   )
