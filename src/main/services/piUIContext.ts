@@ -173,7 +173,7 @@ export class PiUIContext {
       this.send('pi:tuiRender', { id, html })
     }
 
-    const mockTui = { requestRender: () => sendRender() }
+    const mockTui = { requestRender: () => sendRender(), terminal: { rows: 24, cols: width } }
 
     const done = (result: T) => {
       this.pending.delete(id)
