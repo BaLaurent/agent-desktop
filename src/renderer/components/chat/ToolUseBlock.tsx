@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { CodeBlock } from './CodeBlock'
+import { DiffView } from './DiffView'
+import { useSettingsStore } from '../../stores/settingsStore'
 import type { StreamPart } from '../../../shared/types'
 
 type ToolPart = Extract<StreamPart, { type: 'tool' }>
@@ -37,6 +39,12 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
 
   const [showInput, setShowInput] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
+
+  const diffExpandedByDefault = useSettingsStore(
+    (s) => (s.settings.diffExpandedByDefault ?? 'false') === 'true',
+  )
+  const hasDiff = tool.name === 'Edit' && !!tool.input?.old_str && 'new_str' in (tool.input ?? {})
+  const [showDiff, setShowDiff] = useState(hasDiff && diffExpandedByDefault)
 
   // If no input/output, render compact view
   if (!hasInput && !hasOutput) {
@@ -113,6 +121,17 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
             />
           )}
           <div className="flex gap-1 ml-auto shrink-0">
+            {hasDiff && (
+              <button
+                onClick={() => setShowDiff((s) => !s)}
+                className="rounded transition-opacity hover:opacity-80 px-1.5 py-0.5 text-[10px] mobile:px-3 mobile:py-2 mobile:text-xs"
+                style={{ color: 'var(--color-tool)' }}
+                aria-expanded={showDiff}
+                aria-label="Toggle diff view"
+              >
+                {showDiff ? '\u25BC' : '\u25B6'} Diff
+              </button>
+            )}
             {hasInput && (
               <button
                 onClick={() => setShowInput((s) => !s)}
@@ -163,6 +182,16 @@ export function ToolUseBlock({ tool }: ToolUseBlockProps) {
           <CodeBlock language="text" defaultCollapsed={false}>
             {tool.output!}
           </CodeBlock>
+        </div>
+      )}
+
+      {/* Collapsible Diff */}
+      {showDiff && hasDiff && (
+        <div className="px-3 pb-2">
+          <DiffView
+            oldStr={tool.input!.old_str as string}
+            newStr={tool.input!.new_str as string}
+          />
         </div>
       )}
     </div>

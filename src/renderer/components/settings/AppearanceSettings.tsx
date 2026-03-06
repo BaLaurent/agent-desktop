@@ -53,6 +53,7 @@ export function AppearanceSettings() {
   const autoThemeNightTheme = settings.autoTheme_nightTheme ?? 'default-dark.css'
   const autoThemeDayTime = settings.autoTheme_dayTime ?? '07:00'
   const autoThemeNightTime = settings.autoTheme_nightTime ?? '21:00'
+  const diffExpanded = (settings.diffExpandedByDefault ?? 'false') === 'true'
   useEffect(() => {
     document.documentElement.style.fontSize = currentFontSize + 'px'
   }, [currentFontSize])
@@ -214,7 +215,7 @@ export function AppearanceSettings() {
         </div>
 
         {/* Panel Buttons — Proximity Radius */}
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-deep">
           <span className="text-sm text-muted pl-4">Proximity radius</span>
           <div className="flex items-center gap-2">
             <input
@@ -232,6 +233,30 @@ export function AppearanceSettings() {
             />
             <span className="text-xs text-muted">%</span>
           </div>
+        </div>
+
+        {/* File Diffs */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex flex-col">
+            <span className="text-sm text-body">File Diffs</span>
+            <span className="text-xs text-muted">Show edit diffs expanded by default</span>
+          </div>
+          <button
+            onClick={() => setSetting('diffExpandedByDefault', diffExpanded ? 'false' : 'true')}
+            role="switch"
+            aria-checked={diffExpanded}
+            aria-label="Toggle file diffs expanded by default"
+            className="relative w-9 h-5 rounded-full flex-shrink-0 transition-colors"
+            style={{
+              backgroundColor: diffExpanded ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              opacity: diffExpanded ? 1 : 0.3,
+            }}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: diffExpanded ? 'translateX(16px)' : 'translateX(0px)' }}
+            />
+          </button>
         </div>
       </div>
 

@@ -1,3 +1,10 @@
+import { vi } from 'vitest'
+
+vi.mock('../../stores/settingsStore', () => ({
+  useSettingsStore: (selector: (s: { settings: Record<string, string> }) => unknown) =>
+    selector({ settings: {} }),
+}))
+
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ToolUseBlock } from './ToolUseBlock'
 import type { StreamPart } from '../../../shared/types'
@@ -169,6 +176,63 @@ describe('ToolUseBlock', () => {
       render(<ToolUseBlock tool={tool} />)
       const contextSpan = screen.getByText(/· myapp\/src\/components\/Button\.tsx/)
       expect(contextSpan).toHaveAttribute('title', 'myapp/src/components/Button.tsx')
+    })
+  })
+
+  describe('Edit tool diff view', () => {
+    it('shows Diff toggle button for Edit tool with old_str and new_str', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'Edit', id: 'tool_diff_1', status: 'done',
+        input: { file_path: '/src/file.ts', old_str: 'foo', new_str: 'bar' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+      expect(screen.getByLabelText('Toggle diff view')).toBeInTheDocument()
+    })
+
+    it('does not show Diff button for non-Edit tools', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'Bash', id: 'tool_diff_2', status: 'done',
+        input: { command: 'ls' },
+        output: 'files',
+      }
+      render(<ToolUseBlock tool={tool} />)
+      expect(screen.queryByLabelText('Toggle diff view')).not.toBeInTheDocument()
+    })
+
+    it('does not show Diff button for Edit tool without old_str', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'Edit', id: 'tool_diff_3', status: 'done',
+        input: { file_path: '/src/file.ts' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+      expect(screen.queryByLabelText('Toggle diff view')).not.toBeInTheDocument()
+    })
+
+    it('expands diff view when Diff button is clicked', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'Edit', id: 'tool_diff_4', status: 'done',
+        input: { file_path: '/src/file.ts', old_str: 'foo', new_str: 'bar' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+
+      expect(screen.queryByText(/Before/)).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByLabelText('Toggle diff view'))
+      expect(screen.getByText(/Before/)).toBeInTheDocument()
+      expect(screen.getByText(/After/)).toBeInTheDocument()
+    })
+
+    it('diff is collapsed by default when setting is false', () => {
+      const tool: ToolPart = {
+        type: 'tool', name: 'Edit', id: 'tool_diff_5', status: 'done',
+        input: { file_path: '/src/file.ts', old_str: 'foo', new_str: 'bar' },
+        output: 'ok',
+      }
+      render(<ToolUseBlock tool={tool} />)
+      expect(screen.queryByText(/Before/)).not.toBeInTheDocument()
     })
   })
 })

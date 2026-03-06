@@ -46,6 +46,16 @@
   .bg-primary-tint {
     background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
   }
+
+  /* Diff highlighting */
+  .diff-removed {
+    background-color: color-mix(in srgb, var(--color-error) 25%, transparent);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--color-error) 50%, transparent);
+  }
+  .diff-added {
+    background-color: color-mix(in srgb, var(--color-success) 25%, transparent);
+  }
 }
 
 @layer base {
