@@ -512,16 +512,61 @@ export function SidebarTree() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [selectedIds.size, clearSelection])
 
+  // Auto-expand folder ancestor chain when active conversation changes
+  useEffect(() => {
+    if (activeConversationId === null) return
+    const conv = conversations.find((c) => c.id === activeConversationId)
+    if (!conv || conv.folder_id === null) return
+
+    const toExpand: number[] = []
+    let currentId: number | null = conv.folder_id
+    while (currentId !== null) {
+      toExpand.push(currentId)
+      const folder = foldersById.get(currentId)
+      currentId = folder?.parent_id ?? null
+    }
+
+    if (toExpand.length === 0) return
+
+    setExpandedIds(new Set(toExpand))
+  }, [activeConversationId, conversations, foldersById])
+
   const isSearching = searchQuery.trim().length > 0
 
   const toggleExpand = useCallback((id: number) => {
     setExpandedIds((prev) => {
+      if (prev.has(id)) {
+        // Collapse: remove this folder and all its descendants
+        const next = new Set(prev)
+        next.delete(id)
+        const removeDescendants = (fid: number) => {
+          for (const child of (childrenByParent.get(fid) ?? [])) {
+            next.delete(child.id)
+            removeDescendants(child.id)
+          }
+        }
+        removeDescendants(id)
+        return next
+      }
+      // Expand: accordion — close siblings and their descendants
+      const folder = foldersById.get(id)
+      const parentId = folder?.parent_id ?? null
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      for (const sib of (childrenByParent.get(parentId) ?? [])) {
+        if (sib.id === id) continue
+        next.delete(sib.id)
+        const removeDescendants = (fid: number) => {
+          for (const child of (childrenByParent.get(fid) ?? [])) {
+            next.delete(child.id)
+            removeDescendants(child.id)
+          }
+        }
+        removeDescendants(sib.id)
+      }
+      next.add(id)
       return next
     })
-  }, [])
+  }, [foldersById, childrenByParent])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, folderId: number) => {
     e.preventDefault()
