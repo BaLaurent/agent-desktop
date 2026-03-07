@@ -365,7 +365,7 @@ describe('MessageBubble', () => {
 
     const items = screen.getAllByRole('menuitem')
     const labels = items.map((el) => el.textContent)
-    expect(labels).toContain('Copy')
+    expect(labels).toContain('Copy Message')
     expect(labels).toContain('Edit')
     expect(labels).toContain('Retry')
     expect(labels).toContain('Schedule')
@@ -387,7 +387,7 @@ describe('MessageBubble', () => {
 
     const items = screen.getAllByRole('menuitem')
     const labels = items.map((el) => el.textContent)
-    expect(labels).toContain('Copy')
+    expect(labels).toContain('Copy Message')
     expect(labels).toContain('Play TTS')
     expect(labels).toContain('Retry')
     expect(labels).not.toContain('Edit')
@@ -416,7 +416,7 @@ describe('MessageBubble', () => {
     )
     rightClickBubble(container)
 
-    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy')!
+    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy Message')!
     fireEvent.click(copyBtn)
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('copy me')
@@ -502,7 +502,7 @@ describe('MessageBubble', () => {
     rightClickBubble(container)
     expect(screen.getByRole('menu', { name: 'Message actions' })).toBeInTheDocument()
 
-    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy')!
+    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy Message')!
     fireEvent.click(copyBtn)
 
     expect(screen.queryByRole('menu', { name: 'Message actions' })).not.toBeInTheDocument()
@@ -693,7 +693,7 @@ describe('MessageBubble', () => {
       <MessageBubble message={makeMessage({ role: 'assistant', content })} isLast={false} />,
     )
     rightClickBubble(container)
-    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy')!
+    const copyBtn = screen.getAllByRole('menuitem').find((el) => el.textContent === 'Copy Message')!
     fireEvent.click(copyBtn)
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Context clean text')
   })
