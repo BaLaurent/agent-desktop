@@ -115,10 +115,11 @@ interface ContextMenuProps {
   onCreateFile?: (dirPath: string) => void
   onCreateFolder?: (dirPath: string) => void
   multiSelectedCount: number
+  multiSelectedPaths: Set<string>
   onNewConversationFromFiles?: () => void
 }
 
-function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreateFolder, multiSelectedCount, onNewConversationFromFiles }: ContextMenuProps) {
+function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreateFolder, multiSelectedCount, multiSelectedPaths, onNewConversationFromFiles }: ContextMenuProps) {
   // Clamp position to stay within viewport
   const adjustedX = Math.min(x, window.innerWidth - 200)
   const adjustedY = Math.min(y, window.innerHeight - 280)
@@ -153,7 +154,8 @@ function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreate
 
   const handleTrash = async () => {
     try {
-      await window.agent.files.trash(node.path)
+      const pathsToTrash = multiSelectedPaths.size > 0 ? [...multiSelectedPaths] : [node.path]
+      await Promise.all(pathsToTrash.map(p => window.agent.files.trash(p)))
       useFileExplorerStore.getState().refresh()
     } catch { /* ignore */ }
     onClose()
@@ -188,7 +190,9 @@ function FileContextMenu({ x, y, node, onClose, onRename, onCreateFile, onCreate
         </>
       )}
       <ContextMenuDivider />
-      <ContextMenuItem danger onClick={handleTrash}>Move to Trash</ContextMenuItem>
+      <ContextMenuItem danger onClick={handleTrash}>
+        {multiSelectedPaths.size > 1 ? `Move ${multiSelectedPaths.size} items to Trash` : 'Move to Trash'}
+      </ContextMenuItem>
     </ContextMenu>
   )
 }
@@ -1153,6 +1157,7 @@ export function FileExplorerPanel() {
           onCreateFile={handleCreateFileInDir}
           onCreateFolder={handleCreateFolderInDir}
           multiSelectedCount={multiSelectedPaths.size}
+          multiSelectedPaths={multiSelectedPaths}
           onNewConversationFromFiles={() => setShowNewConvModal(true)}
         />
       )}
