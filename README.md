@@ -206,6 +206,33 @@ src/
 
 ## Changelog
 
+### v0.9.3
+
+**Diff View**
+- Side-by-side diff view for Edit tool with character-level highlighting (jsdiff)
+- Collapsible Diff button in ToolUseBlock, `diffExpandedByDefault` toggle in Appearance settings
+- Support for PI SDK edit tool normalization in diff view
+
+**PI Coding Agent**
+- Headless TUI bridge for extension `custom()` dialogs — ANSI-to-HTML rendering with keyboard relay
+- Terminal dimensions provided in mock TUI for Editor component
+- Wider custom TUI dialog with fit-content width (90vw cap) and overflow handling
+
+**Chat & UX**
+- "Copy Selection" context menu option when text is selected, "Copy Message" for full message
+- Floating "Copied!" tooltip at cursor position on copy
+- Auto-expand parent folder and ancestor chain when a conversation becomes active
+- Accordion folder navigation — opening one folder closes siblings at the same level
+
+**File Explorer**
+- Multi-select trash: context menu now trashes all selected files, label shows count
+
+**MCP & Settings**
+- "Paste JSON" button in MCP server form for quick config import (supports wrapped and flat formats)
+- Agent display name improvements in chat bubbles
+
+---
+
 ### v0.9.2
 
 **Discord Integration**
