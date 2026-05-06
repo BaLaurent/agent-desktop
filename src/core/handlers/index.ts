@@ -2,6 +2,7 @@ import type { HandleRegistrar } from '../dispatch'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
 import type { Broadcaster } from '../ports/broadcaster'
 import type { HookRunner } from '../ports/hookRunner'
+import type { SettingsService } from '../services/settings'
 import { registerSettingsHandlers } from './settings'
 import { registerFoldersHandlers } from './folders'
 import { registerConversationsHandlers } from './conversations'
@@ -35,6 +36,7 @@ interface CoreHandlerOptions {
   knowledgesDir: string
   bugReport?: BugReportHandlerOptions
   webPassword: import('../auth').WebPasswordService
+  settingsService?: SettingsService
 }
 
 export function registerCoreHandlers(
@@ -42,7 +44,7 @@ export function registerCoreHandlers(
   db: SqlJsAdapter,
   options: CoreHandlerOptions,
 ): void {
-  registerSettingsHandlers(registrar, db)
+  registerSettingsHandlers(registrar, db, options.settingsService)
   registerFoldersHandlers(registrar, db)
   registerConversationsHandlers(registrar, db)
   registerToolsHandlers(registrar, db)

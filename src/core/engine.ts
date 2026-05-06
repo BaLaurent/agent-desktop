@@ -121,6 +121,7 @@ export class AgentEngine extends TypedEventEmitter<EngineEvents> {
       knowledgesDir: join(homedir(), '.agent-desktop', 'knowledges'),
       bugReport: this.bugReportOpts,
       webPassword: this._webPassword,
+      settingsService: this._settings,
     })
   }
 

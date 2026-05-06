@@ -111,6 +111,11 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
 ])
 
 export class SettingsService {
+  // Runtime lock for keys overridden at process startup (e.g. CLI --port).
+  // Not persisted: the lock disappears on restart, matching the lifecycle
+  // of the override that produced it.
+  private readonly lockedKeys = new Set<string>()
+
   constructor(private db: Database.Database) {}
 
   getAll(): Record<string, string> {
@@ -130,6 +135,9 @@ export class SettingsService {
     if (!ALLOWED_SETTING_KEYS.has(key)) {
       throw new Error(`Unknown setting key: ${key}`)
     }
+    if (this.lockedKeys.has(key)) {
+      throw new Error(`Setting '${key}' is locked by CLI override`)
+    }
     if (value === '') {
       this.db.prepare('DELETE FROM settings WHERE key = ?').run(key)
       return
@@ -138,5 +146,17 @@ export class SettingsService {
     this.db.prepare(
       "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))"
     ).run(key, value)
+  }
+
+  lockKey(key: string): void {
+    this.lockedKeys.add(key)
+  }
+
+  isLocked(key: string): boolean {
+    return this.lockedKeys.has(key)
+  }
+
+  getLockedKeys(): string[] {
+    return Array.from(this.lockedKeys).sort()
   }
 }

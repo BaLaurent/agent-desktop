@@ -47,7 +47,7 @@ let rendererDir: string = ''
 
 // ─── Shim generator ─────────────────────────────────
 
-function generateShim(token: string): string {
+export function generateShim(token: string): string {
   // This JS replaces window.agent (the Electron preload) with WebSocket-based calls
   return `(function() {
   'use strict';
@@ -243,6 +243,7 @@ function generateShim(token: string): string {
     settings: {
       get: function() { return invoke('settings:get', []); },
       set: function(k, v) { return invoke('settings:set', [k, v]); },
+      getLocked: function() { return invoke('settings:getLocked', []); },
       setStreamingTimeout: noop,
     },
     themes: {
@@ -381,6 +382,21 @@ function generateShim(token: string): string {
       connect: function() { return invoke('discord:connect', []); },
       disconnect: function() { return invoke('discord:disconnect', []); },
       status: function() { return invoke('discord:status', []); },
+    },
+    git: {
+      isRepo: function(cwd) { return invoke('git:isRepo', [cwd]); },
+      status: function(cwd) { return invoke('git:status', [cwd]); },
+      logGraph: function(cwd, opts) { return invoke('git:logGraph', [cwd, opts]); },
+      commitDetail: function(cwd, sha) { return invoke('git:commitDetail', [cwd, sha]); },
+      branches: function(cwd) { return invoke('git:branches', [cwd]); },
+      stashList: function(cwd) { return invoke('git:stashList', [cwd]); },
+      // git:checkout and git:fetch are ELECTRON_ONLY_CHANNELS; the call will
+      // reject with OriginDeniedError on the server side. Surfaced as-is so
+      // the UI gets a clear error instead of a silent no-op.
+      checkout: function(cwd, name) { return invoke('git:checkout', [cwd, name]); },
+      stashSave: function(cwd, message) { return invoke('git:stashSave', [cwd, message]); },
+      stashPop: function(cwd, index) { return invoke('git:stashPop', [cwd, index]); },
+      fetch: function(cwd, remote) { return invoke('git:fetch', [cwd, remote]); },
     },
     window: {
       minimize: noop,

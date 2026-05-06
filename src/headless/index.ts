@@ -133,6 +133,13 @@ async function runServices(): Promise<void> {
       || (settings.server_accessMode === 'all' ? 'all' : 'lan')
     const serverShortCode = settings.server_shortCode || undefined
 
+    // CLI overrides pin the corresponding settings for this process lifetime:
+    // remote clients (web/Discord) and the local UI cannot mutate them while
+    // the headless process is running. The lock is in-memory only; restarting
+    // without the override releases it.
+    if (flags.port) engine.settings.lockKey('server_port')
+    if (flags.accessMode) engine.settings.lockKey('server_accessMode')
+
     // `startServer` now wires `broadcast()` → WS clients internally.
     const result = await startServer(serverPort, {
       sslDir,

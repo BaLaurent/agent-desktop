@@ -137,6 +137,7 @@ export interface AgentAPI {
   settings: {
     get(): Promise<Record<string, string>>
     set(key: string, value: string): Promise<void>
+    getLocked(): Promise<string[]>
     setStreamingTimeout(ms: number): void
   }
   themes: {

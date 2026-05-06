@@ -3,8 +3,12 @@ import type { SqlJsAdapter } from '../db/sqljs-adapter'
 import { SettingsService } from '../services/settings'
 import { validateWebhookUrl } from '../utils/webhookValidation'
 
-export function registerSettingsHandlers(registrar: HandleRegistrar, db: SqlJsAdapter): void {
-  const service = new SettingsService(db as any)
+export function registerSettingsHandlers(
+  registrar: HandleRegistrar,
+  db: SqlJsAdapter,
+  sharedService?: SettingsService,
+): void {
+  const service = sharedService ?? new SettingsService(db as any)
 
   registrar.handle('settings:get', async () => {
     try {
@@ -28,5 +32,9 @@ export function registerSettingsHandlers(registrar: HandleRegistrar, db: SqlJsAd
     } catch (err) {
       throw new Error(`Failed to set setting: ${(err as Error).message}`)
     }
+  })
+
+  registrar.handle('settings:getLocked', async () => {
+    return service.getLockedKeys()
   })
 }

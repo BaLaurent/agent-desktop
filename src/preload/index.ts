@@ -152,6 +152,7 @@ const api: AgentAPI = {
   settings: {
     get: () => withTimeout(ipcRenderer.invoke('settings:get')),
     set: (key, value) => withTimeout(ipcRenderer.invoke('settings:set', key, value)),
+    getLocked: () => withTimeout(ipcRenderer.invoke('settings:getLocked')),
     setStreamingTimeout: (ms: number) => { _streamingTimeoutMs = ms },
   },
   themes: {

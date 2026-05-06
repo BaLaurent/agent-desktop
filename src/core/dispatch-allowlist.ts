@@ -115,10 +115,13 @@ export const ELECTRON_ONLY_CHANNELS: ReadonlySet<string> = new Set([
  *    server they are connected through.
  *  - server:{setPassword,clearPassword} — LAN attacker must not rotate the
  *    session secret and lock out the legitimate user.
- *  - settings:set — persists arbitrary key/value to global settings; a
- *    remote client could overwrite security-sensitive config (e.g. bypass
- *    permissions, MCP servers) without local user interaction.
  *  - openscad:exportStl — uses `event.sender` (null over WS → crash).
+ *
+ * NOTE — `settings:set` was previously blocked here. It is now reachable
+ * over WS so the web UI has parity with the Electron app. Per-key locking
+ * (e.g. CLI `--port` override pinning `server_port`) is enforced in
+ * SettingsService.set() via lockedKeys, not here. Whitelisting of valid
+ * keys is enforced by ALLOWED_SETTING_KEYS in the same service.
  */
 // consumed by headless/index.test.ts (excluded). (suppressed below)
 // fallow-ignore-next-line unused-export
@@ -129,7 +132,6 @@ export const WS_BLOCKED_CHANNELS: ReadonlySet<string> = new Set([
   'server:setPassword',    // credential control-plane: remote must not rotate the session secret
   'server:start',
   'server:stop',
-  'settings:set',          // security-sensitive config mutation must stay local
 ])
 
 export class OriginDeniedError extends Error {
