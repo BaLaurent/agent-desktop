@@ -32,6 +32,7 @@ export interface AIOverrides {
   agent_personality?: string      // free text personality directive
   agent_language?: string         // free text language directive
   webhook_completionUrl?: string  // URL to POST on message completion
+  ai_showThinking?: string        // 'true' | 'false' — display extended thinking blocks in assistant bubbles (content is always persisted)
 }
 
 export interface Conversation {
@@ -314,7 +315,7 @@ export type UpdateStatus =
 // ─── IPC / Runtime Types ──────────────────────────────────────
 
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_input' | 'tool_result' | 'tool_approval' | 'ask_user' | 'plan_approval_request' | 'mcp_status' | 'system_message' | 'task_notification' | 'retry' | 'error' | 'done'
+  type: 'text' | 'thinking' | 'tool_start' | 'tool_input' | 'tool_result' | 'tool_approval' | 'ask_user' | 'plan_approval_request' | 'mcp_status' | 'system_message' | 'task_notification' | 'retry' | 'error' | 'done'
   content?: string
   toolName?: string
   toolId?: string
@@ -337,6 +338,7 @@ export interface StreamChunk {
 
 export type StreamPart =
   | { type: 'text'; content: string }
+  | { type: 'thinking'; content: string }
   | { type: 'tool'; name: string; id: string; status: 'running' | 'done'; summary?: string; input?: Record<string, unknown>; output?: string }
   | { type: 'tool_approval'; requestId: string; toolName: string; toolInput: Record<string, unknown> }
   | { type: 'ask_user'; requestId: string; questions: AskUserQuestion[] }

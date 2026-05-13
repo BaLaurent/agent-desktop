@@ -2,12 +2,36 @@ import { useState, useCallback, useMemo } from 'react'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import { ToolCallsSection } from '../ToolCallsSection'
 import { BubbleActions } from './BubbleActions'
+import { ThinkingBlock } from './ThinkingBlock'
 import { useAgentDisplayName } from '../../../hooks/useAgentDisplayName'
 import { useMobileMode } from '../../../hooks/useMobileMode'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { useTtsStore } from '../../../stores/ttsStore'
 import { parseDbTimestamp } from '../../../utils/dbTime'
 import type { Message, CreateScheduledTask } from '../../../../shared/types'
+
+type Segment = { kind: 'thinking' | 'text'; text: string }
+
+/** Split content into ordered segments preserving interleaved order.
+ *  Caller must have already extracted <hook-system-message> blocks. */
+function splitThinkingSegments(content: string): Segment[] {
+  const segments: Segment[] = []
+  const re = /<thinking>([\s\S]*?)<\/thinking>\n?/g
+  let lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(content)) !== null) {
+    if (m.index > lastIndex) {
+      segments.push({ kind: 'text', text: content.slice(lastIndex, m.index) })
+    }
+    segments.push({ kind: 'thinking', text: m[1] })
+    lastIndex = re.lastIndex
+  }
+  if (lastIndex < content.length) {
+    segments.push({ kind: 'text', text: content.slice(lastIndex) })
+  }
+  // Drop empty text segments — thinking tags often touch surrounding text
+  return segments.filter((s) => s.kind === 'thinking' || s.text.length > 0)
+}
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now()
@@ -52,6 +76,7 @@ export function AssistantBubble({
   const mobile = useMobileMode()
   const ttsProvider = useSettingsStore((s) => s.settings.tts_provider)
   const globalTtsResponseMode = useSettingsStore((s) => s.settings.tts_responseMode)
+  const showThinking = useSettingsStore((s) => s.settings.ai_showThinking) === 'true'
   const speakingMessageId = useTtsStore((s) => s.speakingMessageId)
   const { playMessage, stopPlayback } = useTtsStore()
   const agentName = useAgentDisplayName(effectiveAgentName, effectiveSdkBackend)
@@ -60,22 +85,24 @@ export function AssistantBubble({
   const ttsMode = effectiveTtsResponseMode ?? globalTtsResponseMode
   const showTtsButton = !!ttsProvider && ttsProvider !== 'off' && !!ttsMode && ttsMode !== 'off'
 
-  const { hookMessages, cleanContent } = useMemo(() => {
+  const { hookMessages, segments, plainTextContent } = useMemo(() => {
     const hooks: string[] = []
     const cleaned = message.content.replace(
       /<hook-system-message>([\s\S]*?)<\/hook-system-message>\n?/g,
       (_, content: string) => { hooks.push(content); return '' },
-    )
-    return { hookMessages: hooks, cleanContent: cleaned.replace(/^\n+/, '') }
+    ).replace(/^\n+/, '')
+    const segs = splitThinkingSegments(cleaned)
+    const plain = segs.filter((s) => s.kind === 'text').map((s) => s.text).join('').trim()
+    return { hookMessages: hooks, segments: segs, plainTextContent: plain }
   }, [message.content])
 
   const handleCopy = useCallback(async (e?: React.MouseEvent) => {
-    await navigator.clipboard.writeText(cleanContent)
+    await navigator.clipboard.writeText(plainTextContent)
     const x = e?.clientX ?? 0
     const y = e?.clientY ?? 0
     setCopiedPos({ x, y })
     setTimeout(() => setCopiedPos(null), 1500)
-  }, [cleanContent])
+  }, [plainTextContent])
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -125,7 +152,11 @@ export function AssistantBubble({
               <MarkdownRenderer content={hm} />
             </div>
           ))}
-          <MarkdownRenderer content={cleanContent} />
+          {segments.map((seg, i) =>
+            seg.kind === 'thinking'
+              ? (showThinking ? <ThinkingBlock key={`seg_${i}`} content={seg.text} /> : null)
+              : <MarkdownRenderer key={`seg_${i}`} content={seg.text} />,
+          )}
           {message.tool_calls && (
             <ToolCallsSection toolCallsJson={message.tool_calls} />
           )}
@@ -149,7 +180,7 @@ export function AssistantBubble({
           isEditing={false}
           onCopy={handleCopy}
           copiedPos={copiedPos}
-          onPlayTts={() => playMessage(message.id, cleanContent, message.conversation_id)}
+          onPlayTts={() => playMessage(message.id, plainTextContent, message.conversation_id)}
           onStopTts={stopPlayback}
           onRegenerate={onRegenerate}
           onFork={onFork}

@@ -120,9 +120,15 @@ export function buildMessageHistory(db: SqlJsAdapter, conversationId: number, li
 
   const rows = (db as any).prepare(query).all(...params) as Pick<Message, 'role' | 'content'>[]
 
+  // Strip <thinking> blocks from past assistant turns. They are persisted for
+  // user-side replay only; the SDK cannot replay them without the matching
+  // signature_delta (not captured), and feeding them back as raw text would
+  // confuse the model about the shape of its own past output.
   const result = rows.reverse().map((row) => ({
     role: row.role,
-    content: row.content,
+    content: row.role === 'assistant'
+      ? row.content.replace(/<thinking>[\s\S]*?<\/thinking>\n?/g, '')
+      : row.content,
   }))
 
   if (conv?.compact_summary) {
@@ -428,6 +434,7 @@ async function generateConversationTitle(
 ): Promise<void> {
   const cleanAssistant = assistantContent
     .replace(/<hook-system-message>[\s\S]*?<\/hook-system-message>\n?/g, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>\n?/g, '')
     .trimStart()
   const userSnippet = userContent.slice(0, 200)
   const assistantSnippet = cleanAssistant.slice(0, 200)
@@ -479,7 +486,12 @@ export async function compactConversation(
   }
 
   const conversationText = history
-    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .map((m) => {
+      const stripped = m.role === 'assistant'
+        ? m.content.replace(/<thinking>[\s\S]*?<\/thinking>\n?/g, '')
+        : m.content
+      return `${m.role === 'user' ? 'User' : 'Assistant'}: ${stripped}`
+    })
     .join('\n\n')
 
   const aiSettings = getAISettings(db, conversationId, {

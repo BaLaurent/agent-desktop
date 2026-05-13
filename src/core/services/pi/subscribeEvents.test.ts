@@ -96,6 +96,54 @@ describe('subscribeEvents — message_update / text_delta', () => {
   })
 })
 
+describe('subscribeEvents — thinking events', () => {
+  beforeEach(() => mockSendChunk.mockClear())
+
+  it('wraps thinking_start/_delta/_end as <thinking>…</thinking> in fullContent and emits thinking chunks', () => {
+    const session = makeSession()
+    const acc = makeAccumulator()
+    subscribeEvents({ session, accumulator: acc, convExtra })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_start' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'let me ' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'think' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_end' } })
+    expect(acc.fullContent).toBe('<thinking>let me think</thinking>\n')
+    const thinkingCalls = mockSendChunk.mock.calls.filter((c) => c[0] === 'thinking')
+    expect(thinkingCalls.map((c) => c[1])).toEqual(['let me ', 'think'])
+  })
+
+  it('preserves interleaved text/thinking order in fullContent', () => {
+    const session = makeSession()
+    const acc = makeAccumulator()
+    subscribeEvents({ session, accumulator: acc, convExtra })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'before. ' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_start' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'hmm' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_end' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'after.' } })
+    expect(acc.fullContent).toBe('before. <thinking>hmm</thinking>\nafter.')
+  })
+
+  it('opens <thinking> defensively when thinking_delta arrives before thinking_start', () => {
+    const session = makeSession()
+    const acc = makeAccumulator()
+    subscribeEvents({ session, accumulator: acc, convExtra })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'orphan' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_end' } })
+    expect(acc.fullContent).toBe('<thinking>orphan</thinking>\n')
+  })
+
+  it('does NOT emit chunk for empty thinking_delta', () => {
+    const session = makeSession()
+    const acc = makeAccumulator()
+    subscribeEvents({ session, accumulator: acc, convExtra })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_start' } })
+    session.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '' } })
+    const thinkingCalls = mockSendChunk.mock.calls.filter((c) => c[0] === 'thinking')
+    expect(thinkingCalls).toHaveLength(0)
+  })
+})
+
 describe('subscribeEvents — tool_execution_start', () => {
   beforeEach(() => mockSendChunk.mockClear())
 

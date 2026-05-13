@@ -11,6 +11,7 @@ const DEFAULTS: Record<string, string> = {
   ai_contextTokenCounter: 'local',
   ai_maxTurns: '1',
   ai_maxThinkingTokens: '0',
+  ai_showThinking: 'false',
   ai_maxBudgetUsd: '0',
   ai_permissionMode: 'bypassPermissions',
   ai_requirePlanApproval: 'true',

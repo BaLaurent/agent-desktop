@@ -616,6 +616,20 @@ function handleText(chunk: StreamChunk, ctx: ListenerCtx): void {
   commitParts(ctx, parts, prevText + chunk.content)
 }
 
+function handleThinking(chunk: StreamChunk, ctx: ListenerCtx): void {
+  if (!chunk.content) return
+  const { bufferKey } = ctx
+  const parts = [...(streamBuffersMap.get(bufferKey) || [])]
+  const lastPart = parts[parts.length - 1]
+  if (lastPart && lastPart.type === 'thinking') {
+    parts[parts.length - 1] = { type: 'thinking', content: lastPart.content + chunk.content }
+  } else {
+    parts.push({ type: 'thinking', content: chunk.content })
+  }
+  // streamingContent (= text-only) is unchanged — thinking lives in streamParts only.
+  commitParts(ctx, parts)
+}
+
 function handleToolStart(chunk: StreamChunk, ctx: ListenerCtx): void {
   const parts = [...(streamBuffersMap.get(ctx.bufferKey) || [])]
   const toolName = chunk.toolName || chunk.content || 'tool'
@@ -820,6 +834,7 @@ function handleError(chunk: StreamChunk, ctx: ListenerCtx): void {
 
 const chunkHandlers: Partial<Record<StreamChunk['type'], ChunkHandler>> = {
   text: handleText,
+  thinking: handleThinking,
   tool_start: handleToolStart,
   tool_input: handleToolInput,
   tool_result: handleToolResult,

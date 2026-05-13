@@ -2,6 +2,7 @@ import { shortenModelName } from '../../../../shared/constants'
 import { tint } from '../../../utils/colorMix'
 import { SettingRow } from '../../shared/SettingRow'
 import { SearchableModelPicker } from '../../shared/SearchableModelPicker'
+import { ToggleRow } from './skills/ToggleRow'
 
 export interface ModelOption {
   value: string
@@ -18,6 +19,7 @@ export interface ModelSectionProps {
   isClaudeBackend: boolean
   maxTurns: string
   maxThinkingTokens: string
+  showThinking: string
   maxBudgetUsd: string
   compactModel: string
   titleModel: string
@@ -29,6 +31,7 @@ export interface ModelSectionProps {
   onContextTokenCounterChange: (value: string) => void
   onMaxTurnsChange: (value: string) => void
   onMaxThinkingTokensChange: (value: string) => void
+  onShowThinkingChange: (value: string) => void
   onMaxBudgetUsdChange: (value: string) => void
   onCompactModelChange: (value: string) => void
   onTitleModelChange: (value: string) => void
@@ -49,6 +52,7 @@ export function ModelSection(props: ModelSectionProps) {
     isClaudeBackend,
     maxTurns,
     maxThinkingTokens,
+    showThinking,
     maxBudgetUsd,
     compactModel,
     titleModel,
@@ -60,6 +64,7 @@ export function ModelSection(props: ModelSectionProps) {
     onContextTokenCounterChange,
     onMaxTurnsChange,
     onMaxThinkingTokensChange,
+    onShowThinkingChange,
     onMaxBudgetUsdChange,
     onCompactModelChange,
     onTitleModelChange,
@@ -212,6 +217,14 @@ export function ModelSection(props: ModelSectionProps) {
           aria-label="Maximum thinking tokens"
         />
       </SettingRow>
+
+      <ToggleRow
+        label="Show Reasoning"
+        description="Display extended thinking blocks in assistant messages. Always persisted to DB; toggle controls rendering only."
+        checked={showThinking === 'true'}
+        ariaLabel="Toggle reasoning display"
+        onChange={() => onShowThinkingChange(showThinking === 'true' ? 'false' : 'true')}
+      />
 
       <SettingRow label="Max Budget (USD)" description="Cost limit per request. 0 = unlimited (0-10).">
         <input
