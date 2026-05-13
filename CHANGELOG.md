@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.16.0] - 2026-05-13
+
+### New Features
+- **Assistant thinking blocks persisted** — extended-thinking output is now stored alongside assistant messages and rendered back on conversation reload (collapsible block, same UX as a live stream)
+- **Structured logger** — new `createLogger(name)` API in `core/utils/logger.ts` with `trace/debug/info/warn/error` levels and `child()` for sub-loggers; 240+ `console.*` call sites migrated; renderer auto-falls back to `console` when `process.stdout` is undefined
+
+### Bug Fixes
+- **Web shim** — `settings:set` no longer blocked over WebSocket; git namespace restored so remote sessions can hit git IPC
+- **UserBubble** — TTS button removed from user messages (only assistant text is speakable)
+- **Slash dropdown** — popup now stretches to its parent width so command descriptions truncate cleanly instead of overflowing
+- **Picker** — new `align` prop on the popup so the status line picker stops overflowing the right edge
+
+### Under the Hood (Fallow Session 2 — Grade B → A)
+- **Zero circular dependencies in `src/main/`** — introduced `mainContext.ts` as the DI seam; services import `getMainWindow` from `'../mainContext'` instead of `'../index'`. All 20 cycles broken, backward-compat shim kept on `index.ts`
+- **Module hotspot salvages** — split MessageBubble (CRAP 2352 → dispatchers), ToolUseBlock (1122 → 30), ansiToHtml (1056 → 42), cwdRestrictionHook (1122 → 210), createSession (1190 → <30), scheduler.update (812 → 56), enrichEnvironment / OverrideFormFields / SkillsPromptSection (1200+ → <500), and ~10 more
+- **Dead code purge** — liquidated unused exports/types/members, dropped orphan ports barrel, aligned dependencies with actual usage
+- **Health score** — fallow `health_score` 81.8 (B) → **93.0 (A)**
+
+### Tests
+- +290 tests on handler hotspots (Phase 3 coverage push)
+- Total: **3547 tests** (2339 main + 1208 renderer) — all green
+
+### Install
+- Linux — AppImage / .deb (x86_64 + arm64)
+- Windows — NSIS installer / portable .exe
+- Auto-update enabled on AppImage + NSIS
+
+---
+
 ## [0.7.0] - 2026-02-25
 
 ### New Features
