@@ -28,6 +28,7 @@ import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
 import { buildSessionConfig } from './pi/buildSessionConfig'
 import { buildCustomTools } from './pi/buildCustomTools'
 import { runSession } from './pi/runSession'
+import { resolvePIModelObject } from './pi/resolveModel'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('streamingPI')
@@ -315,6 +316,23 @@ export async function streamMessagePI(
       aiSettings?.cwd || process.cwd(),
     )
 
+    // Resolve the user's model id (e.g. "kilo/kilo-auto/free") into the
+    // Model<any> object PI's createAgentSession actually needs. Surface
+    // resolution failures explicitly — the SDK silently falls back to its
+    // default model otherwise, which historically masked the real cause
+    // behind misleading "OAuth forbidden / no API key" errors.
+    let resolvedModel: unknown | undefined
+    try {
+      resolvedModel = await resolvePIModelObject(
+        pi as Parameters<typeof resolvePIModelObject>[0],
+        aiSettings?.model,
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      sendChunk('error', `Model resolution failed: ${msg}`, convExtra)
+      throw err
+    }
+
     aborted = await runSession({
       pi,
       cwd: aiSettings?.cwd || process.cwd(),
@@ -330,6 +348,10 @@ export async function streamMessagePI(
       convKey,
       convExtra,
       accumulator,
+      // Resolved Model<any> object — the SDK silently ignores string ids
+      // and falls back to its default model. resolvePIModelObject mirrors
+      // exactly what the pi-coding-agent CLI does internally.
+      model: resolvedModel,
     })
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort'))) {

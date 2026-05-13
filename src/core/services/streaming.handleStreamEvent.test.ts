@@ -322,15 +322,27 @@ describe('handleStreamEventMessage (via one-shot streamMessage)', () => {
     expect(chunksOf('tool_input')).toHaveLength(0)
   })
 
-  it('ignores content_block_delta with thinking delta.type (treated as unknown here)', async () => {
+  it('forwards thinking_delta with thinking field as a "thinking" chunk', async () => {
     await runOneShot(
       streamEvents({
         type: 'content_block_delta',
-        delta: { type: 'thinking_delta', text: 'pondering' },
+        delta: { type: 'thinking_delta', thinking: 'pondering' },
       }),
     )
-    const nonEmpty = chunksOf('text').filter((c) => c.payload.content !== '')
-    expect(nonEmpty).toHaveLength(0)
+    const thinking = chunksOf('thinking').filter((c) => c.payload.content === 'pondering')
+    expect(thinking).toHaveLength(1)
+    const nonEmptyText = chunksOf('text').filter((c) => c.payload.content !== '')
+    expect(nonEmptyText).toHaveLength(0)
+  })
+
+  it('ignores thinking_delta with empty thinking field', async () => {
+    await runOneShot(
+      streamEvents({
+        type: 'content_block_delta',
+        delta: { type: 'thinking_delta', thinking: '' },
+      }),
+    )
+    expect(chunksOf('thinking')).toHaveLength(0)
   })
 
   it('ignores content_block_delta with no delta field', async () => {
@@ -359,6 +371,48 @@ describe('handleStreamEventMessage (via one-shot streamMessage)', () => {
     expect(nonEmptyText.map((c) => c.payload.content)).toEqual(['thinking… ', 'done.'])
     expect(chunksOf('tool_start')).toHaveLength(1)
     expect(chunksOf('tool_input')).toHaveLength(1)
+  })
+
+  it('preserves interleaved text/thinking order and wraps thinking in <thinking> tags', async () => {
+    mockQuery.mockReturnValueOnce(makeAsyncIterable(
+      streamEvents(
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'before. ' } },
+        { type: 'content_block_start', content_block: { type: 'thinking' } },
+        { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'let me ' } },
+        { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'think...' } },
+        { type: 'content_block_stop' },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'after.' } },
+      ),
+    ))
+    const result = await streamMessage(
+      [{ role: 'user', content: 'hi' }], undefined, undefined, undefined,
+    )
+    expect(result.content).toBe('before. <thinking>let me think...</thinking>\nafter.')
+    // Chunk order matches event order
+    const ordered = captured
+      .filter((c) => c.payload.type === 'text' || c.payload.type === 'thinking')
+      .filter((c) => c.payload.content !== '')
+      .map((c) => ({ type: c.payload.type, content: c.payload.content }))
+    expect(ordered).toEqual([
+      { type: 'text', content: 'before. ' },
+      { type: 'thinking', content: 'let me ' },
+      { type: 'thinking', content: 'think...' },
+      { type: 'text', content: 'after.' },
+    ])
+  })
+
+  it('closes <thinking> tag even if content_block_stop arrives without a matching tool', async () => {
+    mockQuery.mockReturnValueOnce(makeAsyncIterable(
+      streamEvents(
+        { type: 'content_block_start', content_block: { type: 'thinking' } },
+        { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'reflect' } },
+        { type: 'content_block_stop' },
+      ),
+    ))
+    const result = await streamMessage(
+      [{ role: 'user', content: 'hi' }], undefined, undefined, undefined,
+    )
+    expect(result.content).toBe('<thinking>reflect</thinking>\n')
   })
 
   it('handles two consecutive tool blocks with separate ids/inputs', async () => {

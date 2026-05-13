@@ -161,6 +161,7 @@ export const AI_OVERRIDE_KEYS: (keyof AIOverrides)[] = [
   'ai_model',
   'ai_maxTurns',
   'ai_maxThinkingTokens',
+  'ai_showThinking',
   'ai_maxBudgetUsd',
   'ai_permissionMode',
   'ai_requirePlanApproval',

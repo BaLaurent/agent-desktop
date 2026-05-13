@@ -53,11 +53,17 @@ export function buildQueryOptions({
   const nodeExecutable = findBinaryInPath('node') ?? 'node'
   const claudeExecutable = findBinaryInPath('claude')
 
+  const thinkingBudget = aiSettings?.maxThinkingTokens
   const queryOptions: Record<string, unknown> = {
     model: aiSettings?.model || undefined,
     systemPrompt: systemPrompt || undefined,
     maxTurns: aiSettings?.maxTurns || undefined,
-    maxThinkingTokens: aiSettings?.maxThinkingTokens || undefined,
+    // Prefer the non-deprecated `thinking` config. The SDK's `maxThinkingTokens`
+    // is treated as on/off on Opus 4.6 — explicit budgetTokens is more reliable.
+    ...(thinkingBudget && thinkingBudget > 0
+      ? { thinking: { type: 'enabled', budgetTokens: thinkingBudget } }
+      : {}),
+    maxThinkingTokens: thinkingBudget || undefined,
     maxBudgetUsd: aiSettings?.maxBudgetUsd || undefined,
     cwd: aiSettings?.cwd || undefined,
     includePartialMessages: true,

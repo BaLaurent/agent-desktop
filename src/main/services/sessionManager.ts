@@ -54,6 +54,8 @@ interface TurnState {
   toolCallsMap: Map<string, ToolCall>
   currentToolBlockId: string | null
   askUserToolIds: Set<string>
+  /** True between a content_block_start(thinking) and its matching content_block_stop. */
+  thinkingBlockActive: boolean
   lastStopReason?: string
   lastResultSubtype?: string
   /** Usage reported on the most recent SDK result message */
@@ -460,12 +462,28 @@ function handleStreamEvent(
       turn.toolCallsMap.set(toolId, { id: toolId, name: toolName, input: '{}', output: '', status: 'done' })
     }
   } else if (
+    event?.type === 'content_block_start' &&
+    event.content_block?.type === 'thinking'
+  ) {
+    // Open a thinking block. Wrap its deltas in <thinking>…</thinking> inside
+    // turn.content (persisted to messages.content) so the renderer can split
+    // segments back out while preserving interleaved order.
+    turn.thinkingBlockActive = true
+    turn.content += '<thinking>'
+  } else if (
     event?.type === 'content_block_delta' &&
     event.delta?.type === 'text_delta' &&
     event.delta.text
   ) {
     turn.content += event.delta.text
     sendOrBuffer(session, 'text', event.delta.text, convExtra)
+  } else if (
+    event?.type === 'content_block_delta' &&
+    event.delta?.type === 'thinking_delta' &&
+    event.delta.thinking
+  ) {
+    turn.content += event.delta.thinking
+    sendOrBuffer(session, 'thinking', event.delta.thinking, convExtra)
   }
 
   if (
@@ -475,6 +493,13 @@ function handleStreamEvent(
     if (turn.currentToolBlockId) {
       const existing = turn.toolInputAccum.get(turn.currentToolBlockId) || ''
       turn.toolInputAccum.set(turn.currentToolBlockId, existing + (event.delta.partial_json || ''))
+    }
+  }
+
+  if (event?.type === 'content_block_stop') {
+    if (turn.thinkingBlockActive) {
+      turn.content += '</thinking>\n'
+      turn.thinkingBlockActive = false
     }
   }
 
@@ -913,6 +938,7 @@ export async function sendTurn(
       toolCallsMap: new Map(),
       currentToolBlockId: null,
       askUserToolIds: new Set(),
+      thinkingBlockActive: false,
       pendingTaskCount: 0,
       turnEndDeferred: false,
       pollInterval: null,

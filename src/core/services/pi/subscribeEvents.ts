@@ -7,7 +7,10 @@
 // hooks are asymmetric.
 
 import { sendChunk } from '../streaming'
+import { createLogger } from '../../utils/logger'
 import type { ToolCall } from '../../../shared/types'
+
+const log = createLogger('pi.subscribeEvents')
 
 export interface EventAccumulator {
   fullContent: string
@@ -24,8 +27,28 @@ export interface SubscribeEventsOptions {
 
 export function subscribeEvents(opts: SubscribeEventsOptions): () => void {
   const { session, accumulator, convExtra } = opts
+  // PI emits thinking_start/_delta/_end as a sequence; we wrap deltas in
+  // <thinking>…</thinking> inside fullContent so the renderer can split it
+  // back out preserving interleaved text↔thinking order (same format as the
+  // Claude SDK path in streaming.ts).
+  let thinkingOpen = false
+  // Both message_end and turn_end carry the same errorMessage when a provider
+  // call fails — emit the error chunk only once per session.
+  let emittedError = false
 
   return session.subscribe((event) => {
+    try {
+      handleEvent(event)
+    } catch (err) {
+      // Defensive: a thrown handler can otherwise propagate into the SDK's
+      // event loop and silently break the session. Log and skip the event.
+      log.error('listener threw — event will be skipped', err, {
+        eventType: (event as { type?: string } | null)?.type,
+      })
+    }
+  })
+
+  function handleEvent(event: unknown): void {
     const ev = event as { type: string }
 
     if (ev.type === 'message_update') {
@@ -33,6 +56,36 @@ export function subscribeEvents(opts: SubscribeEventsOptions): () => void {
       if (ame?.type === 'text_delta' && ame.delta) {
         accumulator.fullContent += ame.delta
         sendChunk('text', ame.delta, convExtra)
+      } else if (ame?.type === 'thinking_start') {
+        if (!thinkingOpen) {
+          accumulator.fullContent += '<thinking>'
+          thinkingOpen = true
+        }
+      } else if (ame?.type === 'thinking_delta' && ame.delta) {
+        if (!thinkingOpen) {
+          // Defensive: some providers may skip thinking_start
+          accumulator.fullContent += '<thinking>'
+          thinkingOpen = true
+        }
+        accumulator.fullContent += ame.delta
+        sendChunk('thinking', ame.delta, convExtra)
+      } else if (ame?.type === 'thinking_end') {
+        if (thinkingOpen) {
+          accumulator.fullContent += '</thinking>\n'
+          thinkingOpen = false
+        }
+      }
+    } else if (ev.type === 'message_end' || ev.type === 'turn_end') {
+      // PI signals provider errors via stopReason === 'error' + errorMessage,
+      // NOT via thrown exceptions. Without this branch the failure would be
+      // completely silent from the user's POV (empty assistant bubble).
+      const m = (event as { message?: { role?: string; stopReason?: string; errorMessage?: string } }).message
+      if (m?.role === 'assistant' && m.stopReason === 'error' && m.errorMessage) {
+        // Only emit once — both message_end and turn_end carry the same message.
+        if (!emittedError) {
+          emittedError = true
+          sendChunk('error', m.errorMessage, convExtra)
+        }
       }
     } else if (ev.type === 'tool_execution_start') {
       const te = event as { toolCallId: string; toolName: string; args: unknown }
@@ -80,6 +133,7 @@ export function subscribeEvents(opts: SubscribeEventsOptions): () => void {
         ...convExtra,
       })
     }
-    // agent_start, agent_end, turn_start, turn_end, message_start, message_end → no-op
-  })
+    // agent_start, agent_end, turn_start, message_start → no-op
+    // message_end / turn_end handled above for provider-error propagation.
+  }
 }

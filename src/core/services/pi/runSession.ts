@@ -31,6 +31,11 @@ interface RunSessionOptions {
   convKey: number
   convExtra: Record<string, string | number>
   accumulator: { fullContent: string; toolCallsMap: Map<string, ToolCall> }
+  /** Resolved PI Model<any> object (NOT a string id). The SDK silently
+   *  ignores string ids and falls back to its default model, which surfaces
+   *  as misleading "no API key" / "OAuth forbidden" errors. Resolve via
+   *  resolveModel.ts before calling runSession. Undefined = use SDK default. */
+  model?: unknown
 }
 
 interface PiSession {
@@ -58,6 +63,7 @@ export async function runSession(opts: RunSessionOptions): Promise<boolean> {
     convKey,
     convExtra,
     accumulator,
+    model,
   } = opts
 
   const { session } = await pi.createAgentSession({
@@ -67,6 +73,8 @@ export async function runSession(opts: RunSessionOptions): Promise<boolean> {
     tools,
     customTools,
     resourceLoader,
+    // Only forward when explicitly set — keeps PI's "first available" fallback intact.
+    ...(model ? { model } : {}),
   } as Record<string, unknown>)
   persistAfterCreate()
 

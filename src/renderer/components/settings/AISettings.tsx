@@ -140,6 +140,7 @@ export function AISettings() {
     contextTokenCounter: bindSetter(setSetting, 'ai_contextTokenCounter'),
     maxTurns: bindSetter(setSetting, 'ai_maxTurns'),
     maxThinkingTokens: bindSetter(setSetting, 'ai_maxThinkingTokens'),
+    showThinking: bindSetter(setSetting, 'ai_showThinking'),
     maxBudgetUsd: bindSetter(setSetting, 'ai_maxBudgetUsd'),
     compactModel: bindSetter(setSetting, 'ai_compactModel'),
     titleModel: bindSetter(setSetting, 'ai_titleModel'),
@@ -194,6 +195,7 @@ export function AISettings() {
         isClaudeBackend={isClaudeBackend}
         maxTurns={get('ai_maxTurns')}
         maxThinkingTokens={get('ai_maxThinkingTokens')}
+        showThinking={get('ai_showThinking')}
         maxBudgetUsd={get('ai_maxBudgetUsd')}
         compactModel={get('ai_compactModel')}
         titleModel={get('ai_titleModel')}
@@ -205,6 +207,7 @@ export function AISettings() {
         onContextTokenCounterChange={setters.contextTokenCounter}
         onMaxTurnsChange={setters.maxTurns}
         onMaxThinkingTokensChange={setters.maxThinkingTokens}
+        onShowThinkingChange={setters.showThinking}
         onMaxBudgetUsdChange={setters.maxBudgetUsd}
         onCompactModelChange={setters.compactModel}
         onTitleModelChange={setters.titleModel}

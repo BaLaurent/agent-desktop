@@ -5,8 +5,10 @@ import { ToolApprovalBlock } from './ToolApprovalBlock'
 import { PlanApprovalBlock } from './PlanApprovalBlock'
 import { AskUserBlock } from './AskUserBlock'
 import { McpStatusBlock } from './McpStatusBlock'
+import { ThinkingBlock } from './bubble/ThinkingBlock'
 import { groupStreamParts } from '../../utils/groupStreamParts'
 import { useAgentDisplayName } from '../../hooks/useAgentDisplayName'
+import { useSettingsStore } from '../../stores/settingsStore'
 import type { StreamPart } from '../../../shared/types'
 
 interface StreamingIndicatorProps {
@@ -19,6 +21,7 @@ interface StreamingIndicatorProps {
 export function StreamingIndicator({ streamParts, onStop, effectiveAgentName, effectiveSdkBackend }: StreamingIndicatorProps) {
   const hasContent = streamParts.length > 0
   const agentName = useAgentDisplayName(effectiveAgentName, effectiveSdkBackend)
+  const showThinking = useSettingsStore((s) => s.settings.ai_showThinking) === 'true'
 
   return (
     <div className="flex justify-start mb-4">
@@ -44,6 +47,9 @@ export function StreamingIndicator({ streamParts, onStop, effectiveAgentName, ef
               const part = grouped.part
               if (part.type === 'text') {
                 return <MarkdownRenderer key={`text_${idx}`} content={part.content} />
+              }
+              if (part.type === 'thinking') {
+                return showThinking ? <ThinkingBlock key={`think_${idx}`} content={part.content} /> : null
               }
               if (part.type === 'tool_approval') {
                 return <ToolApprovalBlock key={part.requestId} approval={part} />

@@ -337,6 +337,8 @@ interface OneShotState {
   toolCallsMap: Map<string, ToolCall>
   currentToolBlockId: string | null
   askUserToolIds: Set<string>
+  /** True between a content_block_start(thinking) and its matching content_block_stop. */
+  thinkingBlockActive: boolean
   lastStopReason: string | undefined
   lastResultSubtype: string | undefined
 }
@@ -399,11 +401,18 @@ function buildOneShotQueryOptions(
   // is the canonical install path on Linux.
   const claudeExecutable = findBinaryInPath('claude')
 
+  const thinkingBudget = aiSettings?.maxThinkingTokens
   const queryOptions: Record<string, unknown> = {
     model: aiSettings?.model || undefined,
     systemPrompt: systemPrompt || undefined,
     maxTurns: aiSettings?.maxTurns || undefined,
-    maxThinkingTokens: aiSettings?.maxThinkingTokens || undefined,
+    // Prefer the non-deprecated `thinking` config — `maxThinkingTokens` is
+    // on/off on Opus 4.6 and may not emit thinking content blocks on some
+    // model variants. Explicit budgetTokens guarantees the SDK emits them.
+    ...(thinkingBudget && thinkingBudget > 0
+      ? { thinking: { type: 'enabled', budgetTokens: thinkingBudget } }
+      : {}),
+    maxThinkingTokens: thinkingBudget || undefined,
     maxBudgetUsd: aiSettings?.maxBudgetUsd || undefined,
     cwd: aiSettings?.cwd || undefined,
     includePartialMessages: true,
@@ -473,12 +482,27 @@ function handleStreamEventMessage(
       state.toolCallsMap.set(toolId, { id: toolId, name: toolName, input: '{}', output: '', status: 'done' })
     }
   } else if (
+    event?.type === 'content_block_start' &&
+    event.content_block?.type === 'thinking'
+  ) {
+    // Open a thinking block. Wrap its deltas in <thinking>…</thinking> inside fullContent
+    // so the renderer can split segments back out while preserving interleaved order.
+    state.thinkingBlockActive = true
+    state.fullContent += '<thinking>'
+  } else if (
     event?.type === 'content_block_delta' &&
     event.delta?.type === 'text_delta' &&
     event.delta.text
   ) {
     state.fullContent += event.delta.text
     buffer.sendOrBuffer('text', event.delta.text, convExtra)
+  } else if (
+    event?.type === 'content_block_delta' &&
+    event.delta?.type === 'thinking_delta' &&
+    event.delta.thinking
+  ) {
+    state.fullContent += event.delta.thinking
+    buffer.sendOrBuffer('thinking', event.delta.thinking, convExtra)
   }
 
   if (
@@ -491,23 +515,29 @@ function handleStreamEventMessage(
     }
   }
 
-  if (event?.type === 'content_block_stop' && state.currentToolBlockId && state.toolInputAccum.has(state.currentToolBlockId)) {
-    if (state.askUserToolIds.has(state.currentToolBlockId)) {
-      // AskUserQuestion: skip tool_input chunk and toolCallsMap — handled via ask_user chunk
-      state.currentToolBlockId = null
-    } else {
-      const inputJson = state.toolInputAccum.get(state.currentToolBlockId) || '{}'
-      // Finalize input on the stub ToolCall
-      const existing = state.toolCallsMap.get(state.currentToolBlockId)
-      if (existing) {
-        state.toolCallsMap.set(state.currentToolBlockId, { ...existing, input: inputJson })
+  if (event?.type === 'content_block_stop') {
+    if (state.thinkingBlockActive) {
+      state.fullContent += '</thinking>\n'
+      state.thinkingBlockActive = false
+    }
+    if (state.currentToolBlockId && state.toolInputAccum.has(state.currentToolBlockId)) {
+      if (state.askUserToolIds.has(state.currentToolBlockId)) {
+        // AskUserQuestion: skip tool_input chunk and toolCallsMap — handled via ask_user chunk
+        state.currentToolBlockId = null
+      } else {
+        const inputJson = state.toolInputAccum.get(state.currentToolBlockId) || '{}'
+        // Finalize input on the stub ToolCall
+        const existing = state.toolCallsMap.get(state.currentToolBlockId)
+        if (existing) {
+          state.toolCallsMap.set(state.currentToolBlockId, { ...existing, input: inputJson })
+        }
+        buffer.sendOrBuffer('tool_input', undefined, {
+          toolId: state.currentToolBlockId,
+          toolInput: inputJson,
+          ...convExtra,
+        })
+        state.currentToolBlockId = null
       }
-      buffer.sendOrBuffer('tool_input', undefined, {
-        toolId: state.currentToolBlockId,
-        toolInput: inputJson,
-        ...convExtra,
-      })
-      state.currentToolBlockId = null
     }
   }
 }
@@ -606,6 +636,7 @@ function newOneShotState(): OneShotState {
     toolCallsMap: new Map(),
     currentToolBlockId: null,
     askUserToolIds: new Set(),
+    thinkingBlockActive: false,
     lastStopReason: undefined,
     lastResultSubtype: undefined,
   }
