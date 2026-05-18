@@ -487,4 +487,29 @@ describe('assembleAISettings', () => {
       expect(s.mcpServers?.['agent_scheduler']).toBeUndefined()
     })
   })
+
+  describe('cross-backend model mapping', () => {
+    it('maps a stored PI Haiku id to the Claude model when backend is Claude', () => {
+      setSetting(db, 'ai_model', 'anthropic/claude-3-5-haiku')
+      convId = makeConv(db)
+      const s = assembleAISettings(db as any, convId, { cwd: '/tmp' })
+      expect(s.model).toBe('claude-haiku-4-5-20251001')
+    })
+
+    it('falls back to the last native Claude selection for a non-mappable PI model', () => {
+      setSetting(db, 'ai_model', 'openai/gpt-4o')
+      setSetting(db, 'ai_lastModelByBackend', JSON.stringify({ 'claude-agent-sdk': 'claude-opus-4-7' }))
+      convId = makeConv(db)
+      const s = assembleAISettings(db as any, convId, { cwd: '/tmp' })
+      expect(s.model).toBe('claude-opus-4-7')
+      expect(s.lastModelByBackend).toEqual({ 'claude-agent-sdk': 'claude-opus-4-7' })
+    })
+
+    it('leaves a native Claude id untouched (idempotent)', () => {
+      setSetting(db, 'ai_model', 'claude-sonnet-4-6')
+      convId = makeConv(db)
+      const s = assembleAISettings(db as any, convId, { cwd: '/tmp' })
+      expect(s.model).toBe('claude-sonnet-4-6')
+    })
+  })
 })

@@ -71,6 +71,7 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   // AI behavior (global, not cascadable)
   'ai_compactModel',
   'ai_titleModel',
+  'ai_lastModelByBackend',
   // TTS settings (global, not cascadable)
   'tts_provider',
   'tts_piperUrl',

@@ -7,6 +7,7 @@ import {
   parseCustomModelContextLengths,
   type PIExtensionInfo,
 } from '../../../shared/constants'
+import { mapModelToBackend, parseLastModelByBackend } from '../../../core/services/modelBackendMap'
 import { useModelsStore } from '../../stores/modelsStore'
 import type { CwdWhitelistEntry, SlashCommand } from '../../../shared/types'
 import { IdentityBackendSection } from './ai/IdentityBackendSection'
@@ -44,6 +45,14 @@ export function AISettings() {
   const skills = get('ai_skills')
   const piExtensionsDir = get('pi_extensionsDir')
   const model = settings['ai_model'] || DEFAULT_MODEL
+  // What the picker shows: the id adapted to the active backend (the
+  // stored value is kept intact; only the displayed/effective selection
+  // is mapped, matching the runtime resolver). Internal logic below
+  // keeps using the raw `model`.
+  const lastModelByBackend = parseLastModelByBackend(settings['ai_lastModelByBackend'])
+  const mapForBackend = (id: string) =>
+    mapModelToBackend(id, sdkBackend, { lastModelByBackend }) ?? id
+  const displayModel = mapForBackend(model)
   const customModels = parseCustomModels(settings['ai_customModels'])
   const customModelContextLengths = parseCustomModelContextLengths(settings['ai_customModelContextLengths'])
   const cwdWhitelist = parseJsonArraySetting<CwdWhitelistEntry>(settings['hooks_cwdWhitelist'])
@@ -186,7 +195,7 @@ export function AISettings() {
       )}
 
       <ModelSection
-        model={model}
+        model={displayModel}
         customModel={customModel}
         customModels={customModels}
         customModelContextLengths={customModelContextLengths}
@@ -197,8 +206,8 @@ export function AISettings() {
         maxThinkingTokens={get('ai_maxThinkingTokens')}
         showThinking={get('ai_showThinking')}
         maxBudgetUsd={get('ai_maxBudgetUsd')}
-        compactModel={get('ai_compactModel')}
-        titleModel={get('ai_titleModel')}
+        compactModel={mapForBackend(get('ai_compactModel'))}
+        titleModel={mapForBackend(get('ai_titleModel'))}
         onModelChange={handleModelChange}
         onCustomModelInputChange={setters.customModel}
         onSaveCustomModel={saveCustomModel}

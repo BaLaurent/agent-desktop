@@ -10,6 +10,7 @@ import { getSetting } from '../utils/db'
 import { validateString, validatePositiveInt } from '../utils/validate'
 import { HAIKU_MODEL } from '../types/constants'
 import { loadAgentSDK } from '../services/anthropic'
+import { mapModelToBackend, parseLastModelByBackend } from '../services/modelBackendMap'
 import { injectApiKeyEnv } from '../services/streaming'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { createLogger } from '../utils/logger'
@@ -315,7 +316,13 @@ async function generateSummary(
     const sdk = await loadAgentSDK()
 
     let summary = ''
-    const summaryModel = aiSettings.ttsSummaryModel || HAIKU_MODEL
+    // TTS summary always runs through the Claude Agent SDK below, so the
+    // id must be in Claude convention regardless of the chat backend.
+    const summaryModel = mapModelToBackend(
+      aiSettings.ttsSummaryModel || HAIKU_MODEL,
+      'claude-agent-sdk',
+      { lastModelByBackend: parseLastModelByBackend(getSetting(db, 'ai_lastModelByBackend')) },
+    ) as string
     const agentQuery = sdk.query({
       prompt,
       options: {

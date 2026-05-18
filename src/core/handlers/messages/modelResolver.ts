@@ -17,6 +17,7 @@ import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import type { AISettings } from '../../services/streaming'
 import type { CwdWhitelistEntry } from '../../types/types'
 import { safeJsonParse } from '../../utils/json'
+import { mapModelToBackend, parseLastModelByBackend } from '../../services/modelBackendMap'
 import { applyCascadeOnto } from './cascade'
 import { mergeKnowledgeFoldersIntoWhitelist } from './knowledgeBase'
 import { loadMcpServersFromDb, filterDisabledMcpServers, injectSchedulerMcp } from './mcpServers'
@@ -48,7 +49,7 @@ const AI_SETTING_KEYS = [
   'settings_sharedAcrossBackends', 'ai_knowledgeFolders',
   'ai_skills', 'ai_skillsEnabled', 'ai_disabledSkills',
   'pi_disabledExtensions', 'pi_extensionsDir',
-  'ai_apiKey', 'ai_baseUrl', 'ai_customModel',
+  'ai_apiKey', 'ai_baseUrl', 'ai_customModel', 'ai_lastModelByBackend',
   'tts_responseMode', 'tts_autoWordLimit', 'tts_summaryPrompt', 'tts_summaryModel',
   'ai_compactModel', 'ai_titleModel',
   'webhook_completionUrl',
@@ -129,9 +130,16 @@ export function assembleAISettings(
     globalCustomModel,
   })
 
+  // Adapt the stored id to the active backend's naming convention.
+  // Non-destructive: `ai_model` stays as-is; only the effective value
+  // handed to the SDK is translated (reversible on backend switch).
+  const lastModelByBackend = parseLastModelByBackend(map['ai_lastModelByBackend'])
+  const mappedModel = mapModelToBackend(finalModel, sdkBackend, { lastModelByBackend })
+
   return {
     sdkBackend,
-    model: finalModel,
+    model: mappedModel,
+    lastModelByBackend,
     maxTurns: map['ai_maxTurns'] ? Number(map['ai_maxTurns']) : undefined,
     maxThinkingTokens: map['ai_maxThinkingTokens'] ? Number(map['ai_maxThinkingTokens']) : undefined,
     maxBudgetUsd: map['ai_maxBudgetUsd'] ? Number(map['ai_maxBudgetUsd']) : undefined,

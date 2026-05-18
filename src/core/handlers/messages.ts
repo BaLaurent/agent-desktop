@@ -6,6 +6,7 @@ import type { AISettings } from '../services/streaming'
 import type { Message, Attachment, ToolCall, ToolApprovalResponse, AskUserResponse } from '../types/types'
 import { abortStream, respondToApproval, sendChunk, notifyConversationUpdated, injectApiKeyEnv } from '../services/streaming'
 import { summarizeWithModel } from '../services/summarization'
+import { mapModelToBackend } from '../services/modelBackendMap'
 import { validateString, validatePositiveInt, validatePathSafe } from '../utils/validate'
 import { HAIKU_MODEL } from '../types/constants'
 import { mkdirSync } from 'fs'
@@ -444,7 +445,11 @@ async function generateConversationTitle(
     knowledgesDir: options.knowledgesDir,
     getSchedulerMcpConfig: options.getSchedulerMcpConfig,
   })
-  const effectiveModel = aiSettings.titleModel || aiSettings.model || HAIKU_MODEL
+  const effectiveModel = mapModelToBackend(
+    aiSettings.titleModel || aiSettings.model || HAIKU_MODEL,
+    aiSettings.sdkBackend,
+    { lastModelByBackend: aiSettings.lastModelByBackend },
+  ) as string
   const restoreEnv = injectApiKeyEnv(aiSettings.apiKey, aiSettings.baseUrl)
 
   try {
@@ -499,7 +504,11 @@ export async function compactConversation(
     knowledgesDir: options.knowledgesDir,
     getSchedulerMcpConfig: options.getSchedulerMcpConfig,
   })
-  const effectiveModel = aiSettings.compactModel || aiSettings.model || HAIKU_MODEL
+  const effectiveModel = mapModelToBackend(
+    aiSettings.compactModel || aiSettings.model || HAIKU_MODEL,
+    aiSettings.sdkBackend,
+    { lastModelByBackend: aiSettings.lastModelByBackend },
+  ) as string
   const restoreEnv = injectApiKeyEnv(aiSettings.apiKey, aiSettings.baseUrl)
 
   try {

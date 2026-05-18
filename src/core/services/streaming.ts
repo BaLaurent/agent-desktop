@@ -229,6 +229,8 @@ export interface AISettings {
   ttsSummaryModel?: string
   compactModel?: string
   titleModel?: string
+  /** Last natively-selected model per backend — fallback for cross-backend id mapping. */
+  lastModelByBackend?: Record<string, string>
   piDisabledExtensions?: string[]
   piExtensionsDir?: string
   webhookCompletionUrl?: string
