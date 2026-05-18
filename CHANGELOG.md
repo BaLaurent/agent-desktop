@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.16.1] - 2026-05-18
+
+### Bug Fixes
+- **Cross-backend model selection** — `ai_model` is shared across the Claude and PI backends, but the two SDKs use different id conventions (`claude-haiku-4-5-...` vs PI `provider/id`). Switching backend no longer silently falls back to the SDK default: the stored id is now translated by family (haiku/sonnet/opus) at the resolution seam. The setting is never rewritten, so switching back restores the original model. Non-mappable ids (e.g. `openai/gpt-4o` → Claude) fall back to the last natively-selected model for that backend, then the default
+- **`/compact` & auto-title routing** — the effective compact/title model is now mapped before the Claude-vs-PI routing decision, so a PI-style override no longer routes to the wrong SDK
+- **TTS summary** — summary model id is mapped to Claude convention (the TTS summary always runs through the Claude SDK)
+
+### Under the Hood
+- New pure `core/services/modelBackendMap.ts` module (no `electron` import; reused by the renderer picker); mapping applied at the single `assembleAISettings` seam; `ai_lastModelByBackend` written only on explicit native selection so the resolver stays a pure reader
+- Settings picker (incl. compact/title selects) now displays the effective mapped model for the active backend
+
+### Tests
+- +25 cases (model map module, resolver integration, settings handler tracking)
+- Total: **3628 tests** (2420 main + 1208 renderer) — all green
+
+### Install
+- Linux — AppImage / .deb (x86_64 + arm64)
+- Windows — NSIS installer / portable .exe
+- Auto-update enabled on AppImage + NSIS
+
+---
+
 ## [0.16.0] - 2026-05-13
 
 ### New Features
