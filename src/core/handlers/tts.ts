@@ -13,7 +13,7 @@ import { loadAgentSDK } from '../services/anthropic'
 import { mapModelToBackend, parseLastModelByBackend } from '../services/modelBackendMap'
 import { injectApiKeyEnv } from '../services/streaming'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('tts')
 
@@ -323,6 +323,9 @@ async function generateSummary(
       'claude-agent-sdk',
       { lastModelByBackend: parseLastModelByBackend(getSetting(db, 'ai_lastModelByBackend')) },
     ) as string
+    // Force the Claude Code CLI binary from PATH — see streaming.ts for
+    // the musl-vs-glibc rationale.
+    const claudeExecutable = findBinaryInPath('claude')
     const agentQuery = sdk.query({
       prompt,
       options: {
@@ -331,6 +334,7 @@ async function generateSummary(
         allowDangerouslySkipPermissions: true,
         permissionMode: 'bypassPermissions' as any,
         tools: [],
+        ...(claudeExecutable ? { pathToClaudeCodeExecutable: claudeExecutable } : {}),
       },
     })
 
@@ -357,7 +361,7 @@ async function generateSummary(
     log.warn('Summary generation returned empty, using truncated original')
     return truncatedContent
   } catch (err) {
-    log.warn('Summary generation failed, using truncated original', err)
+    log.warn('Summary generation failed, using truncated original', errToCtx(err))
     return truncatedContent
   } finally {
     restoreEnv?.()

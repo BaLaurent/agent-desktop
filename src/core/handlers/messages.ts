@@ -27,7 +27,7 @@ import {
   fireTts,
 } from './messages/streamPhases'
 import type { MessageStreamContext } from './messages/types'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('messages')
 
@@ -411,7 +411,7 @@ async function streamAndSave(
       // SDK session resume failure on the first attempt — clear the saved
       // session id and let the loop rebuild full history on attempt 2.
       if (attempt === 1 && ctx.sdkSessionId) {
-        log.warn('SDK session resume failed, retrying with full history', err)
+        log.warn('SDK session resume failed, retrying with full history', errToCtx(err))
         invalidateAllSessions(db, conversationId)
         options.onSessionInvalidate?.(conversationId)
         continue

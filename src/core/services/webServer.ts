@@ -16,7 +16,7 @@ import { cookieIsValid, type RouteContext } from './web/middleware'
 import { handleLoginPost, handleLogout, handleLoginGet } from './web/routes/login'
 import { handleShimJs, handleShortCode, handleStatic } from './web/routes/static'
 import { handleWsUpgrade } from './web/routes/wsUpgrade'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('webServer')
 
@@ -622,8 +622,7 @@ export async function startServer(port: number, options?: ServerStartOptions): P
     sslCert = result.cert
     serverProtocol = 'https'
   } catch (err) {
-    log.warn('SSL unavailable — falling back to HTTP (less secure)')
-    log.warn('SSL error detail', err)
+    log.warn('SSL unavailable — falling back to HTTP (less secure)', errToCtx(err))
     serverProtocol = 'http'
   }
 

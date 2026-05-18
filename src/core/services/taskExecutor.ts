@@ -3,7 +3,7 @@ import type { ScheduledTask, ToolCall } from '../types'
 import type { AISettings } from './streaming'
 import type { SchedulerService } from './scheduler'
 import { resolveVariablesWithReport } from './variableResolver'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('taskExecutor')
 
@@ -72,7 +72,7 @@ export async function executeTask(
       try {
         await ctx.compactConversation(task.conversation_id)
       } catch (err) {
-        log.warn('compact failed, falling back to clear', err instanceof Error ? err : new Error(String(err)), { taskName: task.name, taskId: task.id })
+        log.warn('compact failed, falling back to clear', errToCtx(err, { taskName: task.name, taskId: task.id }))
         ctx.clearConversation(task.conversation_id)
       }
     }

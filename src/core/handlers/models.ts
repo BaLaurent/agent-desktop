@@ -4,7 +4,7 @@ import * as os from 'os'
 import type { HandleRegistrar } from '../dispatch'
 import { MODEL_OPTIONS, shortenModelName } from '../types/constants'
 import { discoverPIModels } from '../../main/services/piModels'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('models')
 
@@ -91,7 +91,7 @@ async function loadModels(forceRefresh: boolean): Promise<ModelOption[]> {
     cache = { fetchedAt: now, models }
     return models
   } catch (err) {
-    log.warn('fetch failed, using static fallback', err)
+    log.warn('fetch failed, using static fallback', errToCtx(err))
     return cache?.models ?? STATIC_FALLBACK
   }
 }

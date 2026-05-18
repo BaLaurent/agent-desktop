@@ -11,7 +11,9 @@ const mockLog = vi.hoisted(() => ({
   child: vi.fn(),
 }))
 mockLog.child.mockReturnValue(mockLog)
-vi.mock('../utils/logger', () => ({
+// Keep real pure exports (errToCtx); only createLogger is faked for spying.
+vi.mock('../utils/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/logger')>()),
   createLogger: () => mockLog,
 }))
 

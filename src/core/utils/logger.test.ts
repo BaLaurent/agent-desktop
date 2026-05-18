@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { LogEntry, LogLevel } from './logger'
-import { createLogger, captureLogger } from './logger'
+import { createLogger, captureLogger, errToCtx } from './logger'
 
 /** A WritableStream stub that records every write and lets us toggle isTTY. */
 function makeStream(opts: { isTTY?: boolean } = {}): {
@@ -412,5 +412,31 @@ describe('integration smoke', () => {
     const { logger, entries } = captureLogger()
     logger.info('msg', {})
     expect(entries[0].ctx).toBeUndefined()
+  })
+})
+
+describe('errToCtx', () => {
+  it('serializes an Error to { error: "Name: message" }', () => {
+    const e = new TypeError('boom')
+    expect(errToCtx(e)).toEqual({ error: 'TypeError: boom' })
+  })
+
+  it('stringifies non-Error values', () => {
+    expect(errToCtx('plain string')).toEqual({ error: 'plain string' })
+    expect(errToCtx(42)).toEqual({ error: '42' })
+  })
+
+  it('merges extra fields alongside the error', () => {
+    const e = new Error('nope')
+    expect(errToCtx(e, { taskId: 7 })).toEqual({ error: 'Error: nope', taskId: 7 })
+  })
+
+  it('survives the warn() ctx filter that drops raw Error objects', () => {
+    const { logger, entries } = captureLogger()
+    // Regression: log.warn('x', err) silently dropped the Error because an
+    // Error's keys are non-enumerable. errToCtx makes the cause visible.
+    logger.warn('op failed, using fallback', errToCtx(new Error('root cause')))
+    expect(entries).toHaveLength(1)
+    expect(entries[0].ctx).toEqual({ error: 'Error: root cause' })
   })
 })

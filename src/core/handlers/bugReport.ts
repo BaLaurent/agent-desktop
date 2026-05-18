@@ -5,7 +5,7 @@ import type {
   BugReportPayload,
   SendResult,
 } from '../../shared/bugReport'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('bugReport')
 
@@ -25,7 +25,7 @@ export function registerBugReportHandlers(
     try {
       return opts.mainBuffer.getAll()
     } catch (err) {
-      log.warn('getMainErrors failed', err)
+      log.warn('getMainErrors failed', errToCtx(err))
       return []
     }
   })
@@ -35,7 +35,7 @@ export function registerBugReportHandlers(
     try {
       return opts.scrub(text)
     } catch (err) {
-      log.warn('scrub failed', err)
+      log.warn('scrub failed', errToCtx(err))
       return text
     }
   })
@@ -58,12 +58,12 @@ export function registerBugReportHandlers(
         try {
           opts.mainBuffer.clear()
         } catch (err) {
-          log.warn('clear after send failed', err)
+          log.warn('clear after send failed', errToCtx(err))
         }
       }
       return result
     } catch (err) {
-      log.warn('send failed', err)
+      log.warn('send failed', errToCtx(err))
       return { ok: false, error: 'unknown' as const }
     }
   })

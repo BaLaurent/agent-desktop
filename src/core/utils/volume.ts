@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { findBinaryInPath } from './env'
-import { createLogger } from './logger'
+import { createLogger, errToCtx } from './logger'
 
 const log = createLogger('volume')
 
@@ -94,7 +94,7 @@ export function duckVolume(reductionPercent: number): Promise<void> {
       log.debug('Volume ducked', { current, target, reductionPercent })
     } catch (err) {
       savedVolume = null
-      log.warn('Duck failed', err)
+      log.warn('Duck failed', errToCtx(err))
     }
   })()
   return duckPromise
@@ -118,7 +118,7 @@ export async function restoreVolume(): Promise<void> {
     await setVolume(backend, vol)
     log.debug('Volume restored', { vol })
   } catch (err) {
-    log.warn('Restore failed', err)
+    log.warn('Restore failed', errToCtx(err))
   }
 }
 
@@ -174,7 +174,7 @@ export function duckOtherStreams(reductionPercent: number): Promise<void> {
       log.debug('Streams ducked', { count: inputs.length, reductionPercent })
     } catch (err) {
       savedStreams = null
-      log.warn('Duck streams failed', err)
+      log.warn('Duck streams failed', errToCtx(err))
     }
   })()
   return duckStreamsPromise

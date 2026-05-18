@@ -722,6 +722,31 @@ describe('tts service', () => {
       )
     })
 
+    it('summary: passes resolved claude binary as pathToClaudeCodeExecutable', async () => {
+      settingsMap({ tts_provider: 'off' })
+      mockFindBinary.mockReturnValue('/usr/bin/claude')
+
+      const mockQuery = vi.fn()
+      const summaryMessages = (async function* () {
+        yield { type: 'result', subtype: 'success', result: 'Summary' }
+      })()
+      mockQuery.mockReturnValue(summaryMessages)
+      mockLoadSDK.mockResolvedValue({ query: mockQuery } as any)
+      mockInjectApiKey.mockReturnValue(vi.fn())
+
+      await speakResponse('content here', db, 1, {
+        ttsResponseMode: 'summary',
+      })
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            pathToClaudeCodeExecutable: '/usr/bin/claude',
+          }),
+        })
+      )
+    })
+
     it('summary: uses custom ttsSummaryPrompt', async () => {
       settingsMap({ tts_provider: 'off' })
 

@@ -109,6 +109,19 @@ function serializeErr(err: unknown): LogEntry['err'] {
   return { name: 'Error', message: String(err), value: err }
 }
 
+/**
+ * Render a caught value as a log `ctx` field. Only `error(msg, err, ctx)`
+ * has a dedicated `err` parameter; `warn/info/debug/trace` take `(msg, ctx)`
+ * and would silently drop an `Error` (its `name/message/stack` are
+ * non-enumerable, so `Object.keys` is empty and the ctx is discarded).
+ * Use this at non-`error` levels for recoverable fallbacks:
+ * `log.warn('X failed, using fallback', errToCtx(err))`.
+ */
+export function errToCtx(err: unknown, extra?: Record<string, unknown>): Record<string, unknown> {
+  const error = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+  return extra ? { ...extra, error } : { error }
+}
+
 /** Stable JSON serialization with deterministic key ordering. */
 function stableJson(entry: LogEntry): string {
   // Manual ordered emission keeps key order deterministic across Node versions.

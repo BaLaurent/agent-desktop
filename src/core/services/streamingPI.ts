@@ -29,7 +29,7 @@ import { buildSessionConfig } from './pi/buildSessionConfig'
 import { buildCustomTools } from './pi/buildCustomTools'
 import { runSession } from './pi/runSession'
 import { resolvePIModelObject } from './pi/resolveModel'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('streamingPI')
 
@@ -241,7 +241,7 @@ async function resolveSessionManager(
       const sm = pi.SessionManager.open(existingFile)
       return { sessionManager: sm, persistAfterCreate: () => {} }
     } catch (err) {
-      log.warn('SessionManager.open failed, falling back to create', err)
+      log.warn('SessionManager.open failed, falling back to create', errToCtx(err))
       setConversationPiSessionFile(db, conversationId, null)
       // fall through to create
     }
