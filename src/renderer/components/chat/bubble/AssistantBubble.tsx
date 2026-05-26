@@ -162,6 +162,15 @@ export function AssistantBubble({
           )}
         </div>
 
+        {message.stopped ? (
+          <div
+            className="text-[0.625rem] mt-1 flex items-center gap-1 select-none"
+            style={{ color: 'var(--color-warning)' }}
+          >
+            <span aria-hidden>⏹</span> Interrupted
+          </div>
+        ) : null}
+
         <div
           className="text-[0.625rem] mt-2 select-none"
           style={{ color: 'var(--color-text-muted)' }}
