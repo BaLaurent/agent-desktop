@@ -11,6 +11,7 @@ import { ModelPreview } from '../artifacts/ModelPreview'
 import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 import { NotebookPreview } from '../artifacts/NotebookPreview'
+import { CsvPreview } from '../artifacts/CsvPreview'
 
 interface ExpandedViewerModalProps {
   filePath: string
@@ -108,6 +109,8 @@ export function ExpandedViewerModal({
     viewer = <ScadPreview filePath={filePath} lastSavedAt={0} />
   } else if (ext === 'ipynb') {
     viewer = <NotebookPreview content={content} filePath={filePath} />
+  } else if (ext === 'csv') {
+    viewer = <CsvPreview content={content} />
   } else {
     viewer = (
       <div className="h-full flex items-center justify-center text-sm text-muted">

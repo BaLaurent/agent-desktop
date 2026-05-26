@@ -9,6 +9,7 @@ import { ModelPreview } from '../artifacts/ModelPreview'
 import { ScadPreview } from '../artifacts/ScadPreview'
 import { SvgPreview } from '../artifacts/SvgPreview'
 import { NotebookPreview } from '../artifacts/NotebookPreview'
+import { CsvPreview } from '../artifacts/CsvPreview'
 import { ExpandedViewerModal } from './ExpandedViewerModal'
 import { NewConversationFromFilesModal } from './NewConversationFromFilesModal'
 import type { FileNode } from '../../../shared/types'
@@ -26,7 +27,7 @@ function getFileExtension(filePath: string): string {
 
 const getBasename = pathBasename
 
-const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad', 'obj', 'ipynb'])
+const PREVIEW_EXTENSIONS = new Set(['md', 'markdown', 'html', 'htm', 'svg', 'mmd', 'scad', 'obj', 'ipynb', 'csv'])
 
 const MODEL_EXTENSIONS = new Set(['stl', 'obj', '3mf', 'ply'])
 
@@ -655,6 +656,7 @@ function FileViewer({ filePath, content, language, allowScripts, lastSavedAt }: 
     if (ext === 'scad') return <ScadPreview filePath={filePath} lastSavedAt={lastSavedAt ?? 0} />
     if (ext === 'obj') return <ModelPreview filePath={filePath} content={content} />
     if (ext === 'ipynb') return <NotebookPreview content={content} filePath={filePath} />
+    if (ext === 'csv') return <CsvPreview content={content} />
   }
 
   // Everything else (code files, or source mode) → Monaco
