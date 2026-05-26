@@ -68,6 +68,29 @@ describe('schema', () => {
     db.close()
   })
 
+  it('stopped column exists on messages table', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
+
+    const cols = db.pragma('table_info(messages)') as { name: string }[]
+    const colNames = cols.map((c) => c.name)
+
+    expect(colNames).toContain('stopped')
+    db.close()
+  })
+
+  it('stopped column defaults to 0 for new rows', async () => {
+    const db = await createTestDb()
+    createTables(db as any)
+
+    db.prepare("INSERT INTO conversations (title) VALUES ('T')").run()
+    db.prepare("INSERT INTO messages (conversation_id, role, content) VALUES (1, 'assistant', 'hi')").run()
+    const row = db.prepare('SELECT stopped FROM messages WHERE conversation_id = 1').get() as { stopped: number }
+
+    expect(row.stopped).toBe(0)
+    db.close()
+  })
+
   it('mcp_servers has type, url, headers columns after migration', async () => {
     const db = await createTestDb()
     createTables(db as any)

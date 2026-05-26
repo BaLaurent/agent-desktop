@@ -202,6 +202,7 @@ function runMigrations(db: Database.Database): void {
 
     // messages
     applyMigration(db, columnsByTable, 'messages', 'tool_calls', 'TEXT')
+    applyMigration(db, columnsByTable, 'messages', 'stopped', 'INTEGER DEFAULT 0')
 
     // mcp_servers: HTTP/SSE transport columns
     applyMigration(db, columnsByTable, 'mcp_servers', 'type', "TEXT DEFAULT 'stdio'")
