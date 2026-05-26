@@ -39,6 +39,15 @@ vi.mock('../../core/handlers/messages', () => ({
   getAISettings: vi.fn(() => ({
     ttsResponseMode: 'full',
   })),
+  // No persona/language by default — keeps existing summary tests unchanged.
+  getAgentDirectives: vi.fn(() => ({})),
+  // Real formatting so callers exercise the actual directive text.
+  formatAgentDirectives: (d: { personality?: string; language?: string }) => {
+    let out = ''
+    if (d.language) out += `Always respond in ${d.language}.\n\n`
+    if (d.personality) out += `Personality: ${d.personality}\n\n`
+    return out
+  },
 }))
 
 vi.mock('../utils/broadcast', () => ({
@@ -92,7 +101,7 @@ import { loadAgentSDK } from '../../core/services/anthropic'
 import { injectApiKeyEnv } from '../../core/services/streaming'
 import { duckOtherStreams, restoreOtherStreams } from '../../core/utils/volume'
 import { getMainWindow } from '../mainContext'
-import { getAISettings } from '../../core/handlers/messages'
+import { getAISettings, getAgentDirectives } from '../../core/handlers/messages'
 
 const mockFindBinary = vi.mocked(findBinaryInPath)
 const mockGetSetting = vi.mocked(getSetting)
@@ -102,6 +111,7 @@ const mockDuck = vi.mocked(duckOtherStreams)
 const mockRestore = vi.mocked(restoreOtherStreams)
 const mockGetMainWindow = vi.mocked(getMainWindow)
 const mockGetAISettings = vi.mocked(getAISettings)
+const mockGetAgentDirectives = vi.mocked(getAgentDirectives)
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
@@ -133,6 +143,9 @@ describe('tts service', () => {
     mockGetSetting.mockReturnValue('')
     mockFindBinary.mockReturnValue(null)
     mockGetMainWindow.mockReturnValue(null)
+    // clearAllMocks keeps mockReturnValue overrides — reset to the
+    // "no persona/language" default so tests stay order-independent.
+    mockGetAgentDirectives.mockReturnValue({})
   })
 
   // ── stop ──────────────────────────────────────────────────
@@ -769,6 +782,49 @@ describe('tts service', () => {
           prompt: expect.stringContaining('My custom prompt:'),
         })
       )
+    })
+
+    it('summary: injects persona/language directives as systemPrompt', async () => {
+      settingsMap({ tts_provider: 'off' })
+      mockGetAgentDirectives.mockReturnValue({ language: 'French', personality: 'A witty pirate' })
+
+      const mockQuery = vi.fn()
+      const summaryMessages = (async function* () {
+        yield { type: 'result', subtype: 'success', result: 'Résumé' }
+      })()
+      mockQuery.mockReturnValue(summaryMessages)
+      mockLoadSDK.mockResolvedValue({ query: mockQuery } as any)
+      mockInjectApiKey.mockReturnValue(vi.fn())
+
+      await speakResponse('content here', db, 7, { ttsResponseMode: 'summary' })
+
+      expect(mockGetAgentDirectives).toHaveBeenCalledWith(db, 7)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            systemPrompt: expect.stringContaining('Always respond in French.'),
+          }),
+        })
+      )
+      const passedSystemPrompt = mockQuery.mock.calls[0][0].options.systemPrompt
+      expect(passedSystemPrompt).toContain('Personality: A witty pirate')
+    })
+
+    it('summary: omits systemPrompt when no persona/language set', async () => {
+      settingsMap({ tts_provider: 'off' })
+      mockGetAgentDirectives.mockReturnValue({})
+
+      const mockQuery = vi.fn()
+      const summaryMessages = (async function* () {
+        yield { type: 'result', subtype: 'success', result: 'Summary' }
+      })()
+      mockQuery.mockReturnValue(summaryMessages)
+      mockLoadSDK.mockResolvedValue({ query: mockQuery } as any)
+      mockInjectApiKey.mockReturnValue(vi.fn())
+
+      await speakResponse('content here', db, 1, { ttsResponseMode: 'summary' })
+
+      expect(mockQuery.mock.calls[0][0].options).not.toHaveProperty('systemPrompt')
     })
 
     it('summary: restores env after generating summary', async () => {

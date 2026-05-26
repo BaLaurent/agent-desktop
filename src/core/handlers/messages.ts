@@ -14,6 +14,9 @@ import { promises as fsp } from 'fs'
 import { join, basename, extname } from 'path'
 
 import { assembleSystemPrompt } from './messages/knowledgeBase'
+
+export { getAgentDirectives, formatAgentDirectives } from './messages/knowledgeBase'
+export type { AgentDirectives } from './messages/knowledgeBase'
 import { assembleAISettings } from './messages/modelResolver'
 import {
   readRetrySettings,

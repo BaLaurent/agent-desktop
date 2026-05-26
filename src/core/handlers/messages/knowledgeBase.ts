@@ -15,7 +15,7 @@ import { join, extname, resolve, relative } from 'path'
 import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import type { KnowledgeSelection, CwdWhitelistEntry } from '../../types/types'
 import { safeJsonParse } from '../../utils/json'
-import { cascadeStringKey, getFolderOverrides, parseConvOverrides } from './cascade'
+import { cascadeStringKey, getFolderOverrides, parseConvOverrides, getConversationOverrideContext } from './cascade'
 
 const KB_BUDGET = 500_000
 
@@ -162,18 +162,49 @@ function buildBasePrompt(
   return cascadedPrompt ? `${cwdDirective}\n\n${cascadedPrompt}` : cwdDirective
 }
 
+/** Cascaded agent persona/language directives for a conversation. */
+export interface AgentDirectives {
+  personality?: string
+  language?: string
+}
+
+/**
+ * Resolve the cascaded `agent_personality` / `agent_language` settings for
+ * a conversation. Standalone entry point so consumers without the full
+ * system-prompt assembly (e.g. the TTS summary) can apply the same persona.
+ */
+export function getAgentDirectives(db: SqlJsAdapter, conversationId: number): AgentDirectives {
+  const { folderId, aiOverridesRaw } = getConversationOverrideContext(db, conversationId)
+  const convOv = parseConvOverrides(aiOverridesRaw)
+  return {
+    personality: cascadeStringKey(db, 'agent_personality', convOv, folderId),
+    language: cascadeStringKey(db, 'agent_language', convOv, folderId),
+  }
+}
+
+/**
+ * Single source of truth for the persona/language directive text. Returns
+ * a block that can prefix any prompt (system prompt assembly) or stand
+ * alone as a `systemPrompt` (TTS summary). Empty when nothing is set.
+ */
+export function formatAgentDirectives(d: AgentDirectives): string {
+  let out = ''
+  if (d.language) out += `Always respond in ${d.language}.\n\n`
+  if (d.personality) out += `Personality: ${d.personality}\n\n`
+  return out
+}
+
 function applyAgentDecorators(
   db: SqlJsAdapter,
   prompt: string,
   convOv: Record<string, string>,
   folderId: number | null,
 ): string {
-  const personality = cascadeStringKey(db, 'agent_personality', convOv, folderId)
-  const language = cascadeStringKey(db, 'agent_language', convOv, folderId)
-  let out = prompt
-  if (personality) out = `Personality: ${personality}\n\n${out}`
-  if (language) out = `Always respond in ${language}.\n\n${out}`
-  return out
+  const directives: AgentDirectives = {
+    personality: cascadeStringKey(db, 'agent_personality', convOv, folderId),
+    language: cascadeStringKey(db, 'agent_language', convOv, folderId),
+  }
+  return formatAgentDirectives(directives) + prompt
 }
 
 function resolveKnowledgeFoldersRaw(

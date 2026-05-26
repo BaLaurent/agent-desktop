@@ -18,7 +18,7 @@ import type { AISettings } from '../../services/streaming'
 import type { CwdWhitelistEntry } from '../../types/types'
 import { safeJsonParse } from '../../utils/json'
 import { mapModelToBackend, parseLastModelByBackend } from '../../services/modelBackendMap'
-import { applyCascadeOnto } from './cascade'
+import { applyCascadeOnto, getConversationOverrideContext } from './cascade'
 import { mergeKnowledgeFoldersIntoWhitelist } from './knowledgeBase'
 import { loadMcpServersFromDb, filterDisabledMcpServers, injectSchedulerMcp } from './mcpServers'
 
@@ -112,11 +112,9 @@ export function assembleAISettings(
   const globalModel = map['ai_model'] || undefined
   const globalPiExtensionsDir = map['pi_extensionsDir'] || undefined
 
-  const convRow = (db as any)
-    .prepare('SELECT folder_id, ai_overrides FROM conversations WHERE id = ?')
-    .get(conversationId) as { folder_id: number | null; ai_overrides: string | null } | undefined
+  const { folderId, aiOverridesRaw } = getConversationOverrideContext(db, conversationId)
 
-  applyCascadeOnto(map, db, convRow?.folder_id ?? null, convRow?.ai_overrides ?? null)
+  applyCascadeOnto(map, db, folderId, aiOverridesRaw)
 
   const cwdWhitelist = safeJsonParse<CwdWhitelistEntry[]>(map['hooks_cwdWhitelist'] || '[]', [])
   mergeKnowledgeFoldersIntoWhitelist(cwdWhitelist, map['ai_knowledgeFolders'], assembleOpts.knowledgesDir)

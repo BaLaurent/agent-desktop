@@ -12,6 +12,7 @@ import { HAIKU_MODEL } from '../types/constants'
 import { loadAgentSDK } from '../services/anthropic'
 import { mapModelToBackend, parseLastModelByBackend } from '../services/modelBackendMap'
 import { injectApiKeyEnv } from '../services/streaming'
+import { getAgentDirectives, formatAgentDirectives } from './messages'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { createLogger, errToCtx } from '../utils/logger'
 
@@ -77,22 +78,20 @@ function getPlayerPath(db: any): string | null {
   return autoDetectPlayer()
 }
 
-function playAudioFile(filePath: string, db: any): Promise<void> {
+/**
+ * Spawn a child process, register it as the current TTS process so
+ * stopInternal() can kill it, and resolve/reject on exit. A null exit code
+ * means the process was killed by a signal (our own stop()) and is treated
+ * as a clean stop, not an error. stderr (when produced) is appended to the
+ * failure message for diagnostics.
+ */
+function runTrackedProcess(command: string, args: string[], label: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const player = getPlayerPath(db)
-    if (!player) {
-      reject(new Error('No audio player found. Install mpv, ffplay, paplay, or aplay.'))
-      return
-    }
-
-    const playerName = path.basename(player)
-    const args = playerName === 'ffplay'
-      ? ['-nodisp', '-autoexit', filePath]
-      : [filePath]
-
-    const proc = spawn(player, args, { stdio: 'ignore' })
+    const proc = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
     currentProcess = proc
+    let stderr = ''
 
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
     proc.on('error', (err) => {
       currentProcess = null
       reject(err)
@@ -100,12 +99,27 @@ function playAudioFile(filePath: string, db: any): Promise<void> {
     proc.on('exit', (code) => {
       if (currentProcess === proc) currentProcess = null
       if (code !== 0 && code !== null) {
-        reject(new Error(`Audio player ${playerName} exited with code ${code}`))
+        const detail = stderr.trim() ? ': ' + stderr.trim().slice(0, 200) : ''
+        reject(new Error(`${label} exited with code ${code}${detail}`))
       } else {
         resolve()
       }
     })
   })
+}
+
+function playAudioFile(filePath: string, db: any): Promise<void> {
+  const player = getPlayerPath(db)
+  if (!player) {
+    return Promise.reject(new Error('No audio player found. Install mpv, ffplay, paplay, or aplay.'))
+  }
+
+  const playerName = path.basename(player)
+  const args = playerName === 'ffplay'
+    ? ['-nodisp', '-autoexit', filePath]
+    : [filePath]
+
+  return runTrackedProcess(player, args, `Audio player ${playerName}`)
 }
 
 // ─── Provider implementations ───────────────────────────────
@@ -140,27 +154,13 @@ async function speakWithEdgeTts(text: string, voice: string, edgeBinary: string,
       await fsp.writeFile(tmpTextFile, text, 'utf8')
     }
 
-    await new Promise<void>((resolve, reject) => {
+    {
       const args = useFile && tmpTextFile
         ? ['--file', tmpTextFile, '--voice', voice, '--write-media', tmpWav]
         : ['--text', text, '--voice', voice, '--write-media', tmpWav]
 
-      const proc = spawn(edgeBinary, args, { stdio: 'ignore' })
-      currentProcess = proc
-
-      proc.on('error', (err) => {
-        currentProcess = null
-        reject(err)
-      })
-      proc.on('exit', (code) => {
-        if (currentProcess === proc) currentProcess = null
-        if (code !== 0) {
-          reject(new Error(`edge-tts exited with code ${code}`))
-        } else {
-          resolve()
-        }
-      })
-    })
+      await runTrackedProcess(edgeBinary, args, 'edge-tts')
+    }
 
     await playAudioFile(tmpWav, db)
   } finally {
@@ -172,51 +172,15 @@ async function speakWithEdgeTts(text: string, voice: string, edgeBinary: string,
 }
 
 function speakWithSpdSay(text: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('spd-say', ['-e', text], { stdio: ['ignore', 'ignore', 'pipe'] })
-    currentProcess = proc
-    let stderr = ''
-
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-    proc.on('error', (err) => {
-      currentProcess = null
-      reject(err)
-    })
-    proc.on('exit', (code) => {
-      if (currentProcess === proc) currentProcess = null
-      if (code !== 0) {
-        reject(new Error(`spd-say exited with code ${code}${stderr.trim() ? ': ' + stderr.trim().slice(0, 200) : ''}`))
-      } else {
-        resolve()
-      }
-    })
-  })
+  return runTrackedProcess('spd-say', ['-e', text], 'spd-say')
 }
 
 function speakWithSay(text: string, voice?: string): Promise<void> {
   if (process.platform !== 'darwin') {
     return Promise.reject(new Error('say is only available on macOS'))
   }
-  return new Promise((resolve, reject) => {
-    const args = voice ? ['-v', voice, text] : [text]
-    const proc = spawn('say', args, { stdio: ['ignore', 'ignore', 'pipe'] })
-    currentProcess = proc
-    let stderr = ''
-
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-    proc.on('error', (err) => {
-      currentProcess = null
-      reject(err)
-    })
-    proc.on('exit', (code) => {
-      if (currentProcess === proc) currentProcess = null
-      if (code !== 0) {
-        reject(new Error(`say exited with code ${code}${stderr.trim() ? ': ' + stderr.trim().slice(0, 200) : ''}`))
-      } else {
-        resolve()
-      }
-    })
-  })
+  const args = voice ? ['-v', voice, text] : [text]
+  return runTrackedProcess('say', args, 'say')
 }
 
 // ─── Core speak/stop ────────────────────────────────────────
@@ -298,6 +262,7 @@ function countWords(text: string): number {
 async function generateSummary(
   content: string,
   db: any,
+  conversationId: number,
   aiSettings: { ttsSummaryPrompt?: string; ttsSummaryModel?: string; apiKey?: string; baseUrl?: string }
 ): Promise<string> {
   const truncatedContent = content.slice(0, 4000)
@@ -307,6 +272,10 @@ async function generateSummary(
 
   const promptTemplate = aiSettings.ttsSummaryPrompt || defaultPrompt
   const prompt = promptTemplate.replace('{response}', truncatedContent)
+
+  // Apply the same persona/language directives as the chat path so the
+  // spoken summary stays in character and in the configured language.
+  const systemPrompt = formatAgentDirectives(getAgentDirectives(db, conversationId)).trim()
 
   const apiKey = aiSettings.apiKey || getSetting(db, 'ai_apiKey') || undefined
   const baseUrl = aiSettings.baseUrl || getSetting(db, 'ai_baseUrl') || undefined
@@ -330,6 +299,7 @@ async function generateSummary(
       prompt,
       options: {
         model: summaryModel,
+        ...(systemPrompt ? { systemPrompt } : {}),
         maxTurns: 1,
         allowDangerouslySkipPermissions: true,
         permissionMode: 'bypassPermissions' as any,
@@ -371,7 +341,7 @@ async function generateSummary(
 export async function speakResponse(
   content: string,
   db: any,
-  _conversationId: number,
+  conversationId: number,
   aiSettings: { ttsResponseMode?: string; ttsAutoWordLimit?: number; ttsSummaryPrompt?: string; apiKey?: string; baseUrl?: string }
 ): Promise<void> {
   const mode = aiSettings.ttsResponseMode
@@ -381,7 +351,7 @@ export async function speakResponse(
     if (mode === 'full') {
       await speak(content, db)
     } else if (mode === 'summary') {
-      const summary = await generateSummary(content, db, aiSettings)
+      const summary = await generateSummary(content, db, conversationId, aiSettings)
       await speak(summary, db)
     } else if (mode === 'auto') {
       const wordLimit = aiSettings.ttsAutoWordLimit || 200
@@ -389,7 +359,7 @@ export async function speakResponse(
       if (wordCount <= wordLimit) {
         await speak(content, db)
       } else {
-        const summary = await generateSummary(content, db, aiSettings)
+        const summary = await generateSummary(content, db, conversationId, aiSettings)
         await speak(summary, db)
       }
     }

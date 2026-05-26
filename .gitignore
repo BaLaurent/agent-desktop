@@ -27,3 +27,11 @@ graphify-out/
 attachments/
 /.crap-baseline.json
 coverage/
+.codemap-state.json
+.cursor/hooks.json
+.claude/settings.json
+.cache
+
+# Vidéos de présentation HyperFrames (livrables hors-repo, régénérables via music.py + npx hyperframes)
+presentation-video/
+presentation-video-en/
