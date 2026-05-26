@@ -17,6 +17,7 @@ import { handleLoginPost, handleLogout, handleLoginGet } from './web/routes/logi
 import { handleShimJs, handleShortCode, handleStatic } from './web/routes/static'
 import { handleWsUpgrade } from './web/routes/wsUpgrade'
 import { createLogger, errToCtx } from '../utils/logger'
+import { WS_DISCONNECTED_MESSAGE } from '../types/constants'
 
 const log = createLogger('webServer')
 
@@ -35,10 +36,33 @@ let webPassword: WebPasswordService | null = null
 const rateLimiter: RateLimiter = createRateLimiter()
 const COOKIE_NAME = 'agent_session'
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
-const clientAlive = new WeakMap<WebSocket, boolean>()
+/** Consecutive heartbeat ticks with no pong from this client. Reset to 0 on pong. */
+const missedPongs = new WeakMap<WebSocket, number>()
 /** Stores the cookie value captured at WS upgrade, used to re-validate on heartbeat after secret rotation. */
 const clientCookies = new WeakMap<WebSocket, string>()
 const HEARTBEAT_INTERVAL = 30_000
+/**
+ * Terminate only after this many consecutive missed pongs (≈ MAX × interval =
+ * 90s) rather than a single miss. Mobile browsers throttle/suspend background
+ * tabs during long silent tool-use, delaying the pong; a one-tick grace would
+ * kill healthy sessions mid-stream. Cookie re-validation still closes promptly.
+ */
+const MAX_MISSED_PONGS = 3
+
+/**
+ * Per-tick heartbeat decision for one client. Returns `terminate` once the
+ * client has missed `max` consecutive pongs, otherwise `ping` with the
+ * incremented miss count to persist. Extracted as a pure function because the
+ * `ws` library auto-responds to pings, so a live socket can't simulate a dead
+ * client — this lets the tolerance boundary be unit-tested directly.
+ */
+export function heartbeatDecision(
+  missed: number,
+  max = MAX_MISSED_PONGS,
+): { action: 'terminate' } | { action: 'ping'; missed: number } {
+  const next = missed + 1
+  return next >= max ? { action: 'terminate' } : { action: 'ping', missed: next }
+}
 let unsubBroadcast: (() => void) | null = null
 
 // Injectable state set when startServer() is called
@@ -63,6 +87,12 @@ export function generateShim(token: string): string {
   var listeners = {};
   var connected = false;
   var sendQueue = [];
+  var everConnected = false;
+
+  function emitLocal(channel, data) {
+    var cbs = listeners[channel];
+    if (cbs) cbs.forEach(function(fn) { try { fn(data); } catch(e) { console.error(e); } });
+  }
 
   function flushQueue() {
     while (sendQueue.length > 0 && connected && ws && ws.readyState === WebSocket.OPEN) {
@@ -71,6 +101,7 @@ export function generateShim(token: string): string {
   }
 
   function connect() {
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(proto + '//' + location.host + '/ws');
     ws.onopen = function() {
@@ -81,8 +112,13 @@ export function generateShim(token: string): string {
       try { msg = JSON.parse(ev.data); } catch(e) { return; }
       if (msg.type === 'auth_result') {
         connected = msg.success;
-        if (!msg.success) console.error('[agent-ws] Auth failed:', msg.error);
-        else flushQueue();
+        if (!msg.success) { console.error('[agent-ws] Auth failed:', msg.error); return; }
+        flushQueue();
+        // On a *re*-connection, tell the app so it can re-pull authoritative
+        // state: stream chunks and conversationUpdated events broadcast while
+        // we were offline are fire-and-forget and were lost.
+        if (everConnected) emitLocal('connection:reconnected', undefined);
+        everConnected = true;
         return;
       }
       if (msg.type === 'result') {
@@ -95,8 +131,7 @@ export function generateShim(token: string): string {
         return;
       }
       if (msg.type === 'event') {
-        var cbs = listeners[msg.channel];
-        if (cbs) cbs.forEach(function(fn) { try { fn(msg.data); } catch(e) { console.error(e); } });
+        emitLocal(msg.channel, msg.data);
         return;
       }
     };
@@ -105,7 +140,7 @@ export function generateShim(token: string): string {
       sendQueue.length = 0;
       // Reject all pending
       Object.keys(pending).forEach(function(id) {
-        pending[id].reject(new Error('WebSocket disconnected'));
+        pending[id].reject(new Error(${JSON.stringify(WS_DISCONNECTED_MESSAGE)}));
         delete pending[id];
       });
       // Auto-reconnect after 2s
@@ -355,6 +390,7 @@ export function generateShim(token: string): string {
       onConversationsRefresh: function(cb) { return subscribe('conversations:refresh', cb); },
       onConversationUpdated: function(cb) { return subscribe('messages:conversationUpdated', cb); },
       onAutoThemeSwitch: function(cb) { return subscribe('theme:autoSwitch', cb); },
+      onReconnect: function(cb) { return subscribe('connection:reconnected', cb); },
     },
     bugReport: {
       getMainErrors: function() { return Promise.resolve([]); },
@@ -404,6 +440,16 @@ export function generateShim(token: string): string {
       close: noop,
     },
   };
+
+  // Mobile browsers suspend background tabs, so the socket often dies while
+  // hidden (and the server heartbeat terminates it). Reconnect eagerly on
+  // foreground rather than waiting for the close-triggered 2s timer. connect()
+  // is idempotent, so this is safe even if a reconnect is already pending.
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') connect();
+    });
+  }
 
   connect();
 })();
@@ -713,9 +759,9 @@ export async function startServer(port: number, options?: ServerStartOptions): P
     httpServer.on('upgrade', upgradeHandler)
 
     wss.on('connection', (wsClient) => {
-      clientAlive.set(wsClient, true)
+      missedPongs.set(wsClient, 0)
       wsClient.on('pong', () => {
-        clientAlive.set(wsClient, true)
+        missedPongs.set(wsClient, 0)
       })
       wsClient.on('message', (data) => {
         handleWsMessage(wsClient, data.toString())
@@ -746,12 +792,13 @@ export async function startServer(port: number, options?: ServerStartOptions): P
           }
         }
 
-        if (!clientAlive.get(client)) {
+        const decision = heartbeatDecision(missedPongs.get(client) ?? 0)
+        if (decision.action === 'terminate') {
           authenticatedClients.delete(client)
           client.terminate()
           continue
         }
-        clientAlive.set(client, false)
+        missedPongs.set(client, decision.missed)
         try { client.ping() } catch {
           authenticatedClients.delete(client)
           client.terminate()

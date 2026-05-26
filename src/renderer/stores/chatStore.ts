@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Message, Attachment, StreamChunk, StreamPart, AskUserQuestion, McpConnectionStatus, NotificationEvent, NotificationConfig } from '../../shared/types'
-import { DEFAULT_NOTIFICATION_CONFIG, NOTIFICATION_EVENTS } from '../../shared/constants'
+import { DEFAULT_NOTIFICATION_CONFIG, NOTIFICATION_EVENTS, WS_DISCONNECTED_MESSAGE } from '../../shared/constants'
 import { useSettingsStore } from './settingsStore'
 import { playCompletionSound, playErrorSound } from '../utils/notificationSound'
 import type { ContextBreakdown } from '../../core/services/contextBreakdown'
@@ -39,6 +39,14 @@ interface ChatState {
   streamingContent: string
   isLoading: boolean
   error: string | null
+  /**
+   * Web transport state. 'reconnecting' is set when a streaming RPC rejects
+   * mid-flight with a WebSocket drop: the server keeps streaming and persists
+   * the turn, so instead of a fatal error we keep the streaming view and wait
+   * for the shim to reconnect and reload authoritative state. Always
+   * 'connected' under Electron (its IPC bridge never drops).
+   */
+  connectionStatus: 'connected' | 'reconnecting'
   activeConversationId: number | null
   messageQueues: Record<number, QueuedMessage[]>
   queuePaused: Record<number, boolean>
@@ -251,6 +259,15 @@ async function streamOperation(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : errorLabel
+    // A WebSocket drop mid-stream (web mode only) is recoverable, not fatal:
+    // the server is not aborted, keeps streaming, and persists the turn. Keep
+    // the streaming view and flag 'reconnecting' — the onReconnect listener
+    // reloads the authoritative DB state once the shim reconnects. Crucially
+    // we do NOT clear the buffer, surface an error, or pause the queue here.
+    if (msg === WS_DISCONNECTED_MESSAGE && streamBuffersMap.has(conversationId)) {
+      set({ connectionStatus: 'reconnecting' })
+      return
+    }
     const cleanup = cleanupStreamBuffer(get().activeConversationId, conversationId)
     set(get().activeConversationId === conversationId
       ? { error: msg, ...cleanup, queuePaused: { ...get().queuePaused, [conversationId]: true } }
@@ -269,6 +286,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingContent: '',
   isLoading: false,
   error: null,
+  connectionStatus: 'connected',
   activeConversationId: null,
   messageQueues: {},
   queuePaused: {},
@@ -568,6 +586,47 @@ if (typeof window !== 'undefined' && window.agent?.events?.onConversationUpdated
     if (store.activeConversationId === conversationId && !streamBuffersMap.has(conversationId)) {
       store.loadMessages(conversationId)
     }
+  })
+}
+
+// Reconnect listener -- web shim only (no-op under Electron). A WS drop
+// mid-stream is surfaced as 'reconnecting' (see streamOperation), not a fatal
+// error. On reconnect, pull the authoritative DB state: any assistant turn the
+// server persisted during the offline window re-appears, and the streaming
+// flag is reconciled from it. Stream chunks/conversationUpdated events emitted
+// while we were offline were lost (fire-and-forget broadcast), so this reload
+// is the recovery path.
+if (typeof window !== 'undefined' && window.agent?.events?.onReconnect) {
+  window.agent.events.onReconnect(() => {
+    const convId = useChatStore.getState().activeConversationId
+    if (convId == null) {
+      useChatStore.setState({ connectionStatus: 'connected' })
+      return
+    }
+    // Drop the stale buffer so loadMessages' DB state is authoritative and the
+    // conversationUpdated / ensureBuffer guards (!streamBuffersMap.has) re-arm.
+    streamBuffersMap.delete(convId)
+    streamTextMap.delete(convId)
+    void useChatStore.getState().loadMessages(convId).then(() => {
+      // A chunk may have arrived during the load gap, recreating the buffer via
+      // ensureBuffer for a resuming/new turn. If so, that turn now owns the
+      // streaming view — don't reconcile against the reloaded (older) messages,
+      // which would wrongly wipe its live buffer.
+      if (streamBuffersMap.has(convId)) {
+        useChatStore.setState({ connectionStatus: 'connected' })
+        return
+      }
+      const msgs = useChatStore.getState().messages
+      // Last message is the assistant reply ⇒ the server finished + persisted
+      // the turn during the gap ⇒ streaming is done. Otherwise the turn is
+      // still running server-side; resuming chunks re-arm isStreaming via
+      // ensureBuffer, so leave the streaming view in place.
+      const turnComplete = msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant'
+      useChatStore.setState(turnComplete
+        ? { connectionStatus: 'connected', ...cleanupStreamBuffer(convId, convId) }
+        : { connectionStatus: 'connected' }
+      )
+    })
   })
 }
 

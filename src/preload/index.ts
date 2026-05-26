@@ -320,6 +320,10 @@ const api: AgentAPI = {
       ipcRenderer.on('theme:autoSwitch', handler)
       return () => { ipcRenderer.removeListener('theme:autoSwitch', handler) }
     },
+    // Electron's IPC bridge never drops, so there is nothing to reconnect to.
+    // Implemented as an inert no-op to keep the shared renderer API identical
+    // to the web WebSocket shim (which does fire this).
+    onReconnect: (_callback: () => void) => () => {},
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

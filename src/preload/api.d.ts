@@ -257,6 +257,13 @@ export interface AgentAPI {
     onConversationsRefresh(callback: () => void): () => void
     onConversationUpdated(callback: (conversationId: number) => void): () => void
     onAutoThemeSwitch(callback: (filename: string) => void): () => void
+    /**
+     * Fires after the transport reconnects following a drop. Only the web
+     * WebSocket shim emits this; Electron's IPC bridge never disconnects, so
+     * its implementation is an inert no-op. Renderer code uses it to re-pull
+     * authoritative state that may have changed during the offline window.
+     */
+    onReconnect(callback: () => void): () => void
   }
   window: {
     minimize(): void

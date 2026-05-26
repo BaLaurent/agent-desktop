@@ -9,6 +9,8 @@ export const capturedConversationUpdatedListeners: Array<(conversationId: number
 export let capturedConversationUpdatedListener: ((conversationId: number) => void) | null = null
 // Captured TTS state-change listener — set when ttsStore module registers its onStateChange handler
 export let capturedTtsStateListener: ((state: { speaking: boolean; messageId?: number }) => void) | null = null
+// Captured reconnect listener — set when chatStore registers its onReconnect handler
+export let capturedReconnectListener: (() => void) | null = null
 
 export const mockAgent = {
   auth: {
@@ -164,6 +166,10 @@ export const mockAgent = {
       return () => {}
     }),
     onAutoThemeSwitch: vi.fn().mockReturnValue(() => {}),
+    onReconnect: vi.fn().mockImplementation((cb: () => void) => {
+      capturedReconnectListener = cb
+      return () => {}
+    }),
   },
   window: {
     minimize: vi.fn(),

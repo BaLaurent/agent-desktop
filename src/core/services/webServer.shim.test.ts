@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { generateShim } from './webServer'
+import { WS_DISCONNECTED_MESSAGE } from '../types/constants'
 
 // Extract top-level AgentAPI namespaces from the type definition, so that
 // adding a new namespace to the Electron preload (preload/api.d.ts) without
@@ -53,5 +54,36 @@ describe('webServer shim — AgentAPI parity', () => {
 
   it('git.isRepo wires to the git:isRepo channel', () => {
     expect(shim).toContain("invoke('git:isRepo'")
+  })
+})
+
+describe('webServer shim — reconnect recovery', () => {
+  const shim = generateShim('test-token')
+
+  it('exposes events.onReconnect wired to the connection:reconnected channel', () => {
+    expect(shim).toContain('onReconnect: function')
+    expect(shim).toContain("subscribe('connection:reconnected'")
+  })
+
+  it('emits connection:reconnected only on a *re*-connection (not the first auth)', () => {
+    // Guarded by everConnected so the very first successful auth does not fire.
+    expect(shim).toContain('var everConnected = false')
+    expect(shim).toContain("if (everConnected) emitLocal('connection:reconnected'")
+    expect(shim).toContain('everConnected = true')
+  })
+
+  it('rejects in-flight RPCs with the shared disconnect sentinel on socket close', () => {
+    // The sentinel is the contract chatStore matches to enter "reconnecting".
+    expect(shim).toContain(`new Error(${JSON.stringify(WS_DISCONNECTED_MESSAGE)})`)
+  })
+
+  it('reconnects eagerly when a backgrounded tab returns to the foreground', () => {
+    expect(shim).toContain("addEventListener('visibilitychange'")
+    expect(shim).toContain("document.visibilityState === 'visible'")
+  })
+
+  it('connect() is idempotent so the visibility + 2s-timer paths cannot double-open', () => {
+    expect(shim).toContain('WebSocket.CONNECTING')
+    expect(shim).toContain('WebSocket.OPEN')
   })
 })

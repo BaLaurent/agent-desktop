@@ -39,6 +39,7 @@ interface ChatViewProps {
 export function ChatView({ conversationId, conversationTitle, conversationCwd }: ChatViewProps) {
   const isStreaming = useChatStore((s) => s.isStreaming)
   const error = useChatStore((s) => s.error)
+  const connectionStatus = useChatStore((s) => s.connectionStatus)
 
   const orchestratorActions = useChatStore(useShallow((s) => ({
     loadMessages: s.loadMessages,
@@ -230,6 +231,7 @@ export function ChatView({ conversationId, conversationTitle, conversationCwd }:
           onToggleOverrides={() => setShowOverrides((v) => !v)}
         />
 
+        <ChatReconnectingBanner active={connectionStatus === 'reconnecting'} />
         <ChatErrorBanner message={error} />
 
         <ChatLayout
@@ -356,6 +358,25 @@ function ChatErrorBanner({ message }: { message: string | null | undefined }) {
       style={{ backgroundColor: 'var(--color-error)', color: 'var(--color-text-contrast)' }}
     >
       {message}
+    </div>
+  )
+}
+
+/**
+ * Non-fatal banner shown while the web transport reconnects after a drop. The
+ * server keeps streaming and persists the turn, so this is recoverable — we
+ * deliberately use the warning colour (not error red) and keep the streaming
+ * view alive. Never shows under Electron (connectionStatus stays 'connected').
+ */
+function ChatReconnectingBanner({ active }: { active: boolean }) {
+  if (!active) return null
+  return (
+    <div
+      className="flex-shrink-0 px-4 py-2 text-sm flex items-center gap-2"
+      style={{ backgroundColor: 'var(--color-warning)', color: 'var(--color-text-contrast)' }}
+    >
+      <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-text-contrast)' }} />
+      Reconnecting… your work is still being saved.
     </div>
   )
 }

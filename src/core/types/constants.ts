@@ -218,3 +218,14 @@ export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
 export interface McpServerName {
   name: string
 }
+
+// ─── Web Transport Protocol ──────────────────────────────────
+
+/**
+ * Rejection message the web WebSocket shim uses for in-flight RPCs when the
+ * socket closes. Shared so the renderer can recognise a transport drop (and
+ * treat it as recoverable "reconnecting" rather than a fatal error) while the
+ * shim that emits it stays in lock-step. The shim interpolates this value into
+ * its generated source; chatStore matches against it.
+ */
+export const WS_DISCONNECTED_MESSAGE = 'WebSocket disconnected'

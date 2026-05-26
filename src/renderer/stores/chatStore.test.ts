@@ -1,9 +1,9 @@
 import { vi } from 'vitest'
-import { mockAgent, capturedStreamListener, capturedConversationUpdatedListener } from '../__tests__/setup'
+import { mockAgent, capturedStreamListener, capturedConversationUpdatedListener, capturedReconnectListener } from '../__tests__/setup'
 import { useChatStore, _streamBuffersMap, _streamTextMap } from './chatStore'
 import type { StreamChunk } from '../../shared/types'
 import { useSettingsStore } from './settingsStore'
-import { DEFAULT_NOTIFICATION_CONFIG } from '../../shared/constants'
+import { DEFAULT_NOTIFICATION_CONFIG, WS_DISCONNECTED_MESSAGE } from '../../shared/constants'
 
 // Mock notification sounds — jsdom has no AudioContext
 vi.mock('../utils/notificationSound', () => ({
@@ -27,11 +27,14 @@ beforeEach(() => {
     streamingContent: '',
     isLoading: false,
     error: null,
+    connectionStatus: 'connected',
     activeConversationId: null,
     messageQueues: {},
     queuePaused: {},
   })
 })
+
+const flushPromises = () => new Promise((r) => setTimeout(r, 0))
 
 describe('chatStore', () => {
   it('sendMessage adds user message optimistically and sets isStreaming', async () => {
@@ -1492,6 +1495,109 @@ describe('chatStore', () => {
       // Queue should remain — drain will happen after current stream via streamOperation
       expect(useChatStore.getState().messageQueues[1]).toHaveLength(1)
       expect(useChatStore.getState().queuePaused[1]).toBeFalsy()
+    })
+  })
+
+  describe('web reconnect recovery', () => {
+    // The shared `conversations.get` mock is only mockClear()'d between tests,
+    // which does NOT drain queued mockResolvedValueOnce values. A leftover
+    // once-value from an earlier test would be consumed by our loadMessages
+    // call instead of ours. Reset to a clean default so this block is hermetic.
+    beforeEach(() => {
+      mockAgent.conversations.get.mockReset()
+      mockAgent.conversations.get.mockResolvedValue({ id: 1, title: 'T', messages: [] })
+    })
+
+    it('treats a WS disconnect mid-stream as reconnecting, not a fatal error', async () => {
+      mockAgent.messages.send.mockRejectedValueOnce(new Error(WS_DISCONNECTED_MESSAGE))
+
+      await useChatStore.getState().sendMessage(1, 'Hello')
+
+      const s = useChatStore.getState()
+      expect(s.connectionStatus).toBe('reconnecting')
+      expect(s.isStreaming).toBe(true)          // streaming view preserved
+      expect(s.error).toBeNull()                // no fatal banner
+      expect(s.queuePaused[1]).toBeFalsy()      // queue not paused
+      expect(_streamBuffersMap.has(1)).toBe(true) // buffer kept, not cleared
+    })
+
+    it('keeps the fatal-error path for non-disconnect stream failures', async () => {
+      mockAgent.messages.send.mockRejectedValueOnce(new Error('boom'))
+
+      await useChatStore.getState().sendMessage(1, 'Hello')
+
+      const s = useChatStore.getState()
+      expect(s.error).toBe('boom')
+      expect(s.connectionStatus).toBe('connected')
+      expect(s.isStreaming).toBe(false)
+      expect(s.queuePaused[1]).toBe(true)
+      expect(_streamBuffersMap.has(1)).toBe(false) // buffer cleaned up
+    })
+
+    it('on reconnect with a persisted assistant turn: reloads and stops streaming', async () => {
+      if (!capturedReconnectListener) throw new Error('reconnect listener not registered by chatStore')
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'partial' }])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true, connectionStatus: 'reconnecting' })
+      mockAgent.conversations.get.mockResolvedValueOnce({
+        id: 1, title: 'T',
+        messages: [
+          { id: 1, role: 'user', content: 'Hi' },
+          { id: 2, role: 'assistant', content: 'Done' },
+        ],
+      })
+
+      capturedReconnectListener()
+      await flushPromises()
+
+      const s = useChatStore.getState()
+      expect(mockAgent.conversations.get).toHaveBeenCalledWith(1)
+      expect(s.connectionStatus).toBe('connected')
+      expect(s.isStreaming).toBe(false)
+      expect(s.messages).toHaveLength(2)
+      expect(_streamBuffersMap.has(1)).toBe(false) // stale buffer dropped
+    })
+
+    it('on reconnect with the turn still running server-side: keeps streaming', async () => {
+      if (!capturedReconnectListener) throw new Error('reconnect listener not registered by chatStore')
+      _streamBuffersMap.set(1, [{ type: 'text', content: 'partial' }])
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true, connectionStatus: 'reconnecting' })
+      mockAgent.conversations.get.mockResolvedValueOnce({
+        id: 1, title: 'T',
+        messages: [{ id: 1, role: 'user', content: 'Hi' }], // no assistant reply yet
+      })
+
+      capturedReconnectListener()
+      await flushPromises()
+
+      const s = useChatStore.getState()
+      expect(s.connectionStatus).toBe('connected')
+      expect(s.isStreaming).toBe(true) // resuming chunks re-arm via ensureBuffer
+    })
+
+    it('does not wipe a new turn whose buffer was recreated during the load gap', async () => {
+      if (!capturedReconnectListener) throw new Error('reconnect listener not registered by chatStore')
+      useChatStore.setState({ activeConversationId: 1, isStreaming: true, connectionStatus: 'reconnecting' })
+      // Simulate a chunk arriving mid-load: ensureBuffer recreates the buffer
+      // for a new/resuming turn while loadMessages is still in flight. The
+      // reloaded messages end in an assistant reply (the *previous* turn).
+      mockAgent.conversations.get.mockImplementationOnce(async () => {
+        _streamBuffersMap.set(1, [{ type: 'text', content: 'new turn' }])
+        return {
+          id: 1, title: 'T',
+          messages: [
+            { id: 1, role: 'user', content: 'Hi' },
+            { id: 2, role: 'assistant', content: 'old reply' },
+          ],
+        }
+      })
+
+      capturedReconnectListener()
+      await flushPromises()
+
+      const s = useChatStore.getState()
+      expect(s.connectionStatus).toBe('connected')
+      expect(s.isStreaming).toBe(true)          // new turn's streaming preserved
+      expect(_streamBuffersMap.has(1)).toBe(true) // recreated buffer not wiped
     })
   })
 })
