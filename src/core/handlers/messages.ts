@@ -590,17 +590,11 @@ export function registerMessagesHandlers(
     const validConvId = validatePositiveInt(conversationId, 'conversationId')
     const { buildContextBreakdown } = await import('../services/contextBreakdown')
 
-    const modeSetting = (db as any).prepare("SELECT value FROM settings WHERE key = 'ai_contextTokenCounter'")
-      .get() as { value: string } | undefined
-    const mode = (modeSetting?.value === 'anthropic' ? 'anthropic' : 'local') as 'local' | 'anthropic'
-
     const aiSettings = getAISettings(db, validConvId, {
       sessionsBase: options.sessionsBase,
       knowledgesDir: options.knowledgesDir,
       getSchedulerMcpConfig: options.getSchedulerMcpConfig,
     })
-    // Force 'local' on PI backend — Anthropic count_tokens requires Claude auth/model.
-    const effectiveMode: 'local' | 'anthropic' = aiSettings.sdkBackend === 'pi' ? 'local' : mode
 
     const cwd = aiSettings.cwd ?? getConversationCwd(db, validConvId, options.sessionsBase)
     const systemPrompt = await getSystemPrompt(db, validConvId, cwd, {
@@ -609,13 +603,10 @@ export function registerMessagesHandlers(
       getSchedulerMcpConfig: options.getSchedulerMcpConfig,
     })
 
-    // TODO: when effectiveMode === 'anthropic', call the count_tokens endpoint
-    // and pass the result as totalOverride. For now we return the local estimate.
     return buildContextBreakdown({
       db,
       conversationId: validConvId,
       systemPrompt,
-      mode: effectiveMode,
       skillsMode: aiSettings.skillsEnabled === false ? 'off' : (aiSettings.skills ?? 'off'),
       cwd,
     })

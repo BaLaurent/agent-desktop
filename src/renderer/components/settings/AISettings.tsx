@@ -146,7 +146,6 @@ export function AISettings() {
     piDisabledExtensions: bindJsonSetter<string[]>(setSetting, 'pi_disabledExtensions'),
     baseUrl: bindSetter(setSetting, 'ai_baseUrl'),
     customModel: bindSetter(setSetting, 'ai_customModel'),
-    contextTokenCounter: bindSetter(setSetting, 'ai_contextTokenCounter'),
     maxTurns: bindSetter(setSetting, 'ai_maxTurns'),
     maxThinkingTokens: bindSetter(setSetting, 'ai_maxThinkingTokens'),
     showThinking: bindSetter(setSetting, 'ai_showThinking'),
@@ -200,8 +199,6 @@ export function AISettings() {
         customModels={customModels}
         customModelContextLengths={customModelContextLengths}
         fetchedModels={fetchedModels}
-        contextTokenCounter={get('ai_contextTokenCounter')}
-        isClaudeBackend={isClaudeBackend}
         maxTurns={get('ai_maxTurns')}
         maxThinkingTokens={get('ai_maxThinkingTokens')}
         showThinking={get('ai_showThinking')}
@@ -213,7 +210,6 @@ export function AISettings() {
         onSaveCustomModel={saveCustomModel}
         onRemoveCustomModel={removeCustomModel}
         onSetCustomModelContextLength={setCustomModelContextLength}
-        onContextTokenCounterChange={setters.contextTokenCounter}
         onMaxTurnsChange={setters.maxTurns}
         onMaxThinkingTokensChange={setters.maxThinkingTokens}
         onShowThinkingChange={setters.showThinking}

@@ -8,7 +8,6 @@ const DEFAULTS: Record<string, string> = {
   ai_apiKey: '',
   ai_baseUrl: '',
   ai_customModel: '',
-  ai_contextTokenCounter: 'local',
   ai_maxTurns: '1',
   ai_maxThinkingTokens: '0',
   ai_showThinking: 'false',

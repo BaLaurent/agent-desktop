@@ -1,13 +1,9 @@
 /**
  * Token counter abstraction.
  *
- * Two concrete implementations:
- *   - {@link LocalTokenizer}: gpt-tokenizer (BPE), fast + offline, ~±10% on Claude text
- *   - Anthropic `count_tokens` endpoint: exact but costs an API round-trip (wired at the
- *     service layer — not in this module, to keep shared/ free of network deps).
- *
- * The user picks between the two via the `ai_contextTokenCounter` setting.
- * PI backend is always local (no equivalent endpoint).
+ * One concrete implementation, {@link LocalTokenizer}: gpt-tokenizer (BPE),
+ * fast + offline, ~±10% on Claude text. The {@link TokenCounter} interface
+ * stays so callers like {@link countJsonTokens} can take a substitute in tests.
  */
 
 import { encode } from 'gpt-tokenizer'

@@ -147,7 +147,6 @@ async function saveConversationContentTokens(
     db,
     conversationId,
     systemPrompt,
-    mode: 'local',
     skillsMode,
     cwd: aiSettings.cwd,
   })

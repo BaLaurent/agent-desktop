@@ -44,8 +44,8 @@ export const mockAgent = {
   },
   context: {
     getBreakdown: vi.fn().mockResolvedValue({
-      total: 0, totalIsExact: false, window: 200_000, autocompactBuffer: 6_000,
-      free: 194_000, percentUsed: 0, categories: [], mode: 'local', preFirstTurn: true,
+      total: 0, window: 200_000, autocompactBuffer: 6_000,
+      free: 194_000, percentUsed: 0, categories: [], preFirstTurn: true,
     }),
     getSkillsOverhead: vi.fn().mockResolvedValue({
       off: { tokens: 0, count: 0 },

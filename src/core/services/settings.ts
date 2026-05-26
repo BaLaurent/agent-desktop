@@ -67,7 +67,6 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'ai_customModel',
   'ai_customModels',
   'ai_customModelContextLengths',
-  'ai_contextTokenCounter',
   // AI behavior (global, not cascadable)
   'ai_compactModel',
   'ai_titleModel',

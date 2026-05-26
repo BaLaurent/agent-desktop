@@ -15,8 +15,6 @@ const baseArgs: ModelSectionProps = {
   customModels: [],
   customModelContextLengths: {},
   fetchedModels: SAMPLE_MODELS,
-  contextTokenCounter: 'local',
-  isClaudeBackend: true,
   maxTurns: '10',
   maxThinkingTokens: '0',
   showThinking: 'false',
@@ -28,7 +26,6 @@ const baseArgs: ModelSectionProps = {
   onSaveCustomModel: noop,
   onRemoveCustomModel: noop,
   onSetCustomModelContextLength: noop,
-  onContextTokenCounterChange: noop,
   onMaxTurnsChange: noop,
   onMaxThinkingTokensChange: noop,
   onShowThinkingChange: noop,
@@ -57,8 +54,6 @@ export const WithCustomModels: Story = {
 
 export const PiBackend: Story = {
   args: {
-    isClaudeBackend: false,
-    contextTokenCounter: 'local',
     maxThinkingTokens: '8000',
     maxBudgetUsd: '2',
     compactModel: 'claude-haiku-3-5',

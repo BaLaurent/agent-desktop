@@ -47,10 +47,8 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'You are a helpful assistant.',
-      mode: 'local',
     })
     expect(result.preFirstTurn).toBe(true)
-    expect(result.totalIsExact).toBe(false)
     // Total is now content-based: just the system prompt tokens here (no msgs, no skills)
     expect(result.total).toBeGreaterThan(0)
     expect(result.total).toBeLessThan(20)
@@ -73,29 +71,10 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'System prompt content.',
-      mode: 'local',
     })
     expect(result.preFirstTurn).toBe(false)
     // Total is content-only ≈ system prompt tokens (few), NOT the 70k SDK reports
     expect(result.total).toBeLessThan(100)
-  })
-
-  it('respects totalOverride when mode is anthropic', async () => {
-    const id = await seedConversation(db, {
-      last_input_tokens: 10,
-      last_cache_read_tokens: 50_000,
-      last_cache_creation_tokens: 20_000,
-    })
-    const result = await buildContextBreakdown({
-      db: db as never,
-      conversationId: id,
-      systemPrompt: 'sp',
-      mode: 'anthropic',
-      totalOverride: 75_000,
-    })
-    expect(result.total).toBe(75_000)
-    expect(result.totalIsExact).toBe(true)
-    expect(result.mode).toBe('anthropic')
   })
 
   it('falls back to an empty breakdown for a missing conversation', async () => {
@@ -103,7 +82,6 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: 999_999,
       systemPrompt: '',
-      mode: 'local',
     })
     expect(result.total).toBe(0)
     expect(result.categories).toEqual([])
@@ -131,7 +109,6 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'sp',
-      mode: 'local',
     })
     const toolCat = result.categories.find((c) => c.label === 'Tool exchanges')
     expect(toolCat).toBeDefined()
@@ -151,7 +128,6 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'sp',
-      mode: 'local',
     })
     expect(result.categories.find((c) => c.label === 'Tool exchanges')).toBeUndefined()
   })
@@ -183,7 +159,6 @@ describe('buildContextBreakdown', () => {
         db: db as never,
         conversationId: id,
         systemPrompt: 'sp',
-        mode: 'local',
         skillsMode: 'project',
         cwd: tmpProject,
       })
@@ -232,7 +207,6 @@ describe('buildContextBreakdown', () => {
         db: db as never,
         conversationId: id,
         systemPrompt: 'sp',
-        mode: 'local',
         skillsMode: 'user',
       })
       const skills = result.categories.find((c) => c.label === 'Skills')
@@ -268,7 +242,6 @@ describe('buildContextBreakdown', () => {
         db: db as never,
         conversationId: id,
         systemPrompt: 'sp',
-        mode: 'local',
         skillsMode: 'local',
       })
       expect(result.tip).toBeDefined()
@@ -294,7 +267,6 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'sp',
-      mode: 'local',
     })
     // Total reflects ONLY locally-tokenized content (messages + tool_calls +
     // system prompt) — never the 145k SDK-reported cache usage.
@@ -316,7 +288,6 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'sp',
-      mode: 'local',
       skillsMode: 'off',
     })
     expect(result.categories.find((c) => c.label === 'Skills')).toBeUndefined()
@@ -333,7 +304,6 @@ describe('buildContextBreakdown', () => {
       db: db as never,
       conversationId: id,
       systemPrompt: 'sp',
-      mode: 'local',
     })
     const summary = result.categories.find((c) => c.label === 'Compact summary')
     expect(summary).toBeDefined()

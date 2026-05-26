@@ -10,11 +10,9 @@
  *   - Always reserve an autocompact buffer (~3% of the window) so the ceiling
  *     we show matches what a /compact operation would actually need.
  *
- * The `counterMode` parameter chooses how to compute the *total*:
- *   - `'local'`: the last SDK `usage` sum (default, zero cost).
- *   - `'anthropic'`: caller may swap in a live `count_tokens` API result (not
- *     implemented in this module — the caller resolves the override and passes
- *     `totalOverride`).
+ * The total reflects CONTENT we can tokenize locally (system prompt, message
+ * history, compact summary, skills, tool exchanges) — not the SDK's
+ * cache-inclusive billing cost. Fast, offline, zero API round-trips.
  */
 
 import { promises as fsp } from 'fs'
@@ -24,8 +22,6 @@ import type { SqlJsAdapter } from '../db/sqljs-adapter'
 import { localTokenizer } from '../../shared/tokenCounter'
 import { getEffectiveContextWindow } from '../../shared/contextWindow'
 import { parseCustomModelContextLengths } from '../types/constants'
-
-export type TokenCounterMode = 'local' | 'anthropic'
 
 export interface ContextCategory {
   /** Translation key / UI label. Keep short — the bubble lists these vertically. */
@@ -42,8 +38,6 @@ export interface ContextCategory {
 export interface ContextBreakdown {
   /** Best estimate of total tokens in the context for the NEXT turn. */
   total: number
-  /** Whether the total is exact (from Anthropic's count_tokens API) or approximate. */
-  totalIsExact: boolean
   /** Effective window size (SDK + static + custom override). */
   window: number
   /** Reserved capacity for a future /compact call (~3% of window). */
@@ -54,8 +48,6 @@ export interface ContextBreakdown {
   percentUsed: number
   /** Human-readable categories in display order. */
   categories: ContextCategory[]
-  /** Which mode produced this result. */
-  mode: TokenCounterMode
   /** True if no turn has completed yet — the "overhead" category is guessed/unknown. */
   preFirstTurn: boolean
   /** Optional actionable advice for the user (e.g. "drop ai_skills to user to save ~X tokens"). */
@@ -113,10 +105,6 @@ export interface BuildBreakdownInput {
   conversationId: number
   /** Precomputed system prompt — caller should pass what will actually be sent to the SDK. */
   systemPrompt: string
-  /** Token counter mode for the total calculation. */
-  mode: TokenCounterMode
-  /** When mode is 'anthropic', caller passes the authoritative total here. */
-  totalOverride?: number | null
   /** Effective skills discovery mode (from ai_skills cascade). Controls which scopes to scan. */
   skillsMode?: 'off' | 'user' | 'project' | 'local'
   /** Project CWD — needed to resolve project/local skill scopes. */
@@ -242,11 +230,11 @@ function scopesForSkillsMode(mode: 'off' | 'user' | 'project' | 'local', cwd?: s
 const AUTOCOMPACT_BUFFER_RATIO = 0.03 // 3% — matches Claude Code's reserve
 
 export async function buildContextBreakdown(input: BuildBreakdownInput): Promise<ContextBreakdown> {
-  const { db, conversationId, systemPrompt, mode, totalOverride, skillsMode = 'off', cwd } = input
+  const { db, conversationId, systemPrompt, skillsMode = 'off', cwd } = input
 
   const conv = readConversation(db, conversationId)
   if (!conv) {
-    return emptyBreakdown(mode)
+    return emptyBreakdown()
   }
 
   // --- Compute window ---
@@ -349,20 +337,10 @@ export async function buildContextBreakdown(input: BuildBreakdownInput): Promise
   //   - users care about "how much conversation is really stored" for planning
   //     compacts/clears, not the server-side billing accounting
   //
-  // The SDK's total remains accessible via `anthropic` mode (uses the real
-  // count_tokens endpoint) for users who want the authoritative measurement.
-  let total: number
-  let totalIsExact: boolean
-  if (mode === 'anthropic' && typeof totalOverride === 'number' && totalOverride > 0) {
-    total = totalOverride
-    totalIsExact = true
-  } else {
-    // Content-based: localCounted already includes tool exchanges + skills +
-    // system prompt + messages + compact summary. Excludes SDK-cached framework
-    // overhead we can't measure locally (MCP tool specs, SDK system prompt).
-    total = localCounted
-    totalIsExact = false
-  }
+  // localCounted already includes tool exchanges + skills + system prompt +
+  // messages + compact summary. Excludes SDK-cached framework overhead we can't
+  // measure locally (MCP tool specs, SDK system prompt).
+  const total = localCounted
 
   const autocompactBuffer = Math.round(window * AUTOCOMPACT_BUFFER_RATIO)
   const free = Math.max(0, window - total - autocompactBuffer)
@@ -373,13 +351,11 @@ export async function buildContextBreakdown(input: BuildBreakdownInput): Promise
 
   return {
     total,
-    totalIsExact,
     window,
     autocompactBuffer,
     free,
     percentUsed,
     categories,
-    mode,
     preFirstTurn,
     tip,
   }
@@ -419,16 +395,14 @@ function buildTip(args: {
   return undefined
 }
 
-function emptyBreakdown(mode: TokenCounterMode): ContextBreakdown {
+function emptyBreakdown(): ContextBreakdown {
   return {
     total: 0,
-    totalIsExact: false,
     window: 200_000,
     autocompactBuffer: 6_000,
     free: 194_000,
     percentUsed: 0,
     categories: [],
-    mode,
     preFirstTurn: true,
   }
 }

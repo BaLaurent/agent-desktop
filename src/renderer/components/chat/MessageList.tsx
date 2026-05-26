@@ -29,7 +29,7 @@ function ContextClearedDivider({ clearedCount }: { clearedCount: number }) {
 
 function ContextInfoBubble({ display, onDismiss }: { display: ContextDisplay; onDismiss: () => void }) {
   const { breakdown } = display
-  const { total, window: ctxWindow, autocompactBuffer, free, percentUsed, categories, totalIsExact, mode, preFirstTurn } = breakdown
+  const { total, window: ctxWindow, autocompactBuffer, free, percentUsed, categories, preFirstTurn } = breakdown
   const freePct = ctxWindow > 0 ? Math.max(0, 100 - percentUsed) : 0
   return (
     <div className="flex justify-center mb-4">
@@ -56,7 +56,7 @@ function ContextInfoBubble({ display, onDismiss }: { display: ContextDisplay; on
           <span style={{ color: 'var(--color-text)' }}>{formatTokens(total)}</span>
           {' / '}
           <span>{formatTokens(ctxWindow)}</span>
-          {totalIsExact ? ' tokens (exact)' : ' tokens'}
+          {' tokens'}
           <span style={{ color: 'var(--color-text-muted)' }}>{' — '}{percentUsed}%</span>
         </div>
         {!preFirstTurn && (
@@ -118,7 +118,7 @@ function ContextInfoBubble({ display, onDismiss }: { display: ContextDisplay; on
           </div>
         )}
         <div className="text-[10px] opacity-60 mt-1.5" style={{ color: 'var(--color-text-muted)' }}>
-          Mode : {mode === 'anthropic' ? 'Anthropic API (exact)' : 'local (gpt-tokenizer, ±10%)'}
+          Estimation locale (gpt-tokenizer, ±10%)
         </div>
       </div>
     </div>

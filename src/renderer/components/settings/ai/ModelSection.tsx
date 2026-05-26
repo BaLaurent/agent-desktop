@@ -15,8 +15,6 @@ export interface ModelSectionProps {
   customModels: string[]
   customModelContextLengths: Record<string, number>
   fetchedModels: ModelOption[]
-  contextTokenCounter: string
-  isClaudeBackend: boolean
   maxTurns: string
   maxThinkingTokens: string
   showThinking: string
@@ -28,7 +26,6 @@ export interface ModelSectionProps {
   onSaveCustomModel: (value: string) => void
   onRemoveCustomModel: (value: string) => void
   onSetCustomModelContextLength: (modelId: string, lengthInK: number | null) => void
-  onContextTokenCounterChange: (value: string) => void
   onMaxTurnsChange: (value: string) => void
   onMaxThinkingTokensChange: (value: string) => void
   onShowThinkingChange: (value: string) => void
@@ -38,7 +35,7 @@ export interface ModelSectionProps {
 }
 
 /**
- * Model picker, custom-model editor, context counter, agentic limits,
+ * Model picker, custom-model editor, agentic limits,
  * and global compact/title model overrides.
  */
 export function ModelSection(props: ModelSectionProps) {
@@ -48,8 +45,6 @@ export function ModelSection(props: ModelSectionProps) {
     customModels,
     customModelContextLengths,
     fetchedModels,
-    contextTokenCounter,
-    isClaudeBackend,
     maxTurns,
     maxThinkingTokens,
     showThinking,
@@ -61,7 +56,6 @@ export function ModelSection(props: ModelSectionProps) {
     onSaveCustomModel,
     onRemoveCustomModel,
     onSetCustomModelContextLength,
-    onContextTokenCounterChange,
     onMaxTurnsChange,
     onMaxThinkingTokensChange,
     onShowThinkingChange,
@@ -157,25 +151,6 @@ export function ModelSection(props: ModelSectionProps) {
             </div>
           )}
         </div>
-      </SettingRow>
-
-      <SettingRow label="Context counter" description="How <code>/context</code> estimates token usage. PI backend is always local.">
-        <select
-          value={contextTokenCounter}
-          onChange={(e) => onContextTokenCounterChange(e.target.value)}
-          disabled={!isClaudeBackend}
-          className="px-3 py-1.5 rounded text-sm border outline-none disabled:opacity-50 mobile:text-base mobile:py-2"
-          style={{
-            backgroundColor: 'var(--color-bg)',
-            color: 'var(--color-text)',
-            borderColor: tint('--color-text-muted', 20),
-          }}
-          aria-label="Select context token counter mode"
-          title={isClaudeBackend ? undefined : 'Only available on Claude Agent SDK backend'}
-        >
-          <option value="local">Local (gpt-tokenizer, fast)</option>
-          <option value="anthropic">Anthropic API (exact, slower)</option>
-        </select>
       </SettingRow>
 
       <SettingRow label="Max Turns" description="Maximum agentic turns per request. 0 = unlimited.">
