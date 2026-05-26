@@ -73,6 +73,7 @@ export interface Message {
   content: string
   attachments: string // JSON array
   tool_calls: string | null // JSON ToolCall[] or null
+  stopped?: number // 1 if the turn was manually stopped (partial). Optional: optimistic client-side literals omit it.
   created_at: string
   updated_at: string
 }

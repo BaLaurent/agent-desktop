@@ -9,6 +9,7 @@ import { summarizeWithModel } from '../services/summarization'
 import { mapModelToBackend } from '../services/modelBackendMap'
 import { validateString, validatePositiveInt, validatePathSafe } from '../utils/validate'
 import { HAIKU_MODEL } from '../types/constants'
+import { conversationExists } from '../db/queries'
 import { mkdirSync } from 'fs'
 import { promises as fsp } from 'fs'
 import { join, basename, extname } from 'path'
@@ -216,16 +217,17 @@ export function saveMessage(
   role: 'user' | 'assistant',
   content: string,
   attachments: Attachment[] = [],
-  toolCalls?: ToolCall[]
+  toolCalls?: ToolCall[],
+  stopped = false,
 ): Message {
   const now = new Date().toISOString()
   const toolCallsJson = toolCalls?.length ? JSON.stringify(toolCalls) : null
   const result = (db as any)
     .prepare(
-      `INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO messages (conversation_id, role, content, attachments, tool_calls, stopped, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(conversationId, role, content, JSON.stringify(attachments), toolCallsJson, now, now)
+    .run(conversationId, role, content, JSON.stringify(attachments), toolCallsJson, stopped ? 1 : 0, now, now)
 
   return {
     id: result.lastInsertRowid as number,
@@ -234,6 +236,7 @@ export function saveMessage(
     content,
     attachments: JSON.stringify(attachments),
     tool_calls: toolCallsJson,
+    stopped: stopped ? 1 : 0,
     created_at: now,
     updated_at: now,
   }
@@ -349,8 +352,7 @@ async function persistAssistantTurn(
   if (payload.newSessionId) {
     saveConversationSdkSessionId(db, conversationId, payload.newSessionId)
   }
-  const exists = (db as any).prepare('SELECT 1 FROM conversations WHERE id = ?').get(conversationId)
-  if (!exists) return null
+  if (!conversationExists(db, conversationId)) return null
 
   const finalContent = composeAssistantContent(payload.responseContent, hookSystemContents)
   const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], payload.toolCalls)
@@ -360,6 +362,39 @@ async function persistAssistantTurn(
   fireWebhookCompletion(db, ctx, payload, assistantMsg)
   fireTts(ctx, payload)
   void options // referenced through ctx
+  return assistantMsg
+}
+
+/**
+ * Persist a manually-stopped turn: save whatever the model produced so far as
+ * an assistant message flagged `stopped`, invalidate the SDK/PI session so the
+ * next turn rebuilds full history (the model then "sees" the partial), and
+ * refresh the UI. Skips completion side effects (webhook, TTS) — we don't
+ * announce a half-finished response. Returns null when nothing was produced.
+ *
+ * The turn is treated as a real (if incomplete) turn — it counts toward
+ * history and may trigger auto-title in the caller; only completion
+ * announcements (webhook, TTS) are skipped.
+ */
+async function persistStoppedTurn(
+  ctx: MessageStreamContext,
+  payload: import('./messages/streamPhases').AssistantTurnPayload & { aborted: boolean },
+): Promise<Message | null> {
+  const { db, conversationId, hookSystemContents, options } = ctx
+
+  const hasContent = payload.responseContent.length > 0 || (payload.toolCalls?.length ?? 0) > 0
+  if (!hasContent) return null
+
+  if (!conversationExists(db, conversationId)) return null
+
+  const finalContent = composeAssistantContent(payload.responseContent, hookSystemContents)
+  const assistantMsg = saveMessage(db, conversationId, 'assistant', finalContent, [], payload.toolCalls, true)
+
+  invalidateAllSessions(db, conversationId)
+  options.onSessionInvalidate?.(conversationId)
+
+  updateConversationTimestamp(db, conversationId)
+  notifyConversationUpdated(conversationId)
   return assistantMsg
 }
 
@@ -386,7 +421,9 @@ async function streamAndSave(
       // status-line bar should reflect tool-only turns too.
       if (payload.usage) await persistTurnUsage(db, ctx, payload)
 
-      if (payload.aborted) return null
+      if (payload.aborted) {
+        return persistStoppedTurn(ctx, payload)
+      }
 
       if (payload.responseContent) {
         return persistAssistantTurn(ctx, payload)

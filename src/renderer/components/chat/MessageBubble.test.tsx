@@ -697,4 +697,16 @@ describe('MessageBubble', () => {
     fireEvent.click(copyBtn)
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Context clean text')
   })
+
+  // ── Interrupted marker tests ─────────────────────────────────
+
+  it('shows the Interrupted marker for a stopped assistant message', () => {
+    render(<MessageBubble message={makeMessage({ role: 'assistant', content: 'half', stopped: 1 })} isLast={false} />)
+    expect(screen.getByText(/interrupted/i)).toBeInTheDocument()
+  })
+
+  it('does not show the Interrupted marker for a normal assistant message', () => {
+    render(<MessageBubble message={makeMessage({ role: 'assistant', content: 'done' })} isLast={false} />)
+    expect(screen.queryByText(/interrupted/i)).not.toBeInTheDocument()
+  })
 })

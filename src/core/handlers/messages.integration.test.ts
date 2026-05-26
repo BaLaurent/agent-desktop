@@ -529,4 +529,64 @@ describe('messages integration', () => {
       expect(conv.title).toBe('A'.repeat(80))
     })
   })
+
+  it('messages:send saves a stopped partial when aborted with content', async () => {
+    const onTtsSpeak = vi.fn()
+    const onSessionInvalidate = vi.fn()
+    const ipc2 = createMockIpcMain()
+    registerMessagesHandlers(ipc2.registry, db, createTestOptions({ onTtsSpeak, onSessionInvalidate }))
+    db.prepare("UPDATE conversations SET sdk_session_id = 'sess-1' WHERE id = ?").run(convId)
+
+    mockStreamMessage.mockResolvedValueOnce({ content: 'partial answer', toolCalls: [], aborted: true, sessionId: null })
+
+    const result = await ipc2.invoke('messages:send', convId, 'Hello')
+
+    const msgs = db
+      .prepare('SELECT role, content, stopped FROM messages WHERE conversation_id = ? ORDER BY created_at')
+      .all(convId) as { role: string; content: string; stopped: number }[]
+
+    expect(msgs).toHaveLength(2)
+    expect(msgs[1].role).toBe('assistant')
+    expect(msgs[1].content).toBe('partial answer')
+    expect(msgs[1].stopped).toBe(1)
+    expect(result).toBeTruthy()
+
+    const conv = db.prepare('SELECT sdk_session_id FROM conversations WHERE id = ?').get(convId) as { sdk_session_id: string | null }
+    expect(conv.sdk_session_id).toBeNull()
+
+    expect(onSessionInvalidate).toHaveBeenCalledWith(convId)
+    expect(onTtsSpeak).not.toHaveBeenCalled()
+  })
+
+  it('messages:send saves tool calls on a stopped turn', async () => {
+    mockStreamMessage.mockResolvedValueOnce({
+      content: '',
+      toolCalls: [{ id: 't1', name: 'Bash', input: '{}', output: '', status: 'done' }],
+      aborted: true,
+      sessionId: null,
+    })
+
+    await ipc.invoke('messages:send', convId, 'Hello')
+
+    const msgs = db
+      .prepare('SELECT role, stopped, tool_calls FROM messages WHERE conversation_id = ? ORDER BY created_at')
+      .all(convId) as { role: string; stopped: number; tool_calls: string | null }[]
+
+    expect(msgs).toHaveLength(2)
+    expect(msgs[1].role).toBe('assistant')
+    expect(msgs[1].stopped).toBe(1)
+    expect(msgs[1].tool_calls).not.toBeNull()
+    expect(msgs[1].tool_calls).toContain('Bash')
+  })
+
+  it('messages:send saves nothing when aborted with no content', async () => {
+    mockStreamMessage.mockResolvedValueOnce({ content: '', toolCalls: [], aborted: true, sessionId: null })
+
+    const result = await ipc.invoke('messages:send', convId, 'Hello')
+
+    expect(result).toBeNull()
+    const msgs = db.prepare('SELECT role FROM messages WHERE conversation_id = ?').all(convId) as { role: string }[]
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0].role).toBe('user')
+  })
 })
