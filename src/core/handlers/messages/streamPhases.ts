@@ -18,7 +18,7 @@ import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import type { Message } from '../../types/types'
 import type { AISettings } from '../../services/streaming'
 import { streamMessage, sendChunk, notifyConversationUpdated } from '../../services/streaming'
-import { createLogger } from '../../utils/logger'
+import { createLogger, errToCtx } from '../../utils/logger'
 
 const log = createLogger('streamPhases')
 import type { MessageStreamContext, RetrySettings } from './types'
@@ -235,10 +235,10 @@ export async function persistTurnUsage(
     // Persist content-only total BEFORE notifying the client, so the
     // refetch triggered by `notifyConversationUpdated` already sees it.
     await saveConversationContentTokens(db, ctx.conversationId, ctx.systemPrompt, ctx.aiSettings)
-      .catch((e) => log.warn('saveConversationContentTokens failed', e))
+      .catch((e) => log.warn('saveConversationContentTokens failed', errToCtx(e)))
     notifyConversationUpdated(ctx.conversationId)
   } catch (e) {
-    log.warn('saveConversationUsage failed', e)
+    log.warn('saveConversationUsage failed', errToCtx(e))
   }
 }
 

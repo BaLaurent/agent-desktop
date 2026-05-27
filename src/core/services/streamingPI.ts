@@ -99,6 +99,17 @@ async function executeSchedulerCommand(
     let buffer = ''
     let resolved = false
 
+    // Idempotent terminal cleanup: settle the promise once and close the
+    // socket so it stops holding the event loop open. Listeners stay attached
+    // so Node can still emit 'error' during destroy() teardown without
+    // surfacing it as an uncaught exception.
+    const finish = (settle: () => void) => {
+      if (resolved) return
+      resolved = true
+      settle()
+      socket.destroy()
+    }
+
     socket.on('data', (chunk) => {
       buffer += chunk.toString()
       const lines = buffer.split('\n')
@@ -108,14 +119,13 @@ async function executeSchedulerCommand(
         if (!trimmed) continue
         try {
           const response = JSON.parse(trimmed) as SchedulerBridgeResponse
-          if (!resolved) {
-            resolved = true
+          finish(() => {
             if (response.error) {
               reject(new Error(response.error))
             } else {
               resolve(response)
             }
-          }
+          })
         } catch {
           // Continue accumulating
         }
@@ -123,24 +133,16 @@ async function executeSchedulerCommand(
     })
 
     socket.on('error', (err) => {
-      if (!resolved) {
-        reject(err)
-      }
+      finish(() => reject(err))
     })
 
     socket.on('close', () => {
-      if (!resolved) {
-        resolve(null)
-      }
+      finish(() => resolve(null))
     })
 
     // Timeout after 5 seconds
     socket.setTimeout(5000, () => {
-      socket.destroy()
-      if (!resolved) {
-        resolved = true
-        reject(new Error('Scheduler bridge timeout'))
-      }
+      finish(() => reject(new Error('Scheduler bridge timeout')))
     })
   })
 }

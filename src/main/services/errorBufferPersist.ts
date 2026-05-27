@@ -1,6 +1,6 @@
 import { readFile, writeFile, rename, unlink } from 'fs/promises'
 import type { ErrorBuffer, ErrorEntry } from '../../core/services/errorBuffer'
-import { createLogger } from '../../core/utils/logger'
+import { createLogger, errToCtx } from '../../core/utils/logger'
 
 const log = createLogger('errorBufferPersist')
 
@@ -12,7 +12,7 @@ export async function loadFromDisk(buffer: ErrorBuffer, path: string): Promise<v
     raw = await readFile(path, 'utf8')
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return
-    log.warn('read failed, starting empty', { err })
+    log.warn('read failed, starting empty', errToCtx(err))
     return
   }
   let parsed: unknown
@@ -48,7 +48,7 @@ export function attachPersistence(buffer: ErrorBuffer, path: string): () => void
       await writeFile(tmp, payload, 'utf8')
       await rename(tmp, path)
     } catch (err) {
-      log.warn('flush failed', { err })
+      log.warn('flush failed', errToCtx(err))
       try {
         await unlink(tmp)
       } catch {
