@@ -23,6 +23,7 @@ ssl/
 wiki/
 .fallow/
 graphify-out/
+.understand-anything/
 .cache/
 attachments/
 /.crap-baseline.json
