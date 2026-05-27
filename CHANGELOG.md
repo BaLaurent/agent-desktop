@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.17.0] - 2026-05-27
+
+### New Features
+- **Partial replies survive a manual stop** — stopping a streaming reply now keeps whatever the assistant had already written and flags it with an `Interrupted` marker, instead of discarding the turn. Backed by a new `stopped` column on the messages table
+- **Agent persona & language directives** — new free-text `Personality` and `Language` settings (cascade conversation > folder > global) injected into the system prompt and reused by the TTS summary, so a conversation can keep a consistent voice and reply language
+- **CSV files render as tables** — `.csv` files in the preview pane are parsed and displayed as real tables instead of raw text
+
+### Bug Fixes
+- **TTS summary restored** — the spoken-summary feature was broken; it works again, and the structured logger no longer swallows the underlying errors
+- **Web/mobile stream recovery** — long-running streams that went silent after a transport drop are now recovered instead of hanging
+- **Logging** — `warn`/`info` now preserve an `Error`'s `cause` via `errToCtx` (the cause was previously discarded)
+
+### Under the Hood
+- Settings reads routed through the `getSetting` helper (single source for setting access)
+- Removed an unfinished `anthropic` token-counter mode (dead code)
+- Ignore `.understand-anything` analysis output in git
+
+### Tests
+- Full suite green: **2442 main + 1234 renderer**
+
+### Install
+- Linux — AppImage / .deb (x86_64 + arm64)
+- Windows — NSIS installer / portable .exe
+- Auto-update enabled on AppImage + NSIS
+
+---
+
 ## [0.16.1] - 2026-05-18
 
 ### Bug Fixes
