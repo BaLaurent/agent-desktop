@@ -7,6 +7,7 @@
 
 import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import { safeJsonParse } from '../../utils/json'
+import { getSetting } from '../../utils/db'
 
 /**
  * The cascade context for a conversation: its folder (for the Folder
@@ -49,10 +50,7 @@ export function cascadeStringKey(
     const folderOv = getFolderOverrides(db, folderId)
     if (folderOv[key]) return folderOv[key]
   }
-  const globalRow = (db as any)
-    .prepare('SELECT value FROM settings WHERE key = ?')
-    .get(key) as { value: string } | undefined
-  return globalRow?.value || undefined
+  return getSetting(db as any, key) || undefined
 }
 
 /**

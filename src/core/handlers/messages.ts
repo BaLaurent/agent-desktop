@@ -1,5 +1,6 @@
 import type { HandleRegistrar } from '../dispatch'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
+import { getSetting } from '../utils/db'
 import type { Broadcaster } from '../ports/broadcaster'
 import type { HookRunner } from '../ports/hookRunner'
 import type { AISettings } from '../services/streaming'
@@ -599,8 +600,7 @@ export function registerMessagesHandlers(
 
       // Auto-title on first assistant response (skip Quick Chat)
       if (assistantMsg) {
-        const quickChatRow = (db as any).prepare("SELECT value FROM settings WHERE key = 'quickChat_conversationId'").get() as { value: string } | undefined
-        const isQuickChat = quickChatRow?.value === String(validConvId)
+        const isQuickChat = getSetting(db as any, 'quickChat_conversationId') === String(validConvId)
         if (!isQuickChat) {
           const assistantCount = (db as any).prepare(
             "SELECT COUNT(*) as c FROM messages WHERE conversation_id = ? AND role = 'assistant'"

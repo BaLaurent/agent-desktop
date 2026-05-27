@@ -3,6 +3,7 @@ import { validateString, validatePositiveInt } from '../utils/validate'
 import { DEFAULT_MODEL } from '../types/constants'
 import type { ScheduledTask, CreateScheduledTask, IntervalUnit, PreRunAction } from '../types'
 import { getDefaultFolderId, getDefaultModel, conversationExists } from '../db/queries'
+import { getSetting } from '../utils/db'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
 import { validatePreRunAction, validateIntervalUnit, validateScheduleTime } from './scheduler/validation'
 import { executeTaskUpdate, executeTaskDelete, executeTaskToggle } from './scheduler/persistence'
@@ -408,10 +409,7 @@ export class SchedulerService {
 
   /** Get auto-theme settings and check if switch is needed */
   checkAutoTheme(): string | null {
-    const getVal = (key: string): string | null => {
-      const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
-      return row?.value ?? null
-    }
+    const getVal = (key: string): string => getSetting(this.db as any, key)
 
     if (getVal('autoTheme_enabled') !== 'true') return null
 

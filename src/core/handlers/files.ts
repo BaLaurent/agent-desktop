@@ -1,5 +1,6 @@
 import type { HandleRegistrar } from '../dispatch'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
+import { getSetting } from '../utils/db'
 import { promises as fsp } from 'fs'
 import { join, extname, dirname, basename } from 'path'
 import os from 'os'
@@ -196,9 +197,9 @@ async function generateCopyPath(originalPath: string): Promise<string> {
 /** Read the global hooks_cwdWhitelist setting from the database. */
 function getGlobalWhitelist(db: SqlJsAdapter): Array<{ path: string; access: 'read' | 'readwrite' }> {
   try {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('hooks_cwdWhitelist') as { value: string } | undefined
-    if (!row?.value) return []
-    const parsed = JSON.parse(row.value as string)
+    const value = getSetting(db as any, 'hooks_cwdWhitelist')
+    if (!value) return []
+    const parsed = JSON.parse(value)
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []

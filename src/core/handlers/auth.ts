@@ -2,6 +2,7 @@ import * as path from 'path'
 import * as os from 'os'
 import type { HandleRegistrar } from '../dispatch'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
+import { getSetting } from '../utils/db'
 import type { AuthStatus, AuthDiagnostics } from '../types/types'
 import {
   getCredentialsPath,
@@ -29,8 +30,7 @@ async function runDiagnostics(sdkError?: string): Promise<AuthDiagnostics> {
 async function getStatus(db: SqlJsAdapter): Promise<AuthStatus> {
   // Check for API key auth first — bypass OAuth entirely when set
   try {
-    const row = (db as any).prepare("SELECT value FROM settings WHERE key = 'ai_apiKey'").get() as { value: string } | undefined
-    if (row?.value) {
+    if (getSetting(db as any, 'ai_apiKey')) {
       return {
         authenticated: true,
         user: { email: 'API Key', name: 'API Key User' },

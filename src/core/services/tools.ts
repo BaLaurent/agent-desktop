@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import type { AllowedTool } from '../types'
 import { validateString } from '../utils/validate'
 import { safeJsonParse } from '../utils/json'
+import { getSetting } from '../utils/db'
 
 const SDK_TOOLS: { name: string; description: string }[] = [
   { name: 'Bash', description: 'Execute shell commands' },
@@ -18,10 +19,7 @@ const SDK_TOOLS: { name: string; description: string }[] = [
 ]
 
 function getEnabledSet(db: Database.Database): Set<string> | 'all' {
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = 'ai_tools'")
-    .get() as { value: string } | undefined
-  const value = row?.value ?? 'preset:claude_code'
+  const value = getSetting(db, 'ai_tools') || 'preset:claude_code'
   if (value === 'preset:claude_code') return 'all'
   const names = safeJsonParse<string[] | null>(value, null)
   return names ? new Set(names) : 'all'
