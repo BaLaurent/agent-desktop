@@ -17,7 +17,7 @@ import type {
   Attachment,
   AuthStatus,
   SystemInfo,
-  LogEntry,
+  SystemLogEntry,
   ToolApprovalResponse,
   AskUserResponse,
   UpdateInfo,
@@ -240,7 +240,7 @@ export interface AgentAPI {
   system: {
     getPathForFile(file: File): string
     getInfo(): Promise<SystemInfo>
-    getLogs(limit?: number): Promise<LogEntry[]>
+    getLogs(limit?: number): Promise<SystemLogEntry[]>
     clearCache(): Promise<void>
     openExternal(url: string): Promise<void>
     selectFolder(): Promise<string | null>

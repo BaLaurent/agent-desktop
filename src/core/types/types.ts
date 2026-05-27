@@ -384,7 +384,7 @@ export interface SystemInfo {
   sessionType: 'wayland' | 'x11' | 'unknown'
 }
 
-export interface LogEntry {
+export interface SystemLogEntry {
   level: 'info' | 'warn' | 'error'
   message: string
   timestamp: string

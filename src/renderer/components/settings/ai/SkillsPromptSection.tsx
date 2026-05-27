@@ -1,4 +1,4 @@
-import type { SlashCommand } from '../../../shared/types'
+import type { SlashCommand } from '../../../../shared/types'
 import { SettingSourcesRow } from './skills/SettingSourcesRow'
 import { ToggleRow } from './skills/ToggleRow'
 import { DiscoveredSkillsList } from './skills/DiscoveredSkillsList'
