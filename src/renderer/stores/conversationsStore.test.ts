@@ -230,6 +230,60 @@ describe('conversationsStore', () => {
 
       expect(mockAgent.conversations.deleteMany).not.toHaveBeenCalled()
     })
+
+    it('colorSelected optimistically tints selected and calls colorMany', async () => {
+      const convs = [makeConversation({ id: 1, color: null }), makeConversation({ id: 2, color: null }), makeConversation({ id: 3, color: null })]
+      useConversationsStore.setState({ conversations: convs, selectedIds: new Set([1, 3]), lastClickedId: 3 })
+
+      await useConversationsStore.getState().colorSelected('#ff0000')
+
+      expect(mockAgent.conversations.colorMany).toHaveBeenCalledWith(expect.arrayContaining([1, 3]), '#ff0000')
+      const state = useConversationsStore.getState()
+      expect(state.conversations.find((c) => c.id === 1)!.color).toBe('#ff0000')
+      expect(state.conversations.find((c) => c.id === 2)!.color).toBeNull()
+      expect(state.conversations.find((c) => c.id === 3)!.color).toBe('#ff0000')
+      expect(state.selectedIds.size).toBe(0)
+      expect(state.lastClickedId).toBeNull()
+    })
+
+    it('colorSelected rolls back the optimistic tint when colorMany rejects', async () => {
+      const convs = [makeConversation({ id: 1, color: null }), makeConversation({ id: 2, color: null })]
+      useConversationsStore.setState({ conversations: convs, selectedIds: new Set([1, 2]) })
+      mockAgent.conversations.colorMany.mockRejectedValueOnce(new Error('db locked'))
+
+      await useConversationsStore.getState().colorSelected('#00ff00')
+
+      const state = useConversationsStore.getState()
+      expect(state.conversations.find((c) => c.id === 1)!.color).toBeNull()
+      expect(state.conversations.find((c) => c.id === 2)!.color).toBeNull()
+    })
+
+    it('colorSelected is a no-op with empty selection', async () => {
+      useConversationsStore.setState({ conversations: [makeConversation({ id: 1 })], selectedIds: new Set() })
+
+      await useConversationsStore.getState().colorSelected('#123456')
+
+      expect(mockAgent.conversations.colorMany).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('forkConversation', () => {
+    it('forks via the IPC, prepends the new conversation and activates it', async () => {
+      const existing = makeConversation({ id: 1, title: 'Original' })
+      useConversationsStore.setState({ conversations: [existing], activeConversationId: 1 })
+
+      const forked = makeConversation({ id: 42, title: 'Original (fork)' })
+      mockAgent.conversations.fork.mockResolvedValueOnce(forked)
+
+      const result = await useConversationsStore.getState().forkConversation(1, 7)
+
+      expect(mockAgent.conversations.fork).toHaveBeenCalledWith(1, 7)
+      expect(result).toEqual(forked)
+      const state = useConversationsStore.getState()
+      expect(state.conversations[0]).toEqual(forked)
+      expect(state.conversations).toHaveLength(2)
+      expect(state.activeConversationId).toBe(42)
+    })
   })
 
   describe('deleteFolder', () => {

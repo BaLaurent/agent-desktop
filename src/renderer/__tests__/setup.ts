@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import '@testing-library/jest-dom'
+import type { AgentAPI } from '../../preload/api'
 
 // Captured stream listener callback — set when chatStore module registers its onStream handler
 export let capturedStreamListener: ((chunk: unknown) => void) | null = null
@@ -31,6 +32,8 @@ export const mockAgent = {
     import: vi.fn().mockResolvedValue({ id: 2, title: 'Imported' }),
     search: vi.fn().mockResolvedValue([]),
     generateTitle: vi.fn().mockResolvedValue(undefined),
+    colorMany: vi.fn().mockResolvedValue(undefined),
+    fork: vi.fn().mockResolvedValue({ id: 2, title: 'Forked', folder_id: 1, position: 0, model: 'claude-sonnet-4-6', system_prompt: null, cwd: null, kb_enabled: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   },
   messages: {
     send: vi.fn().mockResolvedValue(null),
@@ -63,6 +66,7 @@ export const mockAgent = {
     writeFile: vi.fn().mockResolvedValue(undefined),
     savePastedFile: vi.fn().mockResolvedValue('/tmp/test.png'),
     revealInFileManager: vi.fn().mockResolvedValue(undefined),
+    openTerminalHere: vi.fn().mockResolvedValue(undefined),
     openWithDefault: vi.fn().mockResolvedValue(undefined),
     trash: vi.fn().mockResolvedValue(undefined),
     rename: vi.fn().mockResolvedValue('/new/path'),
@@ -70,6 +74,7 @@ export const mockAgent = {
     move: vi.fn().mockResolvedValue('/tmp/moved'),
     createFile: vi.fn().mockResolvedValue('/tmp/new.txt'),
     createFolder: vi.fn().mockResolvedValue('/tmp/newdir'),
+    prepareSession: vi.fn().mockResolvedValue({ cwd: '/tmp/session', count: 0 }),
   },
   folders: {
     list: vi.fn().mockResolvedValue([]),
@@ -109,6 +114,7 @@ export const mockAgent = {
   settings: {
     get: vi.fn().mockResolvedValue({}),
     set: vi.fn().mockResolvedValue(undefined),
+    getLocked: vi.fn().mockResolvedValue([]),
     setStreamingTimeout: vi.fn(),
   },
   themes: {
@@ -116,7 +122,6 @@ export const mockAgent = {
     read: vi.fn().mockResolvedValue({ filename: 'test.css', name: 'test', isBuiltin: false, css: '' }),
     create: vi.fn().mockResolvedValue({ id: 1 }),
     save: vi.fn().mockResolvedValue(undefined),
-    update: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     getDir: vi.fn().mockResolvedValue('/tmp/themes'),
     refresh: vi.fn().mockResolvedValue([]),
@@ -135,6 +140,7 @@ export const mockAgent = {
     stop: vi.fn().mockResolvedValue(undefined),
     validate: vi.fn().mockResolvedValue({ provider: null, providerFound: false, playerFound: false, playerPath: '' }),
     detectPlayers: vi.fn().mockResolvedValue([]),
+    listSayVoices: vi.fn().mockResolvedValue([]),
     onStateChange: vi.fn().mockImplementation((cb: (state: { speaking: boolean; messageId?: number }) => void) => {
       capturedTtsStateListener = cb
       return () => {}
@@ -160,6 +166,8 @@ export const mockAgent = {
     onTrayNewConversation: vi.fn().mockReturnValue(() => {}),
     onDeeplinkNavigate: vi.fn().mockReturnValue(() => {}),
     onConversationTitleUpdated: vi.fn().mockReturnValue(() => {}),
+    onOverlayStopRecording: vi.fn().mockReturnValue(() => {}),
+    onConversationsRefresh: vi.fn().mockReturnValue(() => {}),
     onConversationUpdated: vi.fn().mockImplementation((cb: (id: number) => void) => {
       capturedConversationUpdatedListeners.push(cb)
       capturedConversationUpdatedListener = cb
@@ -188,7 +196,84 @@ export const mockAgent = {
     listVariables: vi.fn().mockResolvedValue([]),
     onTaskUpdate: vi.fn().mockReturnValue(() => {}),
   },
-}
+  bugReport: {
+    getMainErrors: vi.fn().mockResolvedValue([]),
+    scrub: vi.fn().mockResolvedValue(''),
+    send: vi.fn().mockResolvedValue({ ok: true }),
+    onOpenRequest: vi.fn().mockReturnValue(() => {}),
+  },
+  models: {
+    list: vi.fn().mockResolvedValue([]),
+    refresh: vi.fn().mockResolvedValue([]),
+  },
+  commands: {
+    list: vi.fn().mockResolvedValue([]),
+  },
+  macros: {
+    load: vi.fn().mockResolvedValue(null),
+    list: vi.fn().mockResolvedValue([]),
+    save: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  },
+  quickChat: {
+    getConversationId: vi.fn().mockResolvedValue(1),
+    purge: vi.fn().mockResolvedValue(undefined),
+    hide: vi.fn().mockResolvedValue(undefined),
+    setBubbleMode: vi.fn().mockResolvedValue(undefined),
+    reregisterShortcuts: vi.fn().mockResolvedValue(undefined),
+  },
+  openscad: {
+    compile: vi.fn().mockResolvedValue({ data: '', warnings: '' }),
+    validateConfig: vi.fn().mockResolvedValue({ binaryFound: true, binaryPath: 'openscad', version: '2021.01' }),
+    exportStl: vi.fn().mockResolvedValue(null),
+  },
+  updates: {
+    check: vi.fn().mockResolvedValue({ available: false }),
+    download: vi.fn().mockResolvedValue(undefined),
+    install: vi.fn().mockResolvedValue(undefined),
+    getStatus: vi.fn().mockResolvedValue({ state: 'idle' }),
+    onStatus: vi.fn().mockReturnValue(() => {}),
+  },
+  server: {
+    start: vi.fn().mockResolvedValue({ url: 'http://localhost:0', token: '' }),
+    stop: vi.fn().mockResolvedValue(undefined),
+    getStatus: vi.fn().mockResolvedValue({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, shortCode: null, accessMode: null, clients: 0, firewallWarning: null }),
+    setPassword: vi.fn().mockResolvedValue(undefined),
+    clearPassword: vi.fn().mockResolvedValue(undefined),
+    isPasswordSet: vi.fn().mockResolvedValue(false),
+    getSessionDurationDays: vi.fn().mockResolvedValue(30),
+    setSessionDurationDays: vi.fn().mockResolvedValue(undefined),
+    getRememberDurationDays: vi.fn().mockResolvedValue(30),
+    setRememberDurationDays: vi.fn().mockResolvedValue(undefined),
+  },
+  discord: {
+    connect: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn().mockResolvedValue(undefined),
+    status: vi.fn().mockResolvedValue({ connected: false }),
+  },
+  jupyter: {
+    startKernel: vi.fn().mockResolvedValue({ status: 'ok' }),
+    executeCell: vi.fn().mockResolvedValue(''),
+    interruptKernel: vi.fn().mockResolvedValue(undefined),
+    restartKernel: vi.fn().mockResolvedValue(undefined),
+    shutdownKernel: vi.fn().mockResolvedValue(undefined),
+    getStatus: vi.fn().mockResolvedValue(null),
+    detectJupyter: vi.fn().mockResolvedValue({ found: false, pythonPath: null }),
+    onOutput: vi.fn().mockReturnValue(() => {}),
+  },
+  git: {
+    isRepo: vi.fn().mockResolvedValue(false),
+    status: vi.fn().mockResolvedValue({ branch: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [] }),
+    logGraph: vi.fn().mockResolvedValue([]),
+    commitDetail: vi.fn().mockResolvedValue({ body: '', files: [] }),
+    branches: vi.fn().mockResolvedValue([]),
+    stashList: vi.fn().mockResolvedValue([]),
+    checkout: vi.fn().mockResolvedValue(undefined),
+    stashSave: vi.fn().mockResolvedValue(undefined),
+    stashPop: vi.fn().mockResolvedValue(undefined),
+    fetch: vi.fn().mockResolvedValue(undefined),
+  },
+} satisfies AgentAPI
 
 // Install global mock before any store modules load
 // Use the existing jsdom window — do NOT replace it, just add agent
