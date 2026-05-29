@@ -279,7 +279,6 @@ export function generateShim(token: string): string {
       get: function() { return invoke('settings:get', []); },
       set: function(k, v) { return invoke('settings:set', [k, v]); },
       getLocked: function() { return invoke('settings:getLocked', []); },
-      setStreamingTimeout: noop,
     },
     themes: {
       list: function() { return invoke('themes:list', []); },

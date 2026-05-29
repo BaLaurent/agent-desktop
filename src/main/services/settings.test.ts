@@ -42,12 +42,6 @@ describe('Settings Service', () => {
     expect(settings.theme).toBe('light')
   })
 
-  it('accepts streamingTimeoutSeconds setting key', async () => {
-    await ipc.invoke('settings:set', 'streamingTimeoutSeconds', '60')
-    const settings = await ipc.invoke('settings:get') as Record<string, string>
-    expect(settings.streamingTimeoutSeconds).toBe('60')
-  })
-
   it('accepts voice_volumeDuck setting key', async () => {
     await ipc.invoke('settings:set', 'voice_volumeDuck', '30')
     const settings = await ipc.invoke('settings:get') as Record<string, string>

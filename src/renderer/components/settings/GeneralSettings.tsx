@@ -196,19 +196,6 @@ export function GeneralSettings() {
         </div>
       ))}
 
-      <SettingRow label="Response timeout" description="Seconds before a streaming response times out. 0 = no timeout.">
-        <input
-          type="number"
-          min={0}
-          step={30}
-          value={settings.streamingTimeoutSeconds ?? '300'}
-          onChange={(e) => setSetting('streamingTimeoutSeconds', e.target.value)}
-          className="w-24 text-sm rounded px-2 py-1 border text-right mobile:text-base"
-          style={{ backgroundColor: 'var(--color-base)', color: 'var(--color-text)', borderColor: tint('--color-text-muted', 20) }}
-          aria-label="Response timeout in seconds"
-        />
-      </SettingRow>
-
       {/* Auto-retry settings */}
       <SettingRow label="Auto-retry on error" description="Automatically retry when a streaming response fails (e.g. SDK crash).">
         <Toggle

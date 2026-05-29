@@ -1,8 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AgentAPI } from './api'
 
-let _streamingTimeoutMs = 300000
-
 function withTimeout<T>(promise: Promise<T>, ms = 30000): Promise<T> {
   if (ms <= 0) return promise
   return Promise.race([
@@ -52,13 +50,18 @@ const api: AgentAPI = {
     fork: (conversationId: number, messageId: number) => withTimeout(ipcRenderer.invoke('conversations:fork', conversationId, messageId)),
   },
   messages: {
+    // Streaming RPCs intentionally have NO client-side timeout: the IPC promise
+    // resolves only when the whole agentic turn completes, which can legitimately
+    // take many minutes of silent tool use. A fixed cap turned a healthy-but-slow
+    // turn into a false "server not responding" + lost work (issue #8). Genuine
+    // SDK failures still surface via the 'error' stream chunk + auto-retry.
     send: (conversationId, content, attachments?) =>
-      withTimeout(ipcRenderer.invoke('messages:send', conversationId, content, attachments), _streamingTimeoutMs),
+      ipcRenderer.invoke('messages:send', conversationId, content, attachments),
     stop: (conversationId?: number) => withTimeout(ipcRenderer.invoke('messages:stop', conversationId)),
-    regenerate: (conversationId) => withTimeout(ipcRenderer.invoke('messages:regenerate', conversationId), _streamingTimeoutMs),
-    edit: (messageId, content) => withTimeout(ipcRenderer.invoke('messages:edit', messageId, content), _streamingTimeoutMs),
+    regenerate: (conversationId) => ipcRenderer.invoke('messages:regenerate', conversationId),
+    edit: (messageId, content) => ipcRenderer.invoke('messages:edit', messageId, content),
     compact: (conversationId: number) =>
-      withTimeout(ipcRenderer.invoke('messages:compact', conversationId), _streamingTimeoutMs),
+      ipcRenderer.invoke('messages:compact', conversationId),
     respondToApproval: (requestId, response) =>
       withTimeout(ipcRenderer.invoke('messages:respondToApproval', requestId, response)),
     onStream: (callback) => {
@@ -153,7 +156,6 @@ const api: AgentAPI = {
     get: () => withTimeout(ipcRenderer.invoke('settings:get')),
     set: (key, value) => withTimeout(ipcRenderer.invoke('settings:set', key, value)),
     getLocked: () => withTimeout(ipcRenderer.invoke('settings:getLocked')),
-    setStreamingTimeout: (ms: number) => { _streamingTimeoutMs = ms },
   },
   themes: {
     list: () => withTimeout(ipcRenderer.invoke('themes:list')),

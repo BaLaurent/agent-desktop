@@ -11,6 +11,7 @@ export default defineConfig({
       'src/core/**/*.test.ts',
       'src/extensions/**/*.test.ts',
       'src/headless/**/*.test.ts',
+      'src/preload/**/*.test.ts',
     ],
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),

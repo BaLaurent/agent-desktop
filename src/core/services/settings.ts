@@ -59,8 +59,6 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   // CWD restriction
   'hooks_cwdRestriction',
   'hooks_cwdWhitelist',
-  // Streaming timeout
-  'streamingTimeoutSeconds',
   // API Key auth (global only, not cascadable)
   'ai_apiKey',
   'ai_baseUrl',

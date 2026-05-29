@@ -115,7 +115,6 @@ export const mockAgent = {
     get: vi.fn().mockResolvedValue({}),
     set: vi.fn().mockResolvedValue(undefined),
     getLocked: vi.fn().mockResolvedValue([]),
-    setStreamingTimeout: vi.fn(),
   },
   themes: {
     list: vi.fn().mockResolvedValue([]),
