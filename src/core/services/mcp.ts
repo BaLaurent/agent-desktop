@@ -2,8 +2,14 @@ import type Database from 'better-sqlite3'
 import { spawn } from 'child_process'
 import type { McpServer, McpServerConfig, McpTransportType, McpTestResult } from '../types'
 import { safeJsonParse } from '../utils/json'
+import { expandStdioCommand } from '../utils/paths'
 
-const DANGEROUS_CHARS = /[;&|`$(){}[\]<>!#~]/
+// `~` is intentionally absent: it is a shell convenience for $HOME, not a shell
+// metacharacter. All stdio MCP servers spawn with `shell: false`, so none of
+// these are interpreted by a shell — but we keep the genuine injection chars as
+// defense-in-depth. The leading `~` is expanded at the spawn boundary instead
+// (see expandStdioCommand).
+const DANGEROUS_CHARS = /[;&|`$(){}[\]<>!#]/
 const VALID_TRANSPORT_TYPES: McpTransportType[] = ['stdio', 'http', 'sse']
 const TEST_TIMEOUT_MS = 10_000
 const MAX_OUTPUT_LEN = 4000
@@ -62,15 +68,15 @@ function validateMcpHeaders(headers: unknown): void {
 
 function testStdioConnection(server: McpServer): Promise<McpTestResult> {
   return new Promise((resolve) => {
-    const args = safeJsonParse<string[]>(server.args, [])
     const env = safeJsonParse<Record<string, string>>(server.env, {})
-    const cmdLine = [server.command, ...args].map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')
+    const { command, args } = expandStdioCommand(server.command, safeJsonParse<string[]>(server.args, []))
+    const cmdLine = [command, ...args].map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')
     let output = `$ ${cmdLine}\n`
     let resolved = false
 
     let proc: ReturnType<typeof spawn>
     try {
-      proc = spawn(server.command, args, { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'], shell: false })
+      proc = spawn(command, args, { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'], shell: false })
     } catch (err) {
       resolve({ success: false, output: `Failed to spawn: ${(err as Error).message}` })
       return

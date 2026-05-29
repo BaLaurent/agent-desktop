@@ -3,6 +3,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { McpTransportConfig } from './streaming'
+import { expandStdioCommand } from '../utils/paths'
 
 export interface McpToolSpec {
   name: string
@@ -29,9 +30,10 @@ export class McpConnectError extends Error {
 
 function buildTransport(config: McpTransportConfig) {
   if ('command' in config) {
+    const { command, args } = expandStdioCommand(config.command, config.args)
     return new StdioClientTransport({
-      command: config.command,
-      args: config.args,
+      command,
+      args,
       env: config.env ? ({ ...process.env, ...config.env } as Record<string, string>) : undefined,
     })
   }

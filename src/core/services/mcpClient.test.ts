@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { homedir } from 'os'
 
 const mockConnect = vi.fn()
 const mockListTools = vi.fn()
@@ -73,6 +74,16 @@ describe('createMcpClient — stdio', () => {
     expect(handle.name).toBe('fs')
     expect(handle.tools).toHaveLength(1)
     expect(handle.tools[0].name).toBe('echo')
+  })
+
+  it('expands a leading ~ in command and args before spawning (shell: false)', async () => {
+    await createMcpClient('tilde', {
+      command: '~/bin/my-mcp',
+      args: ['~/config.json', '--port', '3000'],
+    })
+    const passedOpts = mockStdioCtor.mock.calls[0][0] as { command: string; args: string[] }
+    expect(passedOpts.command).toBe(`${homedir()}/bin/my-mcp`)
+    expect(passedOpts.args).toEqual([`${homedir()}/config.json`, '--port', '3000'])
   })
 
   it('omits env when not provided', async () => {

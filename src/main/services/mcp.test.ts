@@ -55,6 +55,19 @@ describe('MCP Service', () => {
       expect((server as any).status).toBe('configured')
     })
 
+    it('accepts a tilde (~) home-relative command — not a shell metachar', async () => {
+      const server = await ipc.invoke('mcp:addServer', {
+        name: 'tilde-server',
+        command: '~/bin/my-mcp-server',
+        args: ['~/config.json'],
+        env: {},
+      })
+
+      // Stored verbatim; tilde is expanded later at the spawn boundary.
+      expect((server as any).command).toBe('~/bin/my-mcp-server')
+      expect((server as any).status).toBe('configured')
+    })
+
     it('throws on empty command', async () => {
       await expect(
         ipc.invoke('mcp:addServer', {

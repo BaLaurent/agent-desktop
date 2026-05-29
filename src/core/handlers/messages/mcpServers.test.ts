@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { homedir } from 'os'
 import { createTestDb } from '../../../main/__tests__/db-helper'
 import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import {
@@ -39,6 +40,17 @@ describe('mcpServers helpers', () => {
         command: 'npx',
         args: ['--yes', 'pkg'],
         env: { TOKEN: 'abc', PORT: '3000' },
+      })
+    })
+
+    it('expands a leading ~ in the stdio command and args at the spawn boundary', () => {
+      db.prepare(
+        "INSERT INTO mcp_servers (name, type, command, args, env, enabled) VALUES (?, ?, ?, ?, ?, 1)",
+      ).run('tilde-tool', 'stdio', '~/bin/my-mcp', '["~/config.json", "--port", "3000"]', '{}')
+      const result = loadMcpServersFromDb(db as any)
+      expect(result['tilde-tool']).toEqual({
+        command: `${homedir()}/bin/my-mcp`,
+        args: [`${homedir()}/config.json`, '--port', '3000'],
       })
     })
 

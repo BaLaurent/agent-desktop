@@ -13,6 +13,7 @@
 import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import type { AISettings } from '../../services/streaming'
 import { safeJsonParse } from '../../utils/json'
+import { expandStdioCommand } from '../../utils/paths'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('mcpServers')
@@ -48,10 +49,10 @@ export function loadMcpServersFromDb(db: SqlJsAdapter): McpServerMap {
           ...(Object.keys(headers).length > 0 ? { headers } : {}),
         }
       } else {
-        const args = safeJsonParse<string[]>(row.args, [])
         const env = safeJsonParse<Record<string, string>>(row.env, {})
+        const { command, args } = expandStdioCommand(row.command, safeJsonParse<string[]>(row.args, []))
         servers[row.name] = {
-          command: row.command,
+          command,
           args,
           ...(Object.keys(env).length > 0 ? { env } : {}),
         }
