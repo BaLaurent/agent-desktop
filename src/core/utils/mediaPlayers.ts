@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFileAsync as exec } from './exec'
 import { findBinaryInPath } from './env'
 import { createLogger, errToCtx } from './logger'
 
@@ -12,15 +12,6 @@ function detectPlayerctl(): string | null {
   if (cachedPlayerctl !== undefined) return cachedPlayerctl
   cachedPlayerctl = findBinaryInPath('playerctl')
   return cachedPlayerctl
-}
-
-function exec(binary: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(binary, args, { timeout: 5000 }, (err, stdout) => {
-      if (err) reject(err)
-      else resolve(stdout.trim())
-    })
-  })
 }
 
 /** Pause every MPRIS player currently in "Playing" status; remember which. Idempotent. */

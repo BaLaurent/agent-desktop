@@ -1,5 +1,6 @@
 import dbus, { type MessageBus, type Message, MessageType, Variant } from 'dbus-next'
-import { execFile, execFileSync } from 'child_process'
+import { execFileSync } from 'child_process'
+import { execFileAsync } from '../../core/utils/exec'
 import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -82,12 +83,7 @@ function resolveHyprctl(): string | null {
 function hyprctl(args: string[]): Promise<string> {
   const binary = resolveHyprctl()
   if (!binary) return Promise.reject(new Error('hyprctl not found in PATH'))
-  return new Promise((resolve, reject) => {
-    execFile(binary, args, { timeout: 5000 }, (err, stdout) => {
-      if (err) reject(err)
-      else resolve(stdout.trim())
-    })
-  })
+  return execFileAsync(binary, args)
 }
 
 /**

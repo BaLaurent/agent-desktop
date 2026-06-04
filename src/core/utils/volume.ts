@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFileAsync as exec } from './exec'
 import { findBinaryInPath } from './env'
 import { createLogger, errToCtx } from './logger'
 
@@ -25,15 +25,6 @@ function detectBackend(): BackendInfo | null {
   }
   cachedBackend = null
   return null
-}
-
-function exec(binary: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(binary, args, { timeout: 5000 }, (err, stdout) => {
-      if (err) reject(err)
-      else resolve(stdout.trim())
-    })
-  })
 }
 
 async function getVolume(backend: BackendInfo): Promise<number> {
