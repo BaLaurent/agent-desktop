@@ -17,7 +17,9 @@ purify.addHook('uponSanitizeAttribute', (_, data) => {
 })
 
 // Single source of truth for Mermaid SVG sanitization — exported so tests exercise
-// the real config AND the hook above (not a drifting duplicate).
+// the real config AND the hook above (not a drifting duplicate). Only consumer outside
+// this file is the test suite, hence the suppression (testability exception).
+// fallow-ignore-next-line unused-export
 export function sanitizeMermaidSvg(svg: string): string {
   return purify.sanitize(svg, {
     USE_PROFILES: { svg: true, svgFilters: true, html: true },
