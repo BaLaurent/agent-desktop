@@ -94,4 +94,26 @@ describe('QuickChatSettings', () => {
 
     expect(setSetting).toHaveBeenCalledWith('voice_volumeDuck', '30')
   })
+
+  it('pause-media checkbox reflects settings value', () => {
+    useSettingsStore.setState({
+      settings: { voice_pauseMediaPlayers: 'true' },
+      setSetting: vi.fn().mockResolvedValue(undefined),
+    })
+
+    render(<QuickChatSettings />)
+    const checkbox = screen.getByLabelText(/pause media players/i) as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+  })
+
+  it('toggling pause-media checkbox calls setSetting', () => {
+    const setSetting = vi.fn().mockResolvedValue(undefined)
+    useSettingsStore.setState({ setSetting })
+
+    render(<QuickChatSettings />)
+    const checkbox = screen.getByLabelText(/pause media players/i)
+    fireEvent.click(checkbox)
+
+    expect(setSetting).toHaveBeenCalledWith('voice_pauseMediaPlayers', 'true')
+  })
 })
