@@ -50,12 +50,12 @@ vi.mock('../mainContext', () => ({
   getMainWindow: vi.fn(() => null),
 }))
 
-vi.mock('../utils/volume', () => ({
-  duckVolume: vi.fn(),
-  restoreVolume: vi.fn(),
+vi.mock('../../core/services/voiceAudioEffects', () => ({
+  applyVoiceAudioEffects: vi.fn().mockResolvedValue(undefined),
+  clearVoiceAudioEffects: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { duckVolume, restoreVolume } from '../utils/volume'
+import { applyVoiceAudioEffects, clearVoiceAudioEffects } from '../../core/services/voiceAudioEffects'
 
 // --- Helpers ---
 
@@ -463,12 +463,12 @@ describe('QuickChat Service', () => {
 
       showOverlay('voice')
       mockOverlayWin.isVisible.mockReturnValue(true)
-      vi.mocked(restoreVolume).mockClear()
+      vi.mocked(clearVoiceAudioEffects).mockClear()
 
       showOverlay('voice')
 
       expect(mockWebContents.send).toHaveBeenCalledWith('overlay:stopRecording')
-      expect(vi.mocked(restoreVolume)).toHaveBeenCalled()
+      expect(vi.mocked(clearVoiceAudioEffects)).toHaveBeenCalled()
     })
 
     it('destroys stale invisible overlay and creates new one', async () => {
@@ -502,41 +502,27 @@ describe('QuickChat Service', () => {
     })
   })
 
-  describe('audio ducking', () => {
-    it('calls duckVolume when voice mode and voice_volumeDuck > 0', async () => {
+  describe('audio effects', () => {
+    it('applies voice audio effects in voice mode', async () => {
       const { registerHandlers, showOverlay } = await import('./quickChat')
-      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
-        'voice_volumeDuck': '30',
-      }))
+      const db = makeMockDb({ 'voice_volumeDuck': '30' })
+      registerHandlers(mockIpcMain as unknown as IpcMain, db)
 
       showOverlay('voice')
 
-      expect(vi.mocked(duckVolume)).toHaveBeenCalledWith(30)
+      expect(vi.mocked(applyVoiceAudioEffects)).toHaveBeenCalledWith(db)
     })
 
-    it('does not call duckVolume in text mode', async () => {
+    it('does not apply voice audio effects in text mode', async () => {
       const { registerHandlers, showOverlay } = await import('./quickChat')
-      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
-        'voice_volumeDuck': '30',
-      }))
+      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb())
 
       showOverlay('text')
 
-      expect(vi.mocked(duckVolume)).not.toHaveBeenCalled()
+      expect(vi.mocked(applyVoiceAudioEffects)).not.toHaveBeenCalled()
     })
 
-    it('does not call duckVolume when voice_volumeDuck is 0', async () => {
-      const { registerHandlers, showOverlay } = await import('./quickChat')
-      registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb({
-        'voice_volumeDuck': '0',
-      }))
-
-      showOverlay('voice')
-
-      expect(vi.mocked(duckVolume)).not.toHaveBeenCalled()
-    })
-
-    it('calls restoreVolume when overlay window closes', async () => {
+    it('clears voice audio effects when overlay window closes', async () => {
       const { registerHandlers, showOverlay } = await import('./quickChat')
       registerHandlers(mockIpcMain as unknown as IpcMain, makeMockDb())
 
@@ -545,7 +531,7 @@ describe('QuickChat Service', () => {
       // Simulate window close
       closedCb?.()
 
-      expect(vi.mocked(restoreVolume)).toHaveBeenCalled()
+      expect(vi.mocked(clearVoiceAudioEffects)).toHaveBeenCalled()
     })
   })
 
