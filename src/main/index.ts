@@ -20,6 +20,7 @@ import { createTray, setTrayUpdateCallbacks, rebuildTrayMenu, toggleAppWindow } 
 import { initAutoUpdater, stopAutoUpdater, checkForUpdates, installUpdate } from './services/updater'
 import { setupDeepLinks } from './services/deeplink'
 import { registerPreviewScheme, registerPreviewProtocol } from './services/protocol'
+import { registerModelScheme, registerModelProtocol } from './services/parakeetProtocol'
 import { registerStreamWindow } from './services/streaming'
 import { cleanupPastedFiles } from './services/files'
 import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } from './services/globalShortcuts'
@@ -35,8 +36,9 @@ import { sendBugReport } from './services/bugReport'
 import { scrub as scrubLog } from './services/logScrubber'
 import { setMainContext } from './mainContext'
 
-// Custom protocol — must be registered before app.ready
+// Custom protocols — must be registered before app.ready
 registerPreviewScheme()
+registerModelScheme()
 
 // Enrich PATH/HOME for AppImage and non-standard environments — before GPU flags
 // (enrichEnvironment discovers WAYLAND_DISPLAY which affects Ozone platform choice)
@@ -89,11 +91,22 @@ if (process.platform === 'win32') {
  * the preview channel (e.g. `fetch('agent-preview:///home/<u>/.ssh/id_rsa')`).
  */
 export const CSP_POLICY = [
-  "default-src 'self' agent-preview:",
-  "script-src 'self'",
+  "default-src 'self' agent-preview: agent-model:",
+  // 'wasm-unsafe-eval' is the narrow CSP token that permits WebAssembly.compile/
+  // instantiate (NOT eval/Function) — required for the Parakeet STT engine, which
+  // runs onnxruntime-web in the renderer. Far weaker than 'unsafe-eval'.
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: agent-preview:",
-  "connect-src 'self' ws: wss: https:",
+  // agent-model: serves onnxruntime-web's WASM artifacts AND manually-provided
+  // Parakeet model files to the STT worker (file:// can't be fetch()ed in prod, so a
+  // privileged protocol is required — same rationale as agent-preview:).
+  // https: already covers the fromHub() HuggingFace download path.
+  "connect-src 'self' ws: wss: https: agent-model:",
+  // The Parakeet STT worker (Vite module worker, 'self'/blob:) plus onnxruntime-web's
+  // internal threaded helper worker, which ORT may spawn from the wasmPaths origin
+  // (agent-model:) or a blob: URL.
+  "worker-src 'self' blob: agent-model:",
   "object-src 'none'",
   "frame-src 'none'",
   "base-uri 'none'",
@@ -154,6 +167,28 @@ export function hardenBrowserWindow(win: BrowserWindow): void {
   })
 }
 
+/**
+ * Record renderer load failures so a blank/grey window leaves a trail.
+ *
+ * A window that renders grey almost always means the document or one of
+ * its module scripts never loaded. `did-fail-load` carries the Chromium
+ * error code + the URL that failed — enough to tell a CSP block
+ * (`Refused to load…`), a refused connection (-102), and a missing file
+ * (-6) apart *after the fact*, without reproducing.
+ *
+ * Routed through `console.error` on purpose: `patchConsoleError`
+ * (installed at module load) both prints it to the terminal AND pushes it
+ * into `mainErrorBuffer`, so it persists to `error-buffer.json` and rides
+ * along in bug reports. Sub-frame failures and `ERR_ABORTED` (-3, fired on
+ * ordinary navigations / HMR) are dropped as noise.
+ */
+export function logRendererLoadFailures(win: BrowserWindow): void {
+  win.webContents.on('did-fail-load', (_ev, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3) return
+    console.error(`[renderer] did-fail-load ${errorCode} ${errorDescription} — ${validatedURL}`)
+  })
+}
+
 let mainWindow: BrowserWindow | null = null
 let isShuttingDown = false
 
@@ -208,6 +243,7 @@ function createWindow(): void {
   // Origin-lock the window BEFORE loadURL/loadFile — otherwise the first
   // navigation dispatches before setWindowOpenHandler/will-navigate are wired.
   hardenBrowserWindow(mainWindow)
+  logRendererLoadFailures(mainWindow)
 
   // Load renderer
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -244,6 +280,19 @@ if (!gotLock) {
     }
 
     registerPreviewProtocol()
+
+    // agent-model: serves the Parakeet STT worker its onnxruntime-web WASM runtime
+    // (host 'ort') and, in manual mode, the user's local model files (host 'model').
+    registerModelProtocol(() => {
+      try {
+        const db = getDatabase()
+        if (getSetting(db, 'parakeet_modelSource') !== 'manual') return null
+        const dir = getSetting(db, 'parakeet_modelPath')
+        return dir && dir.trim() ? dir : null
+      } catch {
+        return null
+      }
+    })
 
     // Security hardening — session CSP + permission filter + app-level
     // guards. Must run after ready; defaultSession is not available before.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { encodeWav } from './wavEncoder'
+import { encodeWav, decodeToMono16k } from './wavEncoder'
 
 /** Create a mock AudioBuffer with the given samples and sample rate */
 function createMockAudioBuffer(
@@ -121,5 +121,43 @@ describe('encodeWav', () => {
 
     expect(view.getUint32(28, true)).toBe(32000) // 16000 * 2
     expect(view.getUint16(32, true)).toBe(2) // block align
+  })
+})
+
+describe('decodeToMono16k', () => {
+  it('passes mono samples through unchanged at the target rate', () => {
+    const mono = new Float32Array([0, 0.25, -0.25, 0.5])
+    const buf = createMockAudioBuffer([mono], 16000)
+
+    const out = decodeToMono16k(buf, 16000)
+    expect(out.length).toBe(4)
+    expect(Array.from(out)).toEqual([0, 0.25, -0.25, 0.5])
+  })
+
+  it('downmixes stereo to mono by averaging channels', () => {
+    const left = new Float32Array([1.0, 0.0])
+    const right = new Float32Array([0.0, 0.5])
+    const buf = createMockAudioBuffer([left, right], 16000)
+
+    const out = decodeToMono16k(buf, 16000)
+    expect(out[0]).toBeCloseTo(0.5, 5)
+    expect(out[1]).toBeCloseTo(0.25, 5)
+  })
+
+  it('resamples 48kHz → 16kHz (3:1) producing one third the samples', () => {
+    const samples = new Float32Array(300)
+    const buf = createMockAudioBuffer([samples], 48000)
+
+    const out = decodeToMono16k(buf, 16000)
+    expect(out.length).toBe(100)
+  })
+
+  it('returns raw Float32 without clamping (clamping is encodeWav\'s job)', () => {
+    const samples = new Float32Array([2.0, -2.0])
+    const buf = createMockAudioBuffer([samples], 16000)
+
+    const out = decodeToMono16k(buf, 16000)
+    expect(out[0]).toBe(2.0)
+    expect(out[1]).toBe(-2.0)
   })
 })

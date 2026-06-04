@@ -38,6 +38,14 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'whisper_modelPath',
   'whisper_advancedParams',
   'whisper_autoSend',
+  // STT engine selection + Parakeet (ONNX/WASM)
+  'stt_backend',
+  'parakeet_modelSource',
+  'parakeet_modelPath',
+  'parakeet_backend',
+  'parakeet_decoderQuant',
+  'parakeet_cpuThreads',
+  'parakeet_chunkLengthS',
   // Voice ducking
   'voice_volumeDuck',
   'voice_pauseMediaPlayers',

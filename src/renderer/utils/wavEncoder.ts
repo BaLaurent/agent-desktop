@@ -1,8 +1,12 @@
 /**
- * Encode an AudioBuffer as a 16-bit PCM WAV file.
- * Downmixes to mono and resamples to targetSampleRate via linear interpolation.
+ * Downmix an AudioBuffer to mono and resample to targetSampleRate via linear
+ * interpolation, returning Float32 PCM in [-1, 1].
+ *
+ * Shared by the two STT backends: `encodeWav` wraps this output as a 16-bit WAV
+ * for whisper.cpp, while the Parakeet (ONNX) path feeds the Float32 array directly
+ * to the model's mel preprocessor.
  */
-export function encodeWav(audioBuffer: AudioBuffer, targetSampleRate = 16000): ArrayBuffer {
+export function decodeToMono16k(audioBuffer: AudioBuffer, targetSampleRate = 16000): Float32Array {
   // Downmix to mono
   const channels = audioBuffer.numberOfChannels
   const srcLength = audioBuffer.length
@@ -31,6 +35,17 @@ export function encodeWav(audioBuffer: AudioBuffer, targetSampleRate = 16000): A
     const frac = srcIdx - lo
     resampled[i] = srcData[lo] * (1 - frac) + srcData[hi] * frac
   }
+
+  return resampled
+}
+
+/**
+ * Encode an AudioBuffer as a 16-bit PCM WAV file.
+ * Downmixes to mono and resamples to targetSampleRate via linear interpolation.
+ */
+export function encodeWav(audioBuffer: AudioBuffer, targetSampleRate = 16000): ArrayBuffer {
+  const resampled = decodeToMono16k(audioBuffer, targetSampleRate)
+  const dstLength = resampled.length
 
   // Convert float32 → int16 PCM
   const pcm = new Int16Array(dstLength)

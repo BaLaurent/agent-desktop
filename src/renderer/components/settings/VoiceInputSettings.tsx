@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { ParakeetSettings } from './ParakeetSettings'
 
 interface ValidationResult {
   binaryFound: boolean
@@ -118,6 +119,8 @@ export function VoiceInputSettings() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [advanced, setAdvanced] = useState<WhisperAdvancedParams>(ADVANCED_DEFAULTS)
 
+  const sttBackend = settings.stt_backend === 'parakeet' ? 'parakeet' : 'whisper'
+
   // Sync from store when settings load
   useEffect(() => {
     setBinaryPath(settings.whisper_binaryPath || 'whisper-cli')
@@ -196,6 +199,36 @@ export function VoiceInputSettings() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* STT engine selector */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          Speech-to-Text Engine
+        </label>
+        <div className="flex gap-2">
+          {(['whisper', 'parakeet'] as const).map((engine) => (
+            <button
+              key={engine}
+              onClick={() => setSetting('stt_backend', engine)}
+              className="px-3 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: sttBackend === engine ? 'var(--color-primary)' : 'var(--color-deep)',
+                color: sttBackend === engine ? 'var(--color-base)' : 'var(--color-text)',
+              }}
+              aria-pressed={sttBackend === engine}
+            >
+              {engine === 'whisper' ? 'Whisper (whisper.cpp)' : 'Parakeet (ONNX, multilingue)'}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Whisper runs an external binary; Parakeet runs NVIDIA's multilingual TDT model locally via ONNX/WebAssembly (no install).
+        </span>
+      </div>
+
+      {sttBackend === 'parakeet' && <ParakeetSettings />}
+
+      {sttBackend === 'whisper' && (
+      <>
       {/* Info */}
       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
         Voice input uses{' '}
@@ -302,7 +335,10 @@ export function VoiceInputSettings() {
         )}
       </div>
 
-      {/* Auto-send */}
+      </>
+      )}
+
+      {/* Auto-send (shared by both engines) */}
       <CheckRow
         label="Auto-send after transcription"
         checked={settings.whisper_autoSend === 'true'}
@@ -310,7 +346,8 @@ export function VoiceInputSettings() {
         hint="Send the transcribed text as a message immediately instead of pasting it into the input"
       />
 
-      {/* Advanced Parameters */}
+      {/* Advanced Parameters (Whisper only) */}
+      {sttBackend === 'whisper' && (
       <div className="flex flex-col gap-2">
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -511,6 +548,7 @@ export function VoiceInputSettings() {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
