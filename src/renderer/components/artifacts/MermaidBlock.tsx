@@ -16,6 +16,25 @@ purify.addHook('uponSanitizeAttribute', (_, data) => {
   }
 })
 
+// Single source of truth for Mermaid SVG sanitization — exported so tests exercise
+// the real config AND the hook above (not a drifting duplicate).
+export function sanitizeMermaidSvg(svg: string): string {
+  return purify.sanitize(svg, {
+    USE_PROFILES: { svg: true, svgFilters: true, html: true },
+    ADD_TAGS: ['foreignobject', 'use'],
+    ADD_ATTR: ['dominant-baseline', 'xlink:href'],
+    FORBID_TAGS: ['script'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onfocus', 'onblur'],
+    // Mermaid v11 renders every node/edge label as XHTML (<div><span><p>) inside an SVG
+    // <foreignObject>. DOMPurify rejects HTML children of an SVG parent at its namespace
+    // gate unless the parent is a registered HTML integration point — and its default set
+    // omits foreignobject (mXSS hardening). Without this, all label text is stripped before
+    // the tag allowlist runs. script/event-handler/non-anchor-href stripping above is
+    // independent and still applies to these children.
+    HTML_INTEGRATION_POINTS: { 'annotation-xml': true, foreignobject: true },
+  })
+}
+
 let nextId = 0
 
 interface MermaidBlockProps {
@@ -190,14 +209,7 @@ export function MermaidBlock({ content }: MermaidBlockProps) {
 
     mermaid.render(id, content.trim())
       .then(({ svg }) => {
-        const sanitized = purify.sanitize(svg, {
-          USE_PROFILES: { svg: true, svgFilters: true, html: true },
-          ADD_TAGS: ['foreignobject', 'use'],
-          ADD_ATTR: ['dominant-baseline', 'xlink:href'],
-          FORBID_TAGS: ['script'],
-          FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onfocus', 'onblur'],
-        })
-        setSvgHtml(sanitized)
+        setSvgHtml(sanitizeMermaidSvg(svg))
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [content])

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import DOMPurify from 'dompurify'
 
 // Mock mermaid — return controlled SVG so we test DOMPurify behavior
 const mockRender = vi.fn()
@@ -11,15 +10,14 @@ vi.mock('mermaid', () => ({
   },
 }))
 
-import { MermaidBlock } from './MermaidBlock'
+// Import the REAL sanitizer (scoped DOMPurify instance + uponSanitizeAttribute hook
+// + config) so the tests cannot drift from production behavior.
+import { MermaidBlock, sanitizeMermaidSvg } from './MermaidBlock'
 
-/** The DOMPurify config used in MermaidBlock — duplicated here for direct unit testing */
-const SANITIZE_CONFIG: DOMPurify.Config = {
-  USE_PROFILES: { svg: true, svgFilters: true, html: true },
-  ADD_TAGS: ['foreignobject', 'use'],
-  ADD_ATTR: ['dominant-baseline', 'xlink:href'],
-  FORBID_TAGS: ['script'],
-  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onfocus', 'onblur'],
+/** textContent of a sanitized SVG string, whitespace-collapsed */
+function textOf(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim()
 }
 
 describe('MermaidBlock', () => {
@@ -28,19 +26,20 @@ describe('MermaidBlock', () => {
   })
 
   describe('DOMPurify sanitization', () => {
-    it('preserves foreignObject element (not stripped by sanitizer)', () => {
+    it('preserves label text inside foreignObject (Mermaid v11 htmlLabels)', () => {
+      // Mermaid v11 renders ALL node/edge label text as XHTML inside <foreignObject>.
+      // DOMPurify drops HTML children of an SVG <foreignObject> unless foreignobject is
+      // registered as an HTML integration point — without that, diagrams render textless.
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
         <foreignObject width="100" height="50">
-          <div xmlns="http://www.w3.org/1999/xhtml">Hello World</div>
+          <div xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel"><p>Hello World</p></span></div>
         </foreignObject>
       </svg>`
 
-      const result = DOMPurify.sanitize(svg, SANITIZE_CONFIG)
+      const result = sanitizeMermaidSvg(svg)
 
-      // jsdom serializes as camelCase foreignObject; browsers may use lowercase
       expect(result.toLowerCase()).toContain('foreignobject')
-      // HTML content inside foreignObject is stripped in jsdom (namespace limitation)
-      // but preserved in real browsers — the key assertion is that foreignObject itself survives
+      expect(textOf(result)).toContain('Hello World')
     })
 
     it('preserves use elements with xlink:href', () => {
@@ -49,7 +48,7 @@ describe('MermaidBlock', () => {
         <use xlink:href="#arrow" x="50" y="50"/>
       </svg>`
 
-      const result = DOMPurify.sanitize(svg, SANITIZE_CONFIG)
+      const result = sanitizeMermaidSvg(svg)
 
       expect(result).toContain('<use')
       expect(result).toContain('xlink:href')
@@ -62,7 +61,7 @@ describe('MermaidBlock', () => {
         <text>Safe text</text>
       </svg>`
 
-      const result = DOMPurify.sanitize(svg, SANITIZE_CONFIG)
+      const result = sanitizeMermaidSvg(svg)
 
       expect(result).not.toContain('<script')
       expect(result).not.toContain('alert')
@@ -75,7 +74,7 @@ describe('MermaidBlock', () => {
         <text onmouseover="alert('hover')">Click me</text>
       </svg>`
 
-      const result = DOMPurify.sanitize(svg, SANITIZE_CONFIG)
+      const result = sanitizeMermaidSvg(svg)
 
       expect(result).not.toContain('onclick')
       expect(result).not.toContain('onload')
@@ -89,9 +88,31 @@ describe('MermaidBlock', () => {
         <text dominant-baseline="middle">Centered</text>
       </svg>`
 
-      const result = DOMPurify.sanitize(svg, SANITIZE_CONFIG)
+      const result = sanitizeMermaidSvg(svg)
 
       expect(result).toContain('dominant-baseline')
+    })
+
+    it('strips dangerous content from foreignObject HTML while keeping safe text', () => {
+      // Enabling foreignObject as an HTML integration point must NOT reopen XSS:
+      // script/event-handler/non-anchor-href stripping still applies to its children.
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+        <foreignObject width="10" height="10">
+          <div xmlns="http://www.w3.org/1999/xhtml">
+            <span onclick="alert(1)">CLICKABLE</span>
+            <script>alert('xss')</script>
+            <a href="javascript:alert(2)">LINK</a>
+          </div>
+        </foreignObject>
+      </svg>`
+
+      const result = sanitizeMermaidSvg(svg)
+
+      expect(textOf(result)).toContain('CLICKABLE')
+      expect(textOf(result)).toContain('LINK')
+      expect(result).not.toContain('<script')
+      expect(result).not.toContain('onclick')
+      expect(result).not.toContain('javascript:')
     })
   })
 
