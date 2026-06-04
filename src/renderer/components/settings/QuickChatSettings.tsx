@@ -79,6 +79,18 @@ export function QuickChatSettings() {
         <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Reduces system volume by this percentage during voice recording. 0 = disabled.
         </span>
+        <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+          <input
+            type="checkbox"
+            checked={settings.voice_pauseMediaPlayers === 'true'}
+            onChange={(e) => setSetting('voice_pauseMediaPlayers', e.target.checked ? 'true' : 'false')}
+            className="accent-[var(--color-primary)]"
+          />
+          Pause media players during voice recording
+        </label>
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Pauses currently playing media (Spotify, browsers, etc. via playerctl) while recording, and resumes them when recording stops. Linux only.
+        </span>
       </div>
 
       {/* Conversations */}

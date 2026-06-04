@@ -40,6 +40,7 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'whisper_autoSend',
   // Voice ducking
   'voice_volumeDuck',
+  'voice_pauseMediaPlayers',
   // Quick Chat
   'quickChat_conversationId',
   'quickChat_voiceConversationId',

@@ -1,8 +1,7 @@
 import type { HandleRegistrar } from '../dispatch'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
 import { transcribe, validateConfig } from '../services/whisper'
-import { getSetting } from '../utils/db'
-import { duckVolume, restoreVolume } from '../utils/volume'
+import { applyVoiceAudioEffects, clearVoiceAudioEffects } from '../services/voiceAudioEffects'
 
 // ─── Handler registration ───────────────────────────────────
 
@@ -18,11 +17,10 @@ export function registerWhisperHandlers(registrar: HandleRegistrar, db: SqlJsAda
   })
 
   registrar.handle('voice:duck', async () => {
-    const duck = Number(getSetting(db as any, 'voice_volumeDuck')) || 0
-    if (duck > 0) await duckVolume(duck)
+    await applyVoiceAudioEffects(db as any)
   })
 
   registrar.handle('voice:restore', async () => {
-    await restoreVolume()
+    await clearVoiceAudioEffects(db as any)
   })
 }

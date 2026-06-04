@@ -7,7 +7,7 @@ import { reregister } from './globalShortcuts'
 import { getMainWindow } from '../mainContext'
 import { broadcast } from '../utils/broadcast'
 import { DEFAULT_MODEL } from '../../shared/constants'
-import { duckVolume, restoreVolume } from '../utils/volume'
+import { applyVoiceAudioEffects, clearVoiceAudioEffects } from '../../core/services/voiceAudioEffects'
 import { ConversationService } from '../../core/services/conversations'
 import { getSetting } from '../../core/utils/db'
 
@@ -123,7 +123,7 @@ function createOverlay(voice: boolean, headless = false): BrowserWindow {
   }
 
   win.loadURL(url)
-  win.on('closed', () => { overlayWindow = null; headlessActive = false; restoreVolume() })
+  win.on('closed', () => { overlayWindow = null; headlessActive = false; void clearVoiceAudioEffects(db) })
 
   registerStreamWindow(win)
   return win
@@ -134,7 +134,7 @@ export function showOverlay(mode: 'text' | 'voice'): void {
     if (overlayWindow.isVisible() || headlessActive) {
       if (mode === 'voice') {
         overlayWindow.webContents.send('overlay:stopRecording')
-        restoreVolume()
+        void clearVoiceAudioEffects(db)
       } else {
         overlayWindow.destroy()
         // 'closed' handler resets overlayWindow = null and headlessActive = false
@@ -151,8 +151,7 @@ export function showOverlay(mode: 'text' | 'voice'): void {
   overlayWindow = createOverlay(mode === 'voice', isHeadless)
 
   if (mode === 'voice') {
-    const duck = Number(getSetting(db, 'voice_volumeDuck')) || 0
-    if (duck > 0) duckVolume(duck)
+    applyVoiceAudioEffects(db).catch(() => {})
   }
 }
 
