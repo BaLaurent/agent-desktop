@@ -30,7 +30,7 @@ attachments/
 coverage/
 .codemap-state.json
 .cursor/hooks.json
-.claude/settings.json
+.claude/
 .cache
 
 # Vidéos de présentation HyperFrames (livrables hors-repo, régénérables via music.py + npx hyperframes)
