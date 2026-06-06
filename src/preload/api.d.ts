@@ -179,6 +179,12 @@ export interface AgentAPI {
     transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
     validateConfig(): Promise<{ binaryFound: boolean; modelFound: boolean; binaryPath: string; modelPath: string }>
   }
+  sherpa: {
+    transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
+    validateConfig(): Promise<{ modelPath: string; files: string[]; detected: 'transducer' | 'whisper' | 'paraformer' | 'nemoCtc' | null; ok: boolean; detail?: string }>
+    downloadModel(presetId: string): Promise<{ modelPath: string }>
+    onDownloadProgress(cb: (p: { file: string; index: number; total: number }) => void): () => void
+  }
   voice: {
     duck(): Promise<void>
     restore(): Promise<void>

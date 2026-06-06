@@ -191,6 +191,16 @@ const api: AgentAPI = {
     transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('whisper:transcribe', wavBuffer), 45000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('whisper:validateConfig')),
   },
+  sherpa: {
+    transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('sherpa:transcribe', wavBuffer), 45000),
+    validateConfig: () => withTimeout(ipcRenderer.invoke('sherpa:validateConfig')),
+    downloadModel: (presetId: string) => withTimeout(ipcRenderer.invoke('sherpa:downloadModel', presetId), 600000),
+    onDownloadProgress: (cb: (p: { file: string; index: number; total: number }) => void) => {
+      const listener = (_e: unknown, p: { file: string; index: number; total: number }) => cb(p)
+      ipcRenderer.on('sherpa:downloadProgress', listener)
+      return () => ipcRenderer.removeListener('sherpa:downloadProgress', listener)
+    },
+  },
   voice: {
     duck: () => withTimeout(ipcRenderer.invoke('voice:duck')),
     restore: () => withTimeout(ipcRenderer.invoke('voice:restore')),
