@@ -46,6 +46,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'parakeet_decoderQuant',
   'parakeet_cpuThreads',
   'parakeet_chunkLengthS',
+  // Sherpa-onnx (native addon STT)
+  'sherpa_modelPath',
   // Voice ducking
   'voice_volumeDuck',
   'voice_pauseMediaPlayers',
