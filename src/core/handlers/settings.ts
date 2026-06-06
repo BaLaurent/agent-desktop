@@ -4,6 +4,7 @@ import { SettingsService } from '../services/settings'
 import { detectBackendConvention, parseLastModelByBackend } from '../services/modelBackendMap'
 import { getSetting } from '../utils/db'
 import { validateWebhookUrl } from '../utils/webhookValidation'
+import { resetRecognizerCache } from '../services/sherpaStt'
 
 /**
  * On an explicit `ai_model` write, remember it as the last NATIVE
@@ -55,6 +56,7 @@ export function registerSettingsHandlers(
         }
       }
       service.set(k, v)
+      if (k === 'sherpa_modelPath') resetRecognizerCache()
       recordNativeModelSelection(db, service, k, v)
     } catch (err) {
       throw new Error(`Failed to set setting: ${(err as Error).message}`)

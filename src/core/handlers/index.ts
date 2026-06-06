@@ -20,6 +20,7 @@ import { registerKnowledgeHandlers } from './knowledge'
 import { registerSchedulerHandlers } from './scheduler'
 import { registerTtsHandlers, speakResponse, stop as ttsStop } from './tts'
 import { registerWhisperHandlers } from './whisper'
+import { registerSherpaHandlers } from './sherpa'
 import { registerVoiceIntentHandlers } from './voiceIntent'
 import { registerSystemHandlers } from './system'
 import { registerGitHandlers } from './git'
@@ -74,6 +75,7 @@ export function registerCoreHandlers(
   registerSchedulerHandlers(registrar, db)
   registerTtsHandlers(registrar, db)
   registerWhisperHandlers(registrar, db)
+  registerSherpaHandlers(registrar, db)
   registerVoiceIntentHandlers(registrar, db, {
     sessionsBase: options.sessionsBase,
     knowledgesDir: options.knowledgesDir,
