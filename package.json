@@ -65,6 +65,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.3",
     "remark-gfm": "^4.0.0",
+    "sherpa-onnx": "^1.13.2",
     "sql.js": "^1.14.0",
     "three": "^0.183.0",
     "typescript": "^5.7.3",
