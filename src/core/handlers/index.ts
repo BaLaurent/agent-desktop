@@ -20,6 +20,7 @@ import { registerKnowledgeHandlers } from './knowledge'
 import { registerSchedulerHandlers } from './scheduler'
 import { registerTtsHandlers, speakResponse, stop as ttsStop } from './tts'
 import { registerWhisperHandlers } from './whisper'
+import { registerVoiceIntentHandlers } from './voiceIntent'
 import { registerSystemHandlers } from './system'
 import { registerGitHandlers } from './git'
 import { registerBugReportHandlers, type BugReportHandlerOptions } from './bugReport'
@@ -73,6 +74,10 @@ export function registerCoreHandlers(
   registerSchedulerHandlers(registrar, db)
   registerTtsHandlers(registrar, db)
   registerWhisperHandlers(registrar, db)
+  registerVoiceIntentHandlers(registrar, db, {
+    sessionsBase: options.sessionsBase,
+    knowledgesDir: options.knowledgesDir,
+  })
   registerSystemHandlers(registrar, db)
   registerGitHandlers(registrar)
   if (options.bugReport) {

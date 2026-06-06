@@ -269,6 +269,26 @@ if (!gotLock) {
     }
   })
 
+  // Dev-only orphan watchdog. electron-vite restarts (on a main-process file change) don't always
+  // terminate the previous Electron process — it gets reparented to init/systemd and lingers as a
+  // zombie that keeps holding the IndexedDB LOCK, so the next instance can't open storage. Detect
+  // the reparenting (our parent PID changes once electron-vite dies) and self-exit. Skipped in the
+  // packaged app, where there is no supervising parent to lose.
+  if (!app.isPackaged) {
+    const parentPid = process.ppid
+    const orphanWatch = setInterval(() => {
+      // NOTE: process.ppid is cached at startup and does NOT update on reparenting, so we can't
+      // compare it. Instead poll whether our original parent (electron-vite) still exists — signal 0
+      // checks liveness without sending anything; ESRCH means it's gone and we've been orphaned.
+      try {
+        process.kill(parentPid, 0)
+      } catch {
+        app.exit(0)
+      }
+    }, 1000)
+    orphanWatch.unref?.()
+  }
+
   app.whenReady().then(async () => {
     // Register the Claude Agent SDK with Core BEFORE any engine init.
     // Core's anthropic.ts is now a registry-only module — entry points own SDK resolution.
@@ -283,16 +303,30 @@ if (!gotLock) {
 
     // agent-model: serves the Parakeet STT worker its onnxruntime-web WASM runtime
     // (host 'ort') and, in manual mode, the user's local model files (host 'model').
-    registerModelProtocol(() => {
-      try {
-        const db = getDatabase()
-        if (getSetting(db, 'parakeet_modelSource') !== 'manual') return null
-        const dir = getSetting(db, 'parakeet_modelPath')
-        return dir && dir.trim() ? dir : null
-      } catch {
-        return null
-      }
-    })
+    registerModelProtocol(
+      () => {
+        try {
+          const db = getDatabase()
+          if (getSetting(db, 'parakeet_modelSource') !== 'manual') return null
+          const dir = getSetting(db, 'parakeet_modelPath')
+          return dir && dir.trim() ? dir : null
+        } catch {
+          return null
+        }
+      },
+      {
+        getHotwordModelDir: () => {
+          try {
+            const db = getDatabase()
+            if (getSetting(db, 'hotword_modelSource') !== 'manual') return null
+            const dir = getSetting(db, 'hotword_modelPath')
+            return dir && dir.trim() ? dir : null
+          } catch {
+            return null
+          }
+        },
+      },
+    )
 
     // Security hardening — session CSP + permission filter + app-level
     // guards. Must run after ready; defaultSession is not available before.

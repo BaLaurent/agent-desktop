@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { ParakeetSettings } from './ParakeetSettings'
+import { ContinuousVoiceSettings } from './ContinuousVoiceSettings'
 
 interface ValidationResult {
   binaryFound: boolean
@@ -549,6 +550,8 @@ export function VoiceInputSettings() {
         )}
       </div>
       )}
+
+      <ContinuousVoiceSettings />
     </div>
   )
 }

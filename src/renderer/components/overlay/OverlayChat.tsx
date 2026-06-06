@@ -6,6 +6,7 @@ import { applyFontScale } from '../../utils/fontScale'
 import { OverlayInput } from './OverlayInput'
 import { OverlayResponse } from './OverlayResponse'
 import { OverlayVoice } from './OverlayVoice'
+import { OverlayContinuousVoice } from './OverlayContinuousVoice'
 
 interface OverlayChatProps {
   voiceMode: boolean
@@ -27,6 +28,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
   const error = useChatStore((s) => s.error)
   const sendMessage = useChatStore((s) => s.sendMessage)
   const setActiveConversation = useChatStore((s) => s.setActiveConversation)
+  const continuousEnabled = useSettingsStore((s) => s.settings.continuousVoice_enabled === 'true')
 
   // Initialize: load settings, apply theme, get conversation ID
   useEffect(() => {
@@ -192,7 +194,9 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
       <div className="h-px" style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }} />
 
       {/* Content area */}
-      {voiceMode && !voiceSent ? (
+      {voiceMode && continuousEnabled && conversationId ? (
+        <OverlayContinuousVoice conversationId={conversationId} />
+      ) : voiceMode && !voiceSent ? (
         <OverlayVoice onTranscription={handleVoiceTranscription} />
       ) : (
         <>

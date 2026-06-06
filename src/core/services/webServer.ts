@@ -321,6 +321,17 @@ export function generateShim(token: string): string {
       duck: noopAsync,
       restore: noopAsync,
     },
+    voiceIntent: {
+      classify: function(cid, text) { return invoke('voice:classifyIntent', [cid, text]); },
+    },
+    hotwordTrain: {
+      listModels: function() { return invoke('hotwordTrain:listModels', []); },
+      start: function(p) { return invoke('hotwordTrain:start', [p]); },
+      setup: function() { return invoke('hotwordTrain:setup', []); },
+      cancel: function() { return invoke('hotwordTrain:cancel', []); },
+      status: function() { return invoke('hotwordTrain:status', []); },
+      onEvent: function(cb) { return subscribe('hotwordTrain:event', cb); },
+    },
     tts: {
       speak: function(t) { return invoke('tts:speak', [t]); },
       speakMessage: function(t, cid, mid) { return invoke('tts:speakMessage', [t, cid, mid]); },

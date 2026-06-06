@@ -4,7 +4,8 @@ import { pathToFileURL } from 'url'
 
 // Capture the handler registered with protocol.handle and stub net/app.
 let handler: ((request: { url: string }) => Response | Promise<Response>) | null = null
-const netFetch = vi.fn((url: string) => ({ __fetched: url }) as unknown as Response)
+// Real net.fetch returns a Promise<Response>; mirror that so the handler's .catch wrapper works.
+const netFetch = vi.fn((url: string) => Promise.resolve({ __fetched: url } as unknown as Response))
 
 vi.mock('electron', () => ({
   protocol: {
@@ -19,7 +20,8 @@ vi.mock('electron', () => ({
 
 import { registerModelProtocol } from './parakeetProtocol'
 
-const ortDist = path.join(process.cwd(), 'node_modules', 'onnxruntime-web', 'dist')
+// Mirror ortDistDir's resolution (real installed package — robust to worktrees).
+const ortDist = path.dirname(require.resolve('onnxruntime-web'))
 const MANUAL_DIR = '/tmp/parakeet-model'
 
 describe('agent-model protocol handler', () => {
@@ -28,16 +30,23 @@ describe('agent-model protocol handler', () => {
     handler = null
   })
 
-  it('serves ORT artifacts from onnxruntime-web/dist', () => {
+  it('serves ORT artifacts from onnxruntime-web/dist', async () => {
     registerModelProtocol(() => MANUAL_DIR)
-    const res = handler!({ url: 'agent-model://ort/ort-wasm-simd-threaded.jsep.wasm' })
+    const res = await handler!({ url: 'agent-model://ort/ort-wasm-simd-threaded.jsep.wasm' })
     expect(res).toEqual({ __fetched: pathToFileURL(path.join(ortDist, 'ort-wasm-simd-threaded.jsep.wasm')).href })
   })
 
-  it('serves manual model files from the configured directory', () => {
+  it('serves manual model files from the configured directory', async () => {
     registerModelProtocol(() => MANUAL_DIR)
-    handler!({ url: 'agent-model://model/vocab.txt' })
+    await handler!({ url: 'agent-model://model/vocab.txt' })
     expect(netFetch).toHaveBeenCalledWith(pathToFileURL(path.join(MANUAL_DIR, 'vocab.txt')).href)
+  })
+
+  it('returns a clean 404 when the file is missing (net.fetch rejects)', async () => {
+    netFetch.mockReturnValueOnce(Promise.reject(new Error('net::ERR_FILE_NOT_FOUND')))
+    registerModelProtocol(() => MANUAL_DIR)
+    const res = (await handler!({ url: 'agent-model://hotword/melspectrogram.onnx' })) as Response
+    expect(res.status).toBe(404)
   })
 
   it('rejects path traversal with 403 (encoded ../ survives URL normalization)', () => {

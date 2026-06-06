@@ -195,6 +195,22 @@ const api: AgentAPI = {
     duck: () => withTimeout(ipcRenderer.invoke('voice:duck')),
     restore: () => withTimeout(ipcRenderer.invoke('voice:restore')),
   },
+  voiceIntent: {
+    classify: (conversationId: number, text: string) =>
+      withTimeout(ipcRenderer.invoke('voice:classifyIntent', conversationId, text), 20000),
+  },
+  hotwordTrain: {
+    listModels: () => withTimeout(ipcRenderer.invoke('hotwordTrain:listModels')),
+    start: (phrase: string) => withTimeout(ipcRenderer.invoke('hotwordTrain:start', phrase)),
+    setup: () => withTimeout(ipcRenderer.invoke('hotwordTrain:setup')),
+    cancel: () => withTimeout(ipcRenderer.invoke('hotwordTrain:cancel')),
+    status: () => withTimeout(ipcRenderer.invoke('hotwordTrain:status')),
+    onEvent: (callback: (ev: unknown) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, ev: unknown) => callback(ev)
+      ipcRenderer.on('hotwordTrain:event', handler)
+      return () => { ipcRenderer.removeListener('hotwordTrain:event', handler) }
+    },
+  },
   tts: {
     speak: (text: string) => withTimeout(ipcRenderer.invoke('tts:speak', text), 60000),
     speakMessage: (text: string, conversationId: number, messageId: number) =>

@@ -31,6 +31,13 @@ import type { PIExtensionInfo } from '../shared/constants'
 import type { PiUIEvent, PiUIRequest, PiUIResponse } from '../shared/piUITypes'
 import type { GitStatus, GitCommit, GitCommitFile, GitBranch, GitStashEntry } from '../shared/git-types'
 
+export type HotwordTrainEvent =
+  | { kind: 'log'; message: string }
+  | { kind: 'progress'; pct: number; message: string }
+  | { kind: 'done'; slug: string; modelPath: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'setup-done' }
+
 export interface AgentAPI {
   auth: {
     getStatus(): Promise<AuthStatus>
@@ -175,6 +182,17 @@ export interface AgentAPI {
   voice: {
     duck(): Promise<void>
     restore(): Promise<void>
+  }
+  voiceIntent: {
+    classify(conversationId: number, text: string): Promise<{ addressed: boolean }>
+  }
+  hotwordTrain: {
+    listModels(): Promise<{ slug: string; path: string }[]>
+    start(phrase: string): Promise<{ started: boolean }>
+    setup(): Promise<{ started: boolean }>
+    cancel(): Promise<{ cancelled: boolean }>
+    status(): Promise<{ running: boolean; phrase: string | null }>
+    onEvent(callback: (ev: HotwordTrainEvent) => void): () => void
   }
   tts: {
     speak(text: string): Promise<void>

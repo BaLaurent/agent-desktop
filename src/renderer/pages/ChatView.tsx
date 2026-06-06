@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import { useShallow } from 'zustand/react/shallow'
 import { useSettingsStore } from '../stores/settingsStore'
+import { ContinuousVoiceControl } from '../components/chat/ContinuousVoiceControl'
 import { useConversationsStore } from '../stores/conversationsStore'
 import { useFileExplorerStore } from '../stores/fileExplorerStore'
 import { useMcpStore } from '../stores/mcpStore'
@@ -233,6 +234,10 @@ export function ChatView({ conversationId, conversationTitle, conversationCwd }:
 
         <ChatReconnectingBanner active={connectionStatus === 'reconnecting'} />
         <ChatErrorBanner message={error} />
+
+        {globalSettings.continuousVoice_enabled === 'true' && conversationId && (
+          <ContinuousVoiceControl conversationId={conversationId} />
+        )}
 
         <ChatLayout
           conversationId={conversationId}

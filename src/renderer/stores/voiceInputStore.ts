@@ -1,13 +1,5 @@
 import { create } from 'zustand'
-import { encodeWav, decodeToMono16k } from '../utils/wavEncoder'
-import { useSettingsStore } from './settingsStore'
-import {
-  loadParakeet,
-  transcribeParakeet,
-  isParakeetLoaded,
-  type ParakeetLoadConfig,
-  type ParakeetBackendPref,
-} from '../services/parakeet'
+import { getSttBackend, transcribeAudioBuffer } from '../services/transcription/transcribeAudioBuffer'
 
 interface VoiceInputState {
   isRecording: boolean
@@ -24,25 +16,6 @@ interface VoiceInputState {
   cancelRecording: () => void
   clearError: () => void
   clearTranscription: () => void
-}
-
-/** Read the active STT backend from the settings store. */
-function getSttBackend(): 'whisper' | 'parakeet' {
-  return useSettingsStore.getState().settings['stt_backend'] === 'parakeet' ? 'parakeet' : 'whisper'
-}
-
-function getParakeetConfig(): ParakeetLoadConfig {
-  const s = useSettingsStore.getState().settings
-  const source = s['parakeet_modelSource'] === 'manual' ? 'manual' : 'download'
-  const backend = (s['parakeet_backend'] as ParakeetBackendPref) || 'wasm'
-  const decoderQuant = s['parakeet_decoderQuant'] === 'fp32' ? 'fp32' : 'int8'
-  const cpuThreads = Number(s['parakeet_cpuThreads']) || undefined
-  return { source, backend, decoderQuant, cpuThreads }
-}
-
-/** Long-audio window length in seconds; 0 = auto-windowing. */
-function getParakeetChunkLengthS(): number {
-  return Number(useSettingsStore.getState().settings['parakeet_chunkLengthS']) || 0
 }
 
 // Module-level refs (not serializable, kept outside Zustand)
@@ -171,29 +144,9 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
         await audioCtx.close()
       }
 
-      let text: string
-      if (getSttBackend() === 'parakeet') {
-        // Lazily load the model into this window's worker on first use. After the
-        // initial download it resolves from the IndexedDB cache (fast, no network).
-        if (!isParakeetLoaded()) {
-          set({ modelLoading: true, modelProgress: 0 })
-          try {
-            await loadParakeet(getParakeetConfig(), (p) => {
-              set({ modelProgress: p.total > 0 ? p.loaded / p.total : null })
-            })
-          } finally {
-            set({ modelLoading: false, modelProgress: null })
-          }
-        }
-        // Parakeet's mel preprocessor takes raw Float32 PCM directly — no WAV wrapper.
-        const pcm = decodeToMono16k(audioBuffer, 16000)
-        text = await transcribeParakeet(pcm, 16000, getParakeetChunkLengthS())
-      } else {
-        // Whisper runs in the main process; hand it a 16-bit WAV over IPC.
-        const wavBuffer = encodeWav(audioBuffer, 16000)
-        const result = await window.agent.whisper.transcribe(new Uint8Array(wavBuffer))
-        text = result.text
-      }
+      const text = await transcribeAudioBuffer(audioBuffer, (p) =>
+        set({ modelLoading: p.modelLoading, modelProgress: p.modelProgress }),
+      )
 
       if (text) {
         transcriptionCounter++

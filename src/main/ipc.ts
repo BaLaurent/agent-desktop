@@ -16,6 +16,7 @@ import { registerHandlers as piExtensionsHandlers } from './services/piExtension
 import { registerHandlers as commandsHandlers } from './services/commands'
 import { registerHandlers as updaterHandlers } from './services/updater'
 import { registerHandlers as jupyterHandlers } from './services/jupyter'
+import { registerHandlers as hotwordTrainerHandlers } from './services/hotwordTrainer'
 import { registerHandlers as themesHandlers, ensureThemeDir } from './services/themes'
 import { registerHandlers as filesHandlers } from './services/files'
 import { registerHandlers as knowledgeHandlers, ensureKnowledgesDir } from './services/knowledge'
@@ -107,6 +108,7 @@ export function bridgeDispatchToIpc(engine: AgentEngine, ipcMain: IpcMain): void
   commandsHandlers(safeIpc, db)
   updaterHandlers(safeIpc)
   jupyterHandlers(safeIpc)
+  hotwordTrainerHandlers(safeIpc, db)
   themesHandlers(safeIpc)
   filesHandlers(safeIpc, db)
   knowledgeHandlers(safeIpc, db)

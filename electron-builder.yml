@@ -47,6 +47,10 @@ extraResources:
     to: mcp/scheduler-server.mjs
   - from: resources/jupyter/bridge.py
     to: jupyter/bridge.py
+  - from: resources/hotword/train_wakeword.py
+    to: hotword/train_wakeword.py
+  - from: resources/hotword-models
+    to: hotword-models
   - from: node_modules/sql.js/dist/sql-wasm.wasm
     to: sql-wasm.wasm
   - from: out/headless/index.js

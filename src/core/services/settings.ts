@@ -49,6 +49,24 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   // Voice ducking
   'voice_volumeDuck',
   'voice_pauseMediaPlayers',
+  // Continuous voice mode (always-listening) — global only, like other voice infra
+  'continuousVoice_enabled',
+  'continuousVoice_gateMode',
+  'continuousVoice_followupWindowMs',
+  'continuousVoice_pauseDuringTts',
+  'continuousVoice_silenceThreshold',
+  'continuousVoice_silenceDurationMs',
+  'continuousVoice_minUtteranceMs',
+  'continuousVoice_preSpeechPadMs',
+  'continuousVoice_intentModel',
+  'continuousVoice_intentPrompt',
+  // Hotword (openWakeWord) engine + custom training
+  'hotword_modelSource',
+  'hotword_model',
+  'hotword_modelPath',
+  'hotword_threshold',
+  'hotword_backend',
+  'hotwordTrain_pythonPath',
   // Quick Chat
   'quickChat_conversationId',
   'quickChat_voiceConversationId',
