@@ -26,8 +26,11 @@ export interface TranscribeProgress {
 }
 
 /** The active STT backend from the settings store. */
-export function getSttBackend(): 'whisper' | 'parakeet' {
-  return useSettingsStore.getState().settings['stt_backend'] === 'parakeet' ? 'parakeet' : 'whisper'
+export function getSttBackend(): 'whisper' | 'parakeet' | 'sherpa' {
+  const v = useSettingsStore.getState().settings['stt_backend']
+  if (v === 'parakeet') return 'parakeet'
+  if (v === 'sherpa') return 'sherpa'
+  return 'whisper'
 }
 
 function getParakeetConfig(): ParakeetLoadConfig {
@@ -68,6 +71,13 @@ export async function transcribeAudioBuffer(
     // Parakeet's mel preprocessor takes raw Float32 PCM directly — no WAV wrapper.
     const pcm = decodeToMono16k(audioBuffer, 16000)
     return transcribeParakeet(pcm, 16000, getParakeetChunkLengthS())
+  }
+
+  if (getSttBackend() === 'sherpa') {
+    // sherpa runs in the main process; hand it a 16-bit WAV over IPC (same as whisper).
+    const wavBuffer = encodeWav(audioBuffer, 16000)
+    const result = await window.agent.sherpa.transcribe(new Uint8Array(wavBuffer))
+    return result.text
   }
 
   // Whisper runs in the main process; hand it a 16-bit WAV over IPC.
