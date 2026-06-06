@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { ParakeetSettings } from './ParakeetSettings'
+import { SherpaSettings } from './SherpaSettings'
 import { ContinuousVoiceSettings } from './ContinuousVoiceSettings'
 
 interface ValidationResult {
@@ -120,7 +121,10 @@ export function VoiceInputSettings() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [advanced, setAdvanced] = useState<WhisperAdvancedParams>(ADVANCED_DEFAULTS)
 
-  const sttBackend = settings.stt_backend === 'parakeet' ? 'parakeet' : 'whisper'
+  const sttBackend =
+    settings.stt_backend === 'parakeet' ? 'parakeet'
+    : settings.stt_backend === 'sherpa' ? 'sherpa'
+    : 'whisper'
 
   // Sync from store when settings load
   useEffect(() => {
@@ -206,7 +210,7 @@ export function VoiceInputSettings() {
           Speech-to-Text Engine
         </label>
         <div className="flex gap-2">
-          {(['whisper', 'parakeet'] as const).map((engine) => (
+          {(['whisper', 'parakeet', 'sherpa'] as const).map((engine) => (
             <button
               key={engine}
               onClick={() => setSetting('stt_backend', engine)}
@@ -217,7 +221,9 @@ export function VoiceInputSettings() {
               }}
               aria-pressed={sttBackend === engine}
             >
-              {engine === 'whisper' ? 'Whisper (whisper.cpp)' : 'Parakeet (ONNX, multilingue)'}
+              {engine === 'whisper' ? 'Whisper (whisper.cpp)'
+                : engine === 'parakeet' ? 'Parakeet (ONNX, multilingue)'
+                : 'Sherpa (ONNX natif)'}
             </button>
           ))}
         </div>
@@ -227,6 +233,8 @@ export function VoiceInputSettings() {
       </div>
 
       {sttBackend === 'parakeet' && <ParakeetSettings />}
+
+      {sttBackend === 'sherpa' && <SherpaSettings />}
 
       {sttBackend === 'whisper' && (
       <>

@@ -56,7 +56,9 @@ function seedSettings(db: Database.Database): void {
     ['whisper_modelPath', ''],
     ['whisper_advancedParams', ''],
     ['whisper_autoSend', 'false'],
-    // STT engine selection: 'whisper' (whisper.cpp, default) | 'parakeet' (Parakeet TDT v3 via ONNX/WASM)
+    // Sherpa-onnx model folder (native addon STT). '' = unset.
+    ['sherpa_modelPath', ''],
+    // STT engine selection: 'whisper' (whisper.cpp, default) | 'parakeet' (Parakeet TDT v3 via ONNX/WASM) | 'sherpa' (sherpa-onnx native addon)
     ['stt_backend', 'whisper'],
     // Parakeet model acquisition: 'download' (HuggingFace → IndexedDB cache) | 'manual' (local folder)
     ['parakeet_modelSource', 'download'],
