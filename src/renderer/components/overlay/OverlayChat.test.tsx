@@ -16,7 +16,6 @@ vi.mock('../../utils/notificationSound', () => ({
 import { render, screen, act } from '@testing-library/react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useChatStore } from '../../stores/chatStore'
-import { playListeningSound, playProcessingSound } from '../../utils/notificationSound'
 import { OverlayChat } from './OverlayChat'
 
 // Inject quickChat namespace into the existing window.agent mock
@@ -248,7 +247,6 @@ describe('OverlayChat', () => {
         render(<OverlayChat voiceMode={true} />)
       })
 
-      expect(playListeningSound).toHaveBeenCalled()
       expect(window.agent.system.showNotification).toHaveBeenCalledWith(
         'Quick Chat',
         'Listening...'
@@ -260,21 +258,26 @@ describe('OverlayChat', () => {
         render(<OverlayChat voiceMode={false} />)
       })
 
-      expect(playListeningSound).not.toHaveBeenCalled()
+      expect(window.agent.system.showNotification).not.toHaveBeenCalledWith(
+        'Quick Chat',
+        'Listening...'
+      )
     })
 
     it('fires processing notification when voiceSent transitions', async () => {
       useChatStore.setState({ isStreaming: false, streamingContent: '' })
 
-      // We need to trigger voiceSent — render voice mode, then simulate transcription via OverlayVoice
-      // Since we can't easily trigger the internal callback, we test indirectly:
-      // Mount in voice mode → listening fires. Then we check processing does NOT fire yet.
+      // Mount in voice mode → the "Processing..." notification should NOT fire until
+      // voiceSent transitions (after transcription). We can't easily trigger the
+      // internal callback here, so we assert it has not fired yet.
       await act(async () => {
         render(<OverlayChat voiceMode={true} />)
       })
 
-      // playProcessingSound should NOT have been called yet (voiceSent is false)
-      expect(playProcessingSound).not.toHaveBeenCalled()
+      expect(window.agent.system.showNotification).not.toHaveBeenCalledWith(
+        'Quick Chat',
+        'Processing...'
+      )
     })
 
     it('calls hide after response notification', async () => {

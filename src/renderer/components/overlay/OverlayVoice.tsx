@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVoiceInputStore } from '../../stores/voiceInputStore'
+import { playListeningSound, playProcessingSound } from '../../utils/notificationSound'
 
 interface OverlayVoiceProps {
   onTranscription: (text: string) => void
@@ -10,6 +11,7 @@ export function OverlayVoice({ onTranscription }: OverlayVoiceProps) {
   const [elapsed, setElapsed] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const handledIdRef = useRef<number>(0)
+  const wasRecordingRef = useRef(false)
 
   // Auto-start recording on mount
   useEffect(() => {
@@ -34,6 +36,18 @@ export function OverlayVoice({ onTranscription }: OverlayVoiceProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
+  }, [isRecording])
+
+  // Audible cues: a rising tone when recording starts, a descending tone when it
+  // stops. Lets the user know when Quick Voice begins and ends capturing audio,
+  // whether the overlay is visible or in headless (notifications-only) mode.
+  useEffect(() => {
+    if (isRecording && !wasRecordingRef.current) {
+      playListeningSound()
+    } else if (!isRecording && wasRecordingRef.current) {
+      playProcessingSound()
+    }
+    wasRecordingRef.current = isRecording
   }, [isRecording])
 
   // Forward transcription to parent

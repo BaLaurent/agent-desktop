@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useChatStore } from '../../stores/chatStore'
-import { playListeningSound, playProcessingSound } from '../../utils/notificationSound'
 import { applyFontScale } from '../../utils/fontScale'
 import { OverlayInput } from './OverlayInput'
 import { OverlayResponse } from './OverlayResponse'
@@ -59,14 +58,12 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
   // Headless: notify "Listening..." on mount
   useEffect(() => {
     if (!headless || !voiceMode) return
-    playListeningSound()
     window.agent.system.showNotification('Quick Chat', 'Listening...').catch(() => {})
   }, [headless, voiceMode])
 
   // Headless: notify "Processing..." when voice recording stops
   useEffect(() => {
     if (!headless || !voiceSent) return
-    playProcessingSound()
     window.agent.system.showNotification('Quick Chat', 'Processing...').catch(() => {})
   }, [headless, voiceSent])
 

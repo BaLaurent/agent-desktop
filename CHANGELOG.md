@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1] - Unreleased
+
+### New Features
+- **Quick Voice audio cues** — a short rising tone plays when Quick Voice starts recording and a descending tone when it stops, so you know when capture begins and ends. Works in both the visible overlay and headless (notifications-only) mode
+
+---
+
 ## [0.17.0] - 2026-05-27
 
 ### New Features

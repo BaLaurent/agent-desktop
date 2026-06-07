@@ -22,7 +22,13 @@ vi.mock('../../stores/voiceInputStore', () => ({
   useVoiceInputStore: () => storeState,
 }))
 
+vi.mock('../../utils/notificationSound', () => ({
+  playListeningSound: vi.fn(),
+  playProcessingSound: vi.fn(),
+}))
+
 import { OverlayVoice } from './OverlayVoice'
+import { playListeningSound, playProcessingSound } from '../../utils/notificationSound'
 
 describe('OverlayVoice', () => {
   beforeEach(() => {
@@ -31,6 +37,8 @@ describe('OverlayVoice', () => {
     storeState.startRecording.mockClear()
     storeState.stopAndTranscribe.mockClear()
     storeState.cancelRecording.mockClear()
+    vi.mocked(playListeningSound).mockClear()
+    vi.mocked(playProcessingSound).mockClear()
   })
 
   it('subscribes to onOverlayStopRecording on mount and unsubscribes on unmount', () => {
@@ -62,5 +70,22 @@ describe('OverlayVoice', () => {
     act(() => { handler() })
 
     expect(storeState.stopAndTranscribe).not.toHaveBeenCalled()
+  })
+
+  it('plays the listening cue when recording starts', () => {
+    render(<OverlayVoice onTranscription={vi.fn()} />)
+
+    expect(playListeningSound).toHaveBeenCalledTimes(1)
+    expect(playProcessingSound).not.toHaveBeenCalled()
+  })
+
+  it('plays the processing cue when recording stops', () => {
+    const { rerender } = render(<OverlayVoice onTranscription={vi.fn()} />)
+    expect(playListeningSound).toHaveBeenCalledTimes(1)
+
+    storeState.isRecording = false
+    act(() => { rerender(<OverlayVoice onTranscription={vi.fn()} />) })
+
+    expect(playProcessingSound).toHaveBeenCalledTimes(1)
   })
 })
