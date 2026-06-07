@@ -696,9 +696,9 @@ async function handleMessage(message: Message): Promise<void> {
 
   // Typing indicator — sendTyping expires after ~10s, refresh every 8s
   const typingInterval = setInterval(() => {
-    message.channel.sendTyping().catch(() => {})
+    if ('sendTyping' in message.channel) message.channel.sendTyping().catch(() => {})
   }, 8000)
-  await message.channel.sendTyping().catch(() => {})
+  if ('sendTyping' in message.channel) await message.channel.sendTyping().catch(() => {})
 
   try {
     const result = (await botDispatch!.get('messages:send')!(conversationId, content)) as {
@@ -708,7 +708,7 @@ async function handleMessage(message: Message): Promise<void> {
     const chunks = splitMessage(responseText)
     await message.reply(chunks[0])
     for (let i = 1; i < chunks.length; i++) {
-      await message.channel.send(chunks[i])
+      if ('send' in message.channel) await message.channel.send(chunks[i])
     }
   } catch (err) {
     await message.reply(`Error: ${err instanceof Error ? err.message : String(err)}`)

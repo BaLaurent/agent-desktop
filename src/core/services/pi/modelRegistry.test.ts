@@ -5,7 +5,7 @@ const mockFind = vi.fn()
 const mockAuthCreate = vi.fn()
 const mockModelRegistryCtor = vi.fn()
 
-vi.mock('./piSdk', () => ({
+vi.mock('./sdkLoader', () => ({
   loadPISdk: vi.fn().mockResolvedValue({
     AuthStorage: {
       create: (...args: unknown[]) => mockAuthCreate(...args),
@@ -20,7 +20,7 @@ vi.mock('./piSdk', () => ({
   }),
 }))
 
-import { discoverPIModels, resolvePIModel } from './piModels'
+import { discoverPIModels, resolvePIModel } from './modelRegistry'
 
 describe('piModels', () => {
   beforeEach(() => {

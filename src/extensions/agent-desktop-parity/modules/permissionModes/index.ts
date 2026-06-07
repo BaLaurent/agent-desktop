@@ -88,6 +88,7 @@ export function initPermissionModes(pi: ExtensionAPI, ctx: ExtensionRuntimeConte
             type: 'text',
             text: 'Plan submitted to user. End your turn now — the user will reply via Approve or Reject buttons.',
           }],
+          details: undefined,
         }
       },
     })

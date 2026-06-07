@@ -10,6 +10,8 @@ export const capturedConversationUpdatedListeners: Array<(conversationId: number
 export let capturedConversationUpdatedListener: ((conversationId: number) => void) | null = null
 // Captured TTS state-change listener — set when ttsStore module registers its onStateChange handler
 export let capturedTtsStateListener: ((state: { speaking: boolean; messageId?: number }) => void) | null = null
+// Captured TTS audio listener — set when ttsStore module registers its onAudio handler
+export let capturedTtsAudioListener: ((audio: { data: string; mime: string; messageId: number | null }) => void) | null = null
 // Captured reconnect listener — set when chatStore registers its onReconnect handler
 export let capturedReconnectListener: (() => void) | null = null
 
@@ -142,6 +144,10 @@ export const mockAgent = {
     listSayVoices: vi.fn().mockResolvedValue([]),
     onStateChange: vi.fn().mockImplementation((cb: (state: { speaking: boolean; messageId?: number }) => void) => {
       capturedTtsStateListener = cb
+      return () => {}
+    }),
+    onAudio: vi.fn().mockImplementation((cb: (audio: { data: string; mime: string; messageId: number | null }) => void) => {
+      capturedTtsAudioListener = cb
       return () => {}
     }),
   },

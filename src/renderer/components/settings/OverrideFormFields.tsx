@@ -1,6 +1,6 @@
 import { SETTING_DEFS, type McpServerName, type PIExtensionInfo, parseCustomModels, shortenModelName } from '../../../shared/constants'
 import { useSettingsStore } from '../../stores/settingsStore'
-import type { CwdWhitelistEntry } from '../../../shared/types'
+import type { CwdWhitelistEntry, AIOverrides } from '../../../shared/types'
 import { SectionHeader } from './override/primitives'
 import { GenericField } from './override/GenericField'
 import { AdvancedSection } from './override/AdvancedSection'
@@ -49,7 +49,7 @@ export function OverrideFormFields(props: OverrideFormFieldsProps) {
   const isClaudeBackend = effectiveBackend !== 'pi'
 
   const renderField = (key: string) => {
-    const def = DEF_MAP.get(key)
+    const def = DEF_MAP.get(key as keyof AIOverrides)
     if (!def) return null
     if (def.claudeOnly && !isClaudeBackend) return null
     if (def.piOnly && isClaudeBackend) return null

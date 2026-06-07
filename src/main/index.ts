@@ -213,7 +213,7 @@ function registerWindowIpc(): void {
   ipcMain.on('window:close', () => {
     try {
       const db = getDatabase()
-      if (getSetting(db, 'minimizeToTray') === 'true') {
+      if (getSetting(db as any, 'minimizeToTray') === 'true') {
         mainWindow?.hide()
         return
       }
@@ -308,8 +308,8 @@ if (!gotLock) {
         getHotwordModelDir: () => {
           try {
             const db = getDatabase()
-            if (getSetting(db, 'hotword_modelSource') !== 'manual') return null
-            const dir = getSetting(db, 'hotword_modelPath')
+            if (getSetting(db as any, 'hotword_modelSource') !== 'manual') return null
+            const dir = getSetting(db as any, 'hotword_modelPath')
             return dir && dir.trim() ? dir : null
           } catch {
             return null
@@ -389,7 +389,7 @@ if (!gotLock) {
           }
         },
         getWebhookUrl: () =>
-          (import.meta.env.MAIN_VITE_BUG_WEBHOOK_URL as string | undefined) ?? '',
+          ((import.meta as any).env.MAIN_VITE_BUG_WEBHOOK_URL as string | undefined) ?? '',
         sendBugReport,
         scrub: scrubLog,
       },
@@ -476,7 +476,7 @@ if (!gotLock) {
   app.on('window-all-closed', () => {
     try {
       const db = getDatabase()
-      if (getSetting(db, 'minimizeToTray') === 'true') return
+      if (getSetting(db as any, 'minimizeToTray') === 'true') return
     } catch {
       // Fall through to quit
     }

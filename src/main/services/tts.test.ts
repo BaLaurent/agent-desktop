@@ -89,7 +89,13 @@ vi.mock('fs', () => ({
   promises: {
     writeFile: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
+    readFile: vi.fn().mockResolvedValue(Buffer.from('FAKEAUDIO')),
   },
+}))
+
+let mockHasWebClients = false
+vi.mock('../../core/services/webServer', () => ({
+  hasWebClients: () => mockHasWebClients,
 }))
 
 // ─── Imports (after mocks) ───────────────────────────────────
@@ -102,6 +108,7 @@ import { injectApiKeyEnv } from '../../core/services/streaming'
 import { duckOtherStreams, restoreOtherStreams } from '../../core/utils/volume'
 import { getMainWindow } from '../mainContext'
 import { getAISettings, getAgentDirectives } from '../../core/handlers/messages'
+import { broadcast } from '../utils/broadcast'
 
 const mockFindBinary = vi.mocked(findBinaryInPath)
 const mockGetSetting = vi.mocked(getSetting)
@@ -146,6 +153,7 @@ describe('tts service', () => {
     // clearAllMocks keeps mockReturnValue overrides — reset to the
     // "no persona/language" default so tests stay order-independent.
     mockGetAgentDirectives.mockReturnValue({})
+    mockHasWebClients = false
   })
 
   // ── stop ──────────────────────────────────────────────────
@@ -174,6 +182,35 @@ describe('tts service', () => {
       resolveSpawnExit(0, 0)
       // The promise may reject since we killed, but stop() shouldn't throw
       await promise.catch(() => {})
+    })
+
+    it('resolves cleanly when a stopped player exits non-zero (mpv SIGTERM → code 4)', async () => {
+      settingsMap({ tts_provider: 'spd-say' })
+      mockFindBinary.mockReturnValue('/usr/bin/spd-say')
+
+      const promise = speak('hello', db)
+      await flush()
+
+      // We deliberately stop playback; mpv-style players trap SIGTERM and exit
+      // gracefully with a non-zero code (4) and a null signal.
+      stop()
+      resolveSpawnExit(0, 4)
+
+      // Must NOT reject — a self-initiated stop is not a playback error.
+      await expect(promise).resolves.toBeUndefined()
+    })
+
+    it('rejects when a player exits non-zero without being stopped (genuine failure)', async () => {
+      settingsMap({ tts_provider: 'spd-say' })
+      mockFindBinary.mockReturnValue('/usr/bin/spd-say')
+
+      const promise = speak('hello', db)
+      await flush()
+
+      // No stop() — the player failed on its own.
+      resolveSpawnExit(0, 4)
+
+      await expect(promise).rejects.toThrow('exited with code 4')
     })
 
     it('notifies speaking state as false', () => {
@@ -369,6 +406,58 @@ describe('tts service', () => {
       // Complete player process
       resolveSpawnExit(1, 0)
       await promise
+    })
+
+    it('ships piper audio to web and skips local playback when a web client is connected', async () => {
+      mockHasWebClients = true
+      settingsMap({ tts_provider: 'piper', tts_piperUrl: 'http://localhost:5000', tts_playerPath: 'mpv' })
+      mockFindBinary.mockReturnValue('/usr/bin/mpv')
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3]), { status: 200 }) as any,
+      )
+
+      await speak('hello', db)
+
+      // No local player spawned — audio went to the browser instead.
+      expect(mockSpawn).not.toHaveBeenCalled()
+      expect(broadcast).toHaveBeenCalledWith('tts:audio', expect.objectContaining({ mime: 'audio/wav' }))
+      fetchSpy.mockRestore()
+    })
+
+    it('ships edgetts audio to web and skips local playback when a web client is connected', async () => {
+      mockHasWebClients = true
+      settingsMap({ tts_provider: 'edgetts', tts_edgettsVoice: 'en-US-AriaNeural', tts_edgettsBinary: 'edge-tts', tts_playerPath: 'mpv' })
+      mockFindBinary.mockReturnValue('/usr/bin/edge-tts')
+
+      const promise = speak('hello', db)
+      await flush()
+
+      // Only the synthesis spawn (edge-tts) — never a local audio player.
+      expect(mockSpawn).toHaveBeenCalledTimes(1)
+      resolveSpawnExit(0, 0)
+      await promise
+
+      expect(mockSpawn).toHaveBeenCalledTimes(1)
+      expect(broadcast).toHaveBeenCalledWith('tts:audio', expect.objectContaining({ mime: 'audio/mpeg' }))
+    })
+
+    it('plays piper audio locally when no web client is connected', async () => {
+      mockHasWebClients = false
+      settingsMap({ tts_provider: 'piper', tts_piperUrl: 'http://localhost:5000', tts_playerPath: 'mpv' })
+      mockFindBinary.mockReturnValue('/usr/bin/mpv')
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3]), { status: 200 }) as any,
+      )
+
+      const promise = speak('hello', db)
+      await flush()
+
+      // Local audio player spawned; nothing broadcast to web.
+      expect(mockSpawn).toHaveBeenCalledWith('/usr/bin/mpv', [expect.stringMatching(/agent-tts-.*\.wav$/)], expect.any(Object))
+      expect(broadcast).not.toHaveBeenCalledWith('tts:audio', expect.anything())
+      resolveSpawnExit(0, 0)
+      await promise
+      fetchSpy.mockRestore()
     })
   })
 

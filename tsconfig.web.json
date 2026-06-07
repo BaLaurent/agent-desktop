@@ -19,11 +19,20 @@
     },
     "baseUrl": "."
   },
+  "references": [{ "path": "./tsconfig.core.json" }],
   "include": [
     "src/renderer/**/*.ts",
     "src/renderer/**/*.tsx",
     "src/renderer/**/*.d.ts",
     "src/shared/**/*.ts",
     "src/preload/api.d.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.integration.test.ts",
+    "**/__tests__/**",
+    "**/*.stories.tsx",
+    "node_modules"
   ]
 }

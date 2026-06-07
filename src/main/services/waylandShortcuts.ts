@@ -114,7 +114,7 @@ async function isHyprland(): Promise<boolean> {
  * Uses XDG_RUNTIME_DIR (/run/user/UID) — tmpfs, per-user, fast.
  */
 function getFifoPath(): string {
-  const runtimeDir = process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`
+  const runtimeDir = process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid?.()}`
   return path.join(runtimeDir, 'agent-desktop-shortcuts.pipe')
 }
 
@@ -376,15 +376,15 @@ async function tryRegisterPortal(
   bus = dbus.sessionBus()
 
   // Wait for the D-Bus Hello handshake to complete — bus.name is null until then
-  if (!bus.name) {
+  if (!(bus as any).name) {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('D-Bus connect timeout after 10s')), 10_000)
       bus!.once('connect', () => { clearTimeout(timeout); resolve() })
       bus!.once('error', (err: Error) => { clearTimeout(timeout); reject(err) })
     })
   }
-  busName = bus.name!.slice(1).replace(/\./g, '_')
-  logToFile(`D-Bus connected: name=${bus.name} busName=${busName}`)
+  busName = (bus as any).name!.slice(1).replace(/\./g, '_')
+  logToFile(`D-Bus connected: name=${(bus as any).name} busName=${busName}`)
 
   const proxy = await bus.getProxyObject(
     'org.freedesktop.portal.Desktop',

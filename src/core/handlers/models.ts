@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as os from 'os'
 import type { HandleRegistrar } from '../dispatch'
 import { MODEL_OPTIONS, shortenModelName } from '../types/constants'
-import { discoverPIModels } from '../../main/services/piModels'
+import { discoverPIModels } from '../services/pi/modelRegistry'
 import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('models')
@@ -108,10 +108,10 @@ async function loadModelsForBackend(backend?: string, forceRefresh = false): Pro
 }
 
 export function registerModelsHandlers(registrar: HandleRegistrar): void {
-  registrar.handle('models:list', async (_event, backend?: string) => {
-    return loadModelsForBackend(backend, false)
+  registrar.handle('models:list', async (_event, backend?: unknown) => {
+    return loadModelsForBackend(backend as string | undefined, false)
   })
-  registrar.handle('models:refresh', async (_event, backend?: string) => {
-    return loadModelsForBackend(backend, true)
+  registrar.handle('models:refresh', async (_event, backend?: unknown) => {
+    return loadModelsForBackend(backend as string | undefined, true)
   })
 }

@@ -100,7 +100,7 @@ export function FolderSettingsPopover({
         style={{ borderColor: 'var(--color-bg)' }}
       >
         <OverrideFormFields
-          draft={draft}
+          draft={draft as Record<string, string | undefined>}
           inheritedValues={globalSettings}
           mcpServers={mcpServers}
           mcpDisabledDraft={mcpDisabledDraft}

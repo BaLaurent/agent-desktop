@@ -10,7 +10,7 @@ interface PISdkLike {
   AuthStorage: { create(): unknown }
   ModelRegistry: new (auth: unknown) => {
     find(provider: string, id: string): unknown
-    getAvailable(): Promise<Array<{ provider: string; id: string }>>
+    getAvailable(): Array<{ provider: string; id: string }>
   }
 }
 

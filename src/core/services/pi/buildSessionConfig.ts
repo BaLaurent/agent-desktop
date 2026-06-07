@@ -19,7 +19,7 @@ import type { AISettings } from '../streaming'
 import type { CwdWhitelistEntry } from '../../types'
 import type { AgentToolResult } from '@mariozechner/pi-agent-core'
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
-import { createBridge, type ExtensionRuntimeContext } from '../piExtensionBridge'
+import { createBridge, type BridgeDeps, type ExtensionRuntimeContext } from '../piExtensionBridge'
 import parityFactory from '../../../extensions/agent-desktop-parity'
 
 /** PI tool name → which parameter holds the target path */
@@ -156,7 +156,7 @@ export async function buildSessionConfig(opts: SessionConfigOptions): Promise<Se
   const { aiSettings, conversationId, convKey, piSdk, sessionStore } = opts
 
   const disabledPaths = new Set(aiSettings?.piDisabledExtensions || [])
-  const extensionBridge = createBridge(conversationId ?? -1, { chunkSender: sendChunk })
+  const extensionBridge = createBridge(conversationId ?? -1, { chunkSender: sendChunk as BridgeDeps['chunkSender'] })
   const runtimeCtx: ExtensionRuntimeContext = {
     version: 1,
     conversationId: conversationId ?? -1,
@@ -203,7 +203,7 @@ export async function buildSessionConfig(opts: SessionConfigOptions): Promise<Se
   const cwdRestricted = applyCwdRestriction(
     piSdk.codingTools,
     aiSettings?.cwd || process.cwd(),
-    (aiSettings?.hooks_cwdWhitelist as CwdWhitelistEntry[] | undefined) ?? [],
+    (aiSettings?.cwdWhitelist as CwdWhitelistEntry[] | undefined) ?? [],
   )
   const gatedCodingTools = gateAgentTools(cwdRestricted, canUseToolFn, bypass)
 

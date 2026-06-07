@@ -1,22 +1,15 @@
-import { loadPISdk } from './piSdk'
+import { loadPISdk } from './sdkLoader'
+import type { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent'
+import type { Api, Model } from '@mariozechner/pi-ai'
 
 export interface PIModelOption {
   value: string
   label: string
 }
 
-type PIModel = {
-  provider: string
-  id: string
-  name?: string
-}
-
 type PIContext = {
-  authStorage: unknown
-  modelRegistry: {
-    getAvailable(): Promise<PIModel[]>
-    find(provider: string, id: string): PIModel | undefined
-  }
+  authStorage: AuthStorage
+  modelRegistry: ModelRegistry
 }
 
 export async function createPIModelContext(): Promise<PIContext> {
@@ -26,7 +19,7 @@ export async function createPIModelContext(): Promise<PIContext> {
   return { authStorage, modelRegistry }
 }
 
-function toModelValue(model: PIModel): string {
+function toModelValue(model: Model<Api>): string {
   return `${model.provider}/${model.id}`
 }
 
@@ -39,7 +32,7 @@ export async function discoverPIModels(): Promise<PIModelOption[]> {
   }))
 }
 
-export async function resolvePIModel(modelId: string): Promise<PIModel> {
+export async function resolvePIModel(modelId: string): Promise<Model<Api>> {
   const { modelRegistry } = await createPIModelContext()
 
   if (modelId.includes('/')) {

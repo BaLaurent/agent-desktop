@@ -38,7 +38,7 @@ export function AIOverridesPopover({
   return (
     <SettingsPopoverShell title={title} onSave={() => onSave(cleanDraft())} onClose={onClose}>
       <OverrideFormFields
-        draft={draft}
+        draft={draft as Record<string, string | undefined>}
         inheritedValues={inheritedValues}
         inheritedSources={inheritedSources}
         mcpServers={mcpServers || []}

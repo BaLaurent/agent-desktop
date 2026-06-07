@@ -69,10 +69,10 @@ async function summarizeClaude(prompt: string, model: string, _opts: SummarizeOp
 }
 
 async function summarizePI(prompt: string, _model: string, opts: SummarizeOptions): Promise<string> {
-  // Dynamic import — piSdk lives under src/main/services and we avoid loading
-  // it in renderer/test contexts that don't need the PI subprocess machinery.
-  const { loadPISdk } = await import('../../main/services/piSdk')
-  const { createPIModelContext, resolvePIModel } = await import('../../main/services/piModels')
+  // Dynamic import — the PI SDK loader lives under src/core/services/pi and we
+  // avoid loading it in renderer/test contexts that don't need the PI subprocess machinery.
+  const { loadPISdk } = await import('./pi/sdkLoader')
+  const { createPIModelContext, resolvePIModel } = await import('./pi/modelRegistry')
   const pi = await loadPISdk()
   const { authStorage, modelRegistry } = await createPIModelContext()
   const model = await resolvePIModel(_model)

@@ -315,7 +315,7 @@ interface MessageInputPropsArgs {
  */
 function buildMessageInputProps(args: MessageInputPropsArgs) {
   return {
-    ref: args.inputRef,
+    ref: args.inputRef as RefObject<MessageInputHandle>,
     onSend: args.handleSend,
     onQueue: args.handleQueue,
     hasQueuedMessages: args.hasQueuedMessages,

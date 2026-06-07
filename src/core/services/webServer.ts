@@ -346,6 +346,7 @@ export function generateShim(token: string): string {
       detectPlayers: function() { return invoke('tts:detectPlayers', []); },
       listSayVoices: function() { return invoke('tts:listSayVoices', []); },
       onStateChange: function(cb) { return subscribe('tts:stateChange', cb); },
+      onAudio: function(cb) { return subscribe('tts:audio', cb); },
     },
     openscad: {
       compile: function(fp) { return invoke('openscad:compile', [fp]); },
@@ -646,6 +647,11 @@ function broadcastEvent(channel: string, ...args: unknown[]): void {
       authenticatedClients.delete(client)
     }
   }
+}
+
+/** True when at least one authenticated WebSocket client is connected. */
+export function hasWebClients(): boolean {
+  return authenticatedClients.size > 0
 }
 
 // ─── Server lifecycle ───────────────────────────────

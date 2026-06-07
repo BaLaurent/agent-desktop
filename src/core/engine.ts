@@ -28,7 +28,7 @@ import type {
 // These replace the 12 one-way webContents.send() broadcast channels.
 // Adapters subscribe and forward to their transport.
 
-interface EngineEvents {
+type EngineEvents = {
   'stream:chunk':              [conversationId: number, chunk: StreamChunk]
   'conversation:updated':      [conversationId: number]
   'conversation:titleUpdated': [id: number, title: string]

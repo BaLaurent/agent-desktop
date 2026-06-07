@@ -27,19 +27,20 @@ function mapBlock(block: McpContentBlock): TextContent | ImageContent {
   return { type: 'text', text: JSON.stringify(block) }
 }
 
-function mcpResultToPi(result: McpCallResult): AgentToolResult {
+function mcpResultToPi(result: McpCallResult): AgentToolResult<unknown> {
   const content = (result.content ?? []).map(mapBlock)
-  const out: AgentToolResult = { content: content.length > 0 ? content : [{ type: 'text', text: '' }] }
-  if (result.isError) (out as AgentToolResult & { isError?: boolean }).isError = true
+  const out: AgentToolResult<unknown> = { content: content.length > 0 ? content : [{ type: 'text', text: '' }], details: undefined }
+  if (result.isError) (out as AgentToolResult<unknown> & { isError?: boolean }).isError = true
   return out
 }
 
-function errorToPiResult(err: unknown): AgentToolResult & { isError: boolean } {
+function errorToPiResult(err: unknown): AgentToolResult<unknown> & { isError: boolean } {
   const message = err instanceof Error ? err.message : String(err)
   return {
     content: [{ type: 'text', text: `MCP tool error: ${message}` }],
+    details: undefined,
     isError: true,
-  } as AgentToolResult & { isError: boolean }
+  } as AgentToolResult<unknown> & { isError: boolean }
 }
 
 export function mcpServerToPiTools(handle: McpClientHandle): ToolDefinition[] {

@@ -28,13 +28,13 @@ export interface TurnUsage {
 type SendTurnFn = (
   conversationId: number,
   messages: MessageParam[],
-  systemPrompt?: string,
-  aiSettings?: AISettings,
-  sdkSessionId?: string | null,
+  systemPrompt: string | undefined,
+  aiSettings: AISettings,
+  sdkSessionId: string | null,
 ) => Promise<{ content: string; toolCalls: ToolCall[]; aborted: boolean; sessionId: string | null; error?: string; stopReason?: string; usage?: TurnUsage }>
 
 type RespondToSessionApprovalFn = (requestId: string, response: ToolApprovalResponse | AskUserResponse) => void
-type AbortSessionFn = (conversationId?: number) => void
+type AbortSessionFn = (conversationId: number) => void
 type HasActiveSessionFn = (conversationId: number) => boolean
 
 let _sendTurn: SendTurnFn | null = null
@@ -262,7 +262,7 @@ interface StreamEventMessage {
   type: 'stream_event'
   event?: {
     type?: string
-    delta?: { type: string; text?: string; partial_json?: string }
+    delta?: { type: string; text?: string; partial_json?: string; thinking?: string }
     content_block?: { type: string; name?: string; id?: string }
   }
 }
@@ -324,7 +324,7 @@ export async function streamMessage(
   }
 
   // Persistent: delegate to SessionManager (falls back to one-shot if not injected)
-  if (_sendTurn) {
+  if (_sendTurn && aiSettings) {
     return _sendTurn(conversationId, messages, systemPrompt, aiSettings, sdkSessionId ?? null)
   }
   return streamMessageOneShot(messages, systemPrompt, aiSettings, conversationId, sdkSessionId, persistSession)
@@ -699,7 +699,7 @@ async function streamMessageOneShot(
   const sdk = await loadAgentSDK()
 
   const convKey = conversationId ?? -1
-  const convExtra = conversationId != null ? { conversationId } : {}
+  const convExtra: Record<string, number> = conversationId != null ? { conversationId } : {}
   const abortController = registerOneShotAbortController(convKey)
 
   const state = newOneShotState()

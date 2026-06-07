@@ -96,7 +96,7 @@ const mockCreateAgentSession = vi.fn().mockResolvedValue({
 })
 
 // vi.mock is hoisted — use globalThis to share state between factory and tests
-vi.mock('../../main/services/piSdk', () => {
+vi.mock('./pi/sdkLoader', () => {
   // Must be defined inside factory — vi.mock is hoisted
   const _mockReload = vi.fn().mockResolvedValue(undefined)
   const _mockGetExtensions = vi.fn().mockReturnValue({ extensions: [] })
@@ -121,7 +121,7 @@ import { streamMessagePI } from './streamingPI'
 import { getConversationPiSessionFile, setConversationPiSessionFile } from '../handlers/messages'
 import { getDatabase } from '../db/database'
 import * as nodeFs from 'node:fs'
-import { loadPISdk } from '../../main/services/piSdk'
+import { loadPISdk } from './pi/sdkLoader'
 import { createCanUseTool } from './canUseTool'
 
 describe('streamMessagePI', () => {

@@ -18,13 +18,13 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
   })
 
   ipcMain.handle('conversations:delete', (_e, id: number) => {
-    reassignOrphanedTasks(db, id)
+    reassignOrphanedTasks(db as any, id)
     invalidateSession(id)
     service.delete(id)
   })
 
   ipcMain.handle('conversations:deleteMany', (_e, ids: number[]) => {
-    for (const id of ids) reassignOrphanedTasks(db, id)
+    for (const id of ids) reassignOrphanedTasks(db as any, id)
     for (const id of ids) invalidateSession(id)
     service.deleteMany(ids)
   })

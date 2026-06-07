@@ -12,14 +12,14 @@ const piDisposeMock = vi.fn()
 const piCreateSessionMock = vi.fn()
 const mockResolvePIModel = vi.fn()
 const mockCreatePIModelContext = vi.fn()
-vi.mock('../../main/services/piSdk', () => ({
+vi.mock('./pi/sdkLoader', () => ({
   loadPISdk: async () => ({
     createAgentSession: piCreateSessionMock,
     SessionManager: { inMemory: () => ({}) },
     codingTools: [],
   }),
 }))
-vi.mock('../../main/services/piModels', () => ({
+vi.mock('./pi/modelRegistry', () => ({
   resolvePIModel: (...args: unknown[]) => mockResolvePIModel(...args),
   createPIModelContext: (...args: unknown[]) => mockCreatePIModelContext(...args),
 }))

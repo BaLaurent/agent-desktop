@@ -10,6 +10,7 @@ beforeEach(() => {
     sherpa: {
       validateConfig: vi.fn(async () => ({ modelPath: '/m', files: ['encoder.onnx'], detected: 'transducer', ok: true })),
       downloadModel: vi.fn(async () => ({ modelPath: '/m' })),
+      listInstalledModels: vi.fn(async () => []),
       onDownloadProgress: vi.fn(() => () => {}),
     },
   }

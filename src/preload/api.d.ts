@@ -209,6 +209,7 @@ export interface AgentAPI {
     detectPlayers(): Promise<Array<{ name: string; path: string; available: boolean }>>
     listSayVoices(): Promise<Array<{ name: string; locale: string }>>
     onStateChange(callback: (state: { speaking: boolean; messageId?: number }) => void): () => void
+    onAudio(callback: (audio: { data: string; mime: string; messageId: number | null }) => void): () => void
   }
   openscad: {
     compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
@@ -225,6 +226,8 @@ export interface AgentAPI {
     runNow(id: number): Promise<void>
     conversationTasks(conversationId: number): Promise<number[]>
     listVariables(): Promise<VariableInfo[]>
+    toggleBackground(enabled: boolean): Promise<void>
+    backgroundStatus(): Promise<{ enabled: boolean; installed: boolean }>
     onTaskUpdate(callback: (task: ScheduledTask) => void): () => void
   }
   updates: {

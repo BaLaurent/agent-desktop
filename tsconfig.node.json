@@ -18,10 +18,17 @@
     },
     "baseUrl": "."
   },
+  "references": [{ "path": "./tsconfig.core.json" }],
   "include": [
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
     "electron.vite.config.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.integration.test.ts",
+    "**/__tests__/**",
+    "node_modules"
   ]
 }

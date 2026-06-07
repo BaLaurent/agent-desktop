@@ -92,7 +92,7 @@ export class SqlJsAdapter {
     const results = this.db.exec(`PRAGMA ${pragmaStr}`)
     if (!results.length) return []
     const { columns, values } = results[0]
-    return values.map((row) => {
+    return values.map((row: unknown[]) => {
       const obj: Record<string, unknown> = {}
       for (let i = 0; i < columns.length; i++) {
         obj[columns[i]] = row[i]

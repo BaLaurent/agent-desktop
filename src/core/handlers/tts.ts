@@ -22,6 +22,11 @@ const log = createLogger('tts')
 // ─── Module state ───────────────────────────────────────────
 
 let currentProcess: ChildProcess | null = null
+// Processes we deliberately killed via stopInternal(). Players such as mpv
+// trap SIGTERM and exit gracefully with a non-zero code (mpv → 4) instead of
+// dying by signal, so the exit handler must not report a self-initiated stop
+// as a playback error.
+const intentionallyStopped = new WeakSet<ChildProcess>()
 let cachedPlayer: string | null = null
 let currentMessageId: number | null = null
 
@@ -36,6 +41,35 @@ export function setSpeakingStateListener(listener: SpeakingStateListener | null)
 
 function notifySpeakingState(speaking: boolean): void {
   speakingStateListener?.(speaking, currentMessageId)
+}
+
+// ─── Web audio sink (set by Electron main) ──────────────────
+//
+// When a web client is connected, generated audio is shipped to the browser
+// instead of (or in addition to) being played by a local audio player. The
+// sink returns true when it delivered the audio to at least one web client,
+// in which case local playback is skipped — the person driving TTS is remote.
+
+interface WebAudioSink {
+  /** Cheap check: is at least one web client connected (worth generating audio for)? */
+  active(): boolean
+  /** Deliver generated audio to connected web clients. */
+  send(audio: { data: string; mime: string; messageId: number | null }): void
+}
+let webAudioSink: WebAudioSink | null = null
+
+export function setWebAudioSink(sink: WebAudioSink | null): void {
+  webAudioSink = sink
+}
+
+/** True when generated audio should be routed to web clients rather than played locally. */
+function shouldRouteToWeb(): boolean {
+  return !!webAudioSink?.active()
+}
+
+/** Ship a generated audio buffer to connected web clients. */
+function shipAudioToWeb(buffer: Buffer, mime: string): void {
+  webAudioSink?.send({ data: buffer.toString('base64'), mime, messageId: currentMessageId })
 }
 
 // ─── Inline helpers ─────────────────────────────────────────
@@ -99,7 +133,9 @@ function runTrackedProcess(command: string, args: string[], label: string): Prom
     })
     proc.on('exit', (code) => {
       if (currentProcess === proc) currentProcess = null
-      if (code !== 0 && code !== null) {
+      // A signal death (code === null) or a process we deliberately stopped is
+      // a clean stop, not a playback failure.
+      if (code !== 0 && code !== null && !intentionallyStopped.has(proc)) {
         const detail = stderr.trim() ? ': ' + stderr.trim().slice(0, 200) : ''
         reject(new Error(`${label} exited with code ${code}${detail}`))
       } else {
@@ -138,6 +174,7 @@ async function speakWithPiper(text: string, piperUrl: string, db: any): Promise<
       throw new Error(`Piper returned ${response.status}: ${response.statusText}`)
     }
     const buffer = Buffer.from(await response.arrayBuffer())
+    if (shouldRouteToWeb()) { shipAudioToWeb(buffer, 'audio/wav'); return }
     await fsp.writeFile(tmpFile, buffer)
     await playAudioFile(tmpFile, db)
   } finally {
@@ -163,6 +200,7 @@ async function speakWithEdgeTts(text: string, voice: string, edgeBinary: string,
       await runTrackedProcess(edgeBinary, args, 'edge-tts')
     }
 
+    if (shouldRouteToWeb()) { shipAudioToWeb(await fsp.readFile(tmpWav), 'audio/mpeg'); return }
     await playAudioFile(tmpWav, db)
   } finally {
     await fsp.unlink(tmpWav).catch(() => {})
@@ -188,6 +226,7 @@ function speakWithSay(text: string, voice?: string): Promise<void> {
 
 function stopInternal(): void {
   if (currentProcess) {
+    intentionallyStopped.add(currentProcess)
     try {
       currentProcess.kill('SIGTERM')
     } catch {

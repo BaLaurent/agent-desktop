@@ -63,7 +63,7 @@ export function createElectronContext(db: SqlJsAdapter): TaskRunContext {
     onSessionInvalidate: invalidateSession,
   }
   return {
-    db,
+    db: db as any,
     buildHistory(conversationId: number) {
       return buildMessageHistory(db, conversationId)
     },
@@ -98,7 +98,7 @@ export function createElectronContext(db: SqlJsAdapter): TaskRunContext {
       }
     },
     saveMessage(conversationId, role, content, attachments?, toolCalls?) {
-      saveMessage(db, conversationId, role, content, attachments, toolCalls)
+      saveMessage(db, conversationId, role as 'user' | 'assistant', content, attachments as any, toolCalls)
     },
     async notify(title, body) {
       try {
@@ -132,7 +132,7 @@ export function createElectronContext(db: SqlJsAdapter): TaskRunContext {
 export async function executeTask(db: SqlJsAdapter, task: ScheduledTask): Promise<void> {
   if (!schedulerService || schedulerDb !== db) {
     schedulerDb = db
-    schedulerService = new SchedulerService(db)
+    schedulerService = new SchedulerService(db as any)
   }
   const ctx = createElectronContext(db)
 
@@ -170,7 +170,7 @@ export async function executeTask(db: SqlJsAdapter, task: ScheduledTask): Promis
 export function reassignOrphanedTasks(db: SqlJsAdapter, conversationId: number): void {
   if (!schedulerService || schedulerDb !== db) {
     schedulerDb = db
-    schedulerService = new SchedulerService(db)
+    schedulerService = new SchedulerService(db as any)
   }
   schedulerService.reassignOrphanedTasks(conversationId)
 }
@@ -197,7 +197,7 @@ function tick(): void {
 
 export async function startScheduler(db: SqlJsAdapter): Promise<void> {
   schedulerDb = db
-  schedulerService = new SchedulerService(db)
+  schedulerService = new SchedulerService(db as any)
 
   // Check if background mode is active
   const backgroundMode = getBackgroundSchedulerEnabled(db)
@@ -328,7 +328,7 @@ export function getSchedulerService(): SchedulerService | null {
 export function registerHandlers(ipcMain: IpcMain, db: SqlJsAdapter): void {
   // Ensure service exists for IPC calls (startScheduler may not have been called yet)
   const svc = () => {
-    if (!schedulerService) schedulerService = new SchedulerService(db)
+    if (!schedulerService) schedulerService = new SchedulerService(db as any)
     return schedulerService
   }
 

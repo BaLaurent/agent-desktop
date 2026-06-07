@@ -5,7 +5,7 @@ import { registerModelsHandlers, _resetModelsCache } from './models'
 import { MODEL_OPTIONS } from '../types/constants'
 
 const mockDiscoverPIModels = vi.fn()
-vi.mock('../../main/services/piModels', () => ({
+vi.mock('../services/pi/modelRegistry', () => ({
   discoverPIModels: (...args: unknown[]) => mockDiscoverPIModels(...args),
 }))
 

@@ -198,7 +198,7 @@ interface StreamEventMsg {
   type: 'stream_event'
   event?: {
     type?: string
-    delta?: { type: string; text?: string; partial_json?: string }
+    delta?: { type: string; text?: string; partial_json?: string; thinking?: string }
     content_block?: { type: string; name?: string; id?: string }
   }
 }

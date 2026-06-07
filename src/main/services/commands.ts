@@ -19,13 +19,13 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     const results = new Map<string, SlashCommand>()
 
     for (const cmd of BUILTIN_COMMANDS) {
-      results.set(cmd.name, cmd)
+      results.set(cmd.name, cmd as SlashCommand)
     }
 
     const claudeDir = expandTilde('~/.claude')
     const userCommands = await scanCommandsDir(path.join(claudeDir, 'commands'), 'user')
     for (const cmd of userCommands) {
-      results.set(cmd.name, cmd)
+      results.set(cmd.name, cmd as SlashCommand)
     }
 
     if (cwd && typeof cwd === 'string') {
@@ -33,7 +33,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
         const safeCwd = validatePathSafe(cwd)
         const projectCommands = await scanCommandsDir(path.join(safeCwd, '.claude', 'commands'), 'project')
         for (const cmd of projectCommands) {
-          results.set(cmd.name, cmd)
+          results.set(cmd.name, cmd as SlashCommand)
         }
       } catch {
         // Invalid cwd — skip project commands
@@ -43,7 +43,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     if (skillsMode && skillsMode !== 'off') {
       const userSkills = await scanSkillsDir(path.join(claudeDir, 'skills'))
       for (const skill of userSkills) {
-        results.set(skill.name, skill)
+        results.set(skill.name, skill as SlashCommand)
       }
 
       if ((skillsMode === 'project' || skillsMode === 'local') && cwd && typeof cwd === 'string') {
@@ -51,7 +51,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
           const safeCwd = validatePathSafe(cwd)
           const projectSkills = await scanSkillsDir(path.join(safeCwd, '.claude', 'skills'))
           for (const skill of projectSkills) {
-            results.set(skill.name, skill)
+            results.set(skill.name, skill as SlashCommand)
           }
         } catch {
           // Invalid cwd — skip project skills
@@ -61,7 +61,7 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     const macros = await scanMacrosDir()
     for (const macro of macros) {
-      results.set(macro.name, macro)
+      results.set(macro.name, macro as SlashCommand)
     }
 
     // Pi extension commands — Electron-only path (depends on PI SDK + Electron paths)

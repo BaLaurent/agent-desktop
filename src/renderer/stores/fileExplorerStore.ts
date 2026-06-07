@@ -305,10 +305,9 @@ export const useFileExplorerStore = create<FileExplorerState>((set, get) => ({
 
   loadJsTrust: async () => {
     try {
-      const [foldersRaw, trustAllRaw] = await Promise.all([
-        window.agent.settings.get('html_jsTrustedFolders'),
-        window.agent.settings.get('html_jsTrustAll'),
-      ])
+      const settings = await window.agent.settings.get()
+      const foldersRaw = settings.html_jsTrustedFolders
+      const trustAllRaw = settings.html_jsTrustAll
       let folders: string[] = []
       if (foldersRaw) {
         try { folders = JSON.parse(foldersRaw) } catch { /* invalid JSON, keep empty */ }

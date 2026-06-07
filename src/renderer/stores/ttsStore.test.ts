@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { capturedTtsStateListener } from '../__tests__/setup'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { capturedTtsStateListener, capturedTtsAudioListener } from '../__tests__/setup'
 
 // Must import store AFTER setup has installed the mock
 import { useTtsStore } from './ttsStore'
@@ -59,6 +59,55 @@ describe('ttsStore', () => {
 
       // Should not change — messageId is undefined
       expect(useTtsStore.getState().speakingMessageId).toBe(42)
+    })
+  })
+
+  describe('onAudio listener (web mode)', () => {
+    let playSpy: ReturnType<typeof vi.fn>
+    let pauseSpy: ReturnType<typeof vi.fn>
+    let lastAudio: { listeners: Record<string, () => void> }
+
+    beforeEach(() => {
+      playSpy = vi.fn().mockResolvedValue(undefined)
+      pauseSpy = vi.fn()
+      vi.stubGlobal('URL', {
+        createObjectURL: vi.fn(() => 'blob:fake'),
+        revokeObjectURL: vi.fn(),
+      })
+      vi.stubGlobal('Audio', class {
+        listeners: Record<string, () => void> = {}
+        src = ''
+        play = playSpy
+        pause = pauseSpy
+        addEventListener(ev: string, cb: () => void) { this.listeners[ev] = cb }
+        constructor() { lastAudio = this }
+      } as unknown as typeof Audio)
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('plays shipped audio and sets speakingMessageId', () => {
+      capturedTtsAudioListener?.({ data: btoa('AUDIO'), mime: 'audio/mpeg', messageId: 7 })
+
+      expect(playSpy).toHaveBeenCalled()
+      expect(useTtsStore.getState().speakingMessageId).toBe(7)
+    })
+
+    it('clears speakingMessageId when playback ends', () => {
+      capturedTtsAudioListener?.({ data: btoa('AUDIO'), mime: 'audio/mpeg', messageId: 7 })
+      lastAudio.listeners['ended']?.()
+
+      expect(useTtsStore.getState().speakingMessageId).toBeNull()
+    })
+
+    it('onStateChange(false) does not clear while web audio is playing', () => {
+      capturedTtsAudioListener?.({ data: btoa('AUDIO'), mime: 'audio/mpeg', messageId: 7 })
+      capturedTtsStateListener?.({ speaking: false })
+
+      // Web audio drives its own lifecycle; the early state-false must be ignored.
+      expect(useTtsStore.getState().speakingMessageId).toBe(7)
     })
   })
 })

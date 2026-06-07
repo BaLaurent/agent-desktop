@@ -4,7 +4,7 @@ import * as path from 'path'
 import type { PIExtensionInfo } from '../../shared/constants'
 import type { SlashCommand } from '../../shared/types'
 import type { PiUIResponse } from '../../shared/piUITypes'
-import { loadPISdk } from './piSdk'
+import { loadPISdk } from '../../core/services/pi/sdkLoader'
 import {
   registerPiUIContext,
   unregisterPiUIContext,

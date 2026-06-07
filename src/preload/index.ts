@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { AgentAPI } from './api'
+import type { AgentAPI, HotwordTrainEvent } from './api'
+import type { ScheduledTask, UpdateStatus, JupyterOutputChunk } from '../shared/types'
 
 function withTimeout<T>(promise: Promise<T>, ms = 30000): Promise<T> {
   if (ms <= 0) return promise
@@ -136,7 +137,7 @@ const api: AgentAPI = {
       return () => { ipcRenderer.removeListener('pi:uiRequest', handler) }
     },
     respondUI: (id, response) => {
-      ipcRenderer.send('pi:uiResponse', { id, ...response })
+      ipcRenderer.send('pi:uiResponse', { ...response, id })
     },
     sendTuiInput: (id: string, data: string) => {
       ipcRenderer.send('pi:tuiInput', { id, data })
@@ -216,8 +217,8 @@ const api: AgentAPI = {
     setup: () => withTimeout(ipcRenderer.invoke('hotwordTrain:setup')),
     cancel: () => withTimeout(ipcRenderer.invoke('hotwordTrain:cancel')),
     status: () => withTimeout(ipcRenderer.invoke('hotwordTrain:status')),
-    onEvent: (callback: (ev: unknown) => void) => {
-      const handler = (_e: Electron.IpcRendererEvent, ev: unknown) => callback(ev)
+    onEvent: (callback: (ev: HotwordTrainEvent) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, ev: HotwordTrainEvent) => callback(ev)
       ipcRenderer.on('hotwordTrain:event', handler)
       return () => { ipcRenderer.removeListener('hotwordTrain:event', handler) }
     },
@@ -234,6 +235,11 @@ const api: AgentAPI = {
       const handler = (_e: Electron.IpcRendererEvent, state: { speaking: boolean; messageId?: number }) => callback(state)
       ipcRenderer.on('tts:stateChange', handler)
       return () => { ipcRenderer.removeListener('tts:stateChange', handler) }
+    },
+    onAudio: (callback: (audio: { data: string; mime: string; messageId: number | null }) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, audio: { data: string; mime: string; messageId: number | null }) => callback(audio)
+      ipcRenderer.on('tts:audio', handler)
+      return () => { ipcRenderer.removeListener('tts:audio', handler) }
     },
   },
   openscad: {
@@ -253,8 +259,8 @@ const api: AgentAPI = {
     listVariables: () => withTimeout(ipcRenderer.invoke('scheduler:listVariables')),
     toggleBackground: (enabled: boolean) => withTimeout(ipcRenderer.invoke('scheduler:toggleBackground', enabled)),
     backgroundStatus: () => withTimeout(ipcRenderer.invoke('scheduler:backgroundStatus')),
-    onTaskUpdate: (callback: (task: unknown) => void) => {
-      const handler = (_e: Electron.IpcRendererEvent, task: unknown) => callback(task)
+    onTaskUpdate: (callback: (task: ScheduledTask) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, task: ScheduledTask) => callback(task)
       ipcRenderer.on('scheduler:taskUpdate', handler)
       return () => { ipcRenderer.removeListener('scheduler:taskUpdate', handler) }
     },
@@ -264,8 +270,8 @@ const api: AgentAPI = {
     download: () => withTimeout(ipcRenderer.invoke('updates:download'), 300000),
     install: () => withTimeout(ipcRenderer.invoke('updates:install')),
     getStatus: () => withTimeout(ipcRenderer.invoke('updates:getStatus')),
-    onStatus: (callback: (status: unknown) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
+    onStatus: (callback: (status: UpdateStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
       ipcRenderer.on('updates:status', handler)
       return () => { ipcRenderer.removeListener('updates:status', handler) }
     },
@@ -295,8 +301,8 @@ const api: AgentAPI = {
     shutdownKernel: (filePath: string) => withTimeout(ipcRenderer.invoke('jupyter:shutdownKernel', filePath)),
     getStatus: (filePath: string) => withTimeout(ipcRenderer.invoke('jupyter:getStatus', filePath)),
     detectJupyter: () => withTimeout(ipcRenderer.invoke('jupyter:detectJupyter')),
-    onOutput: (callback: (chunk: unknown) => void) => {
-      const handler = (_e: Electron.IpcRendererEvent, chunk: unknown) => callback(chunk)
+    onOutput: (callback: (chunk: JupyterOutputChunk) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, chunk: JupyterOutputChunk) => callback(chunk)
       ipcRenderer.on('jupyter:output', handler)
       return () => { ipcRenderer.removeListener('jupyter:output', handler) }
     },

@@ -199,7 +199,7 @@ describe('buildSessionConfig — gatedCodingTools CWD restriction', () => {
     opts.aiSettings = {
       ...opts.aiSettings,
       permissionMode: 'bypassPermissions',
-      hooks_cwdWhitelist: [{ path: '/project', access: 'readwrite' }],
+      cwdWhitelist: [{ path: '/project', access: 'readwrite' }],
     }
     const result = await buildSessionConfig(opts)
 
@@ -219,7 +219,7 @@ describe('buildSessionConfig — gatedCodingTools CWD restriction', () => {
     opts.aiSettings = {
       ...opts.aiSettings,
       permissionMode: 'bypassPermissions',
-      hooks_cwdWhitelist: [], // empty = no read enforcement
+      cwdWhitelist: [], // empty = no read enforcement
     }
     const result = await buildSessionConfig(opts)
 
@@ -240,7 +240,7 @@ describe('buildSessionConfig — gatedCodingTools CWD restriction', () => {
       ...opts.aiSettings,
       cwd: '/project',
       permissionMode: 'bypassPermissions',
-      hooks_cwdWhitelist: [],
+      cwdWhitelist: [],
     }
     const result = await buildSessionConfig(opts)
 
@@ -260,7 +260,7 @@ describe('buildSessionConfig — gatedCodingTools CWD restriction', () => {
       ...opts.aiSettings,
       cwd: '/project',
       permissionMode: 'bypassPermissions',
-      hooks_cwdWhitelist: [],
+      cwdWhitelist: [],
     }
     const result = await buildSessionConfig(opts)
 

@@ -312,6 +312,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversation_id: conversationId,
       role: 'user',
       content,
+      tool_calls: null,
       attachments: JSON.stringify(attachments || []),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -727,16 +728,17 @@ function finalizeRunningTool(parts: StreamPart[], chunk: StreamChunk): boolean {
     const p = parts[i]
     if (p.type !== 'tool' || p.status !== 'running') continue
     if (toolId && p.id !== toolId) continue
-    parts[i] = {
+    const done = {
       ...p,
-      status: 'done',
+      status: 'done' as const,
       summary: chunk.content || '',
       output: chunk.toolOutput || chunk.content || '',
     }
+    parts[i] = done
     // If input was sent with the result chunk, set it too
     if (chunk.toolInput && !p.input) {
       const parsed = safeParseJSON<Record<string, unknown>>(chunk.toolInput)
-      if (parsed) parts[i] = { ...parts[i], input: parsed }
+      if (parsed) parts[i] = { ...done, input: parsed }
     }
     // Dispatch after Bash has actually finished so git state is up-to-date
     const resolvedInput = (parts[i] as { input?: Record<string, unknown> }).input

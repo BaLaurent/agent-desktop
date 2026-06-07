@@ -46,12 +46,12 @@ export function BubbleContextMenu({
       className="min-w-[140px]"
       aria-label="Message actions"
     >
-      <ContextMenuItem onClick={(e) => { onClose(); onCopyMessage(e) }}>
+      <ContextMenuItem onClick={((e: React.MouseEvent) => { onClose(); onCopyMessage(e) }) as () => void}>
         Copy Message
       </ContextMenuItem>
 
       {selectedText && (
-        <ContextMenuItem onClick={(e) => { onClose(); onCopySelection(selectedText, e) }}>
+        <ContextMenuItem onClick={((e: React.MouseEvent) => { onClose(); onCopySelection(selectedText, e) }) as () => void}>
           Copy Selection
         </ContextMenuItem>
       )}

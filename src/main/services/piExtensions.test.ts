@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockReload = vi.fn().mockResolvedValue(undefined)
 const mockGetExtensions = vi.fn().mockReturnValue({ extensions: [] })
 
-vi.mock('./piSdk', () => {
+vi.mock('../../core/services/pi/sdkLoader', () => {
   const _mockReload = vi.fn().mockResolvedValue(undefined)
   const _mockGetExtensions = vi.fn().mockReturnValue({ extensions: [] })
   return {
@@ -20,13 +20,13 @@ vi.mock('./piSdk', () => {
 })
 
 import { discoverPIExtensions, discoverPIExtensionCommands, registerHandlers } from './piExtensions'
-import { loadPISdk } from './piSdk'
+import { loadPISdk } from '../../core/services/pi/sdkLoader'
 
 // Access internal mocks from the factory
 const piSdkModule = await vi.importMock<{
   loadPISdk: ReturnType<typeof vi.fn>
   __mocks: { reload: ReturnType<typeof vi.fn>; getExtensions: ReturnType<typeof vi.fn> }
-}>('./piSdk')
+}>('../../core/services/pi/sdkLoader')
 
 describe('discoverPIExtensions', () => {
   beforeEach(() => {

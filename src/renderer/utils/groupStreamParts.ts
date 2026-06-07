@@ -1,8 +1,4 @@
-// Reason: fallow does not propagate `export *` re-exports — `StreamPart` is
-// declared in src/core/types/types.ts and re-exported via shared/types.ts.
-// TypeScript resolves correctly (build: 0 errors).
-// fallow-ignore-next-line unresolved-import
-import type { StreamPart } from '../../../shared/types'
+import type { StreamPart } from '../../shared/types'
 
 export type ToolPart = Extract<StreamPart, { type: 'tool' }>
 

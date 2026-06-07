@@ -95,6 +95,7 @@ export function injectSchedulerMcp(
   conversationId: number,
   getSchedulerMcpConfig: ((id: number) => Record<string, unknown> | null) | undefined,
 ): void {
+  if (!servers) return
   if (sdkBackend !== 'claude-agent-sdk') return
   if (!getSchedulerMcpConfig) return
   const schedulerMcp = getSchedulerMcpConfig(conversationId)

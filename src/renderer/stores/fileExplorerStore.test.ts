@@ -370,9 +370,10 @@ describe('fileExplorerStore', () => {
   // ── JS trust ─────────────────────────────────────────────
 
   it('loadJsTrust loads folders and trustAll from settings', async () => {
-    mockAgent.settings.get
-      .mockResolvedValueOnce('["/home/user/trusted"]')  // html_jsTrustedFolders
-      .mockResolvedValueOnce('true')                     // html_jsTrustAll
+    mockAgent.settings.get.mockResolvedValueOnce({
+      html_jsTrustedFolders: '["/home/user/trusted"]',
+      html_jsTrustAll: 'true',
+    })
 
     await act(async () => {
       await useFileExplorerStore.getState().loadJsTrust()
@@ -384,9 +385,7 @@ describe('fileExplorerStore', () => {
   })
 
   it('loadJsTrust defaults to empty when settings are absent', async () => {
-    mockAgent.settings.get
-      .mockResolvedValueOnce(null)  // no folders
-      .mockResolvedValueOnce(null)  // no trustAll
+    mockAgent.settings.get.mockResolvedValueOnce({})
 
     await act(async () => {
       await useFileExplorerStore.getState().loadJsTrust()

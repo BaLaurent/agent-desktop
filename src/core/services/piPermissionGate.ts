@@ -6,18 +6,20 @@ export interface PiPermissionGateOptions {
   bypass: boolean
 }
 
-function denyResult(message: string): AgentToolResult & { isError: boolean } {
+function denyResult(message: string): AgentToolResult<unknown> & { isError: boolean } {
   return {
     content: [{ type: 'text', text: `Permission denied: ${message}` }],
+    details: undefined,
     isError: true,
-  } as AgentToolResult & { isError: boolean }
+  } as AgentToolResult<unknown> & { isError: boolean }
 }
 
-function errorResult(message: string): AgentToolResult & { isError: boolean } {
+function errorResult(message: string): AgentToolResult<unknown> & { isError: boolean } {
   return {
     content: [{ type: 'text', text: `Permission check failed: ${message}` }],
+    details: undefined,
     isError: true,
-  } as AgentToolResult & { isError: boolean }
+  } as AgentToolResult<unknown> & { isError: boolean }
 }
 
 export function gatePiTools(

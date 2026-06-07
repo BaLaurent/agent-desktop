@@ -15,7 +15,7 @@ import {
   denyPendingForConversation,
   getPISchedulerBridge,
 } from './streaming'
-import { loadPISdk } from '../../main/services/piSdk'
+import { loadPISdk } from './pi/sdkLoader'
 import { existsSync } from 'node:fs'
 import { getConversationPiSessionFile, setConversationPiSessionFile } from '../handlers/messages'
 import { getDatabase } from '../db/database'
@@ -154,7 +154,7 @@ function createSchedulerTool(): ToolDefinition {
     label: 'Agent Scheduler',
     description: 'Schedule tasks to run at specific times or intervals. Use this tool to create, list, or cancel scheduled tasks for the current conversation.',
     parameters: SchedulerToolParams,
-    async execute(_toolCallId, params: SchedulerToolParams, _signal, _onUpdate, _ctx): Promise<AgentToolResult> {
+    async execute(_toolCallId, params: SchedulerToolParams, _signal, _onUpdate, _ctx): Promise<AgentToolResult<unknown>> {
       const result = await executeSchedulerCommand(params.conversation_id, params.command, {
         name: params.name,
         prompt: params.prompt,
@@ -172,16 +172,17 @@ function createSchedulerTool(): ToolDefinition {
           const nextRun = t.next_run_at ? new Date(t.next_run_at).toLocaleString() : 'N/A'
           return `#${t.id} ${t.enabled ? '✅' : '⏸️'} ${t.name} (${t.interval_value}${t.interval_unit}) - ${nextRun} (run #${t.run_count})`
         })
-        return { content: [{ type: 'text', text: formatted.length ? formatted.join('\n') : 'No scheduled tasks' }] }
+        return { content: [{ type: 'text', text: formatted.length ? formatted.join('\n') : 'No scheduled tasks' }], details: undefined }
       } else if (params.command === 'create') {
         const r = result as { id: number; name: string; next_run_at?: string; max_runs?: number | null }
         return {
           content: [{ type: 'text', text: `Task created: ID ${r.id} "${r.name}" (next: ${r.next_run_at ?? 'N/A'})` }],
+          details: undefined,
         }
       } else if (params.command === 'cancel') {
-        return { content: [{ type: 'text', text: result && typeof result === 'object' && 'deleted' in result ? 'Task cancelled' : 'Cancel result unknown' }] }
+        return { content: [{ type: 'text', text: result && typeof result === 'object' && 'deleted' in result ? 'Task cancelled' : 'Cancel result unknown' }], details: undefined }
       }
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: undefined }
     },
   }
 }
@@ -279,7 +280,7 @@ export async function streamMessagePI(
   const pi = await loadPISdk()
 
   const convKey = conversationId ?? -1
-  const convExtra = conversationId != null ? { conversationId } : {}
+  const convExtra: Record<string, string | number> = conversationId != null ? { conversationId } : {}
   const accumulator = { fullContent: '', toolCallsMap: new Map<string, ToolCall>() }
   let aborted = false
 

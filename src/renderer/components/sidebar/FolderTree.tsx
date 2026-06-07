@@ -159,7 +159,7 @@ const FolderRow = memo(function FolderRow(props: FolderRowProps) {
         </span>
         {isRenaming ? (
           <input
-            ref={inputRef}
+            ref={inputRef as React.RefObject<HTMLInputElement>}
             autoFocus
             value={renameValue}
             onChange={(e) => onRenameChange(e.target.value)}

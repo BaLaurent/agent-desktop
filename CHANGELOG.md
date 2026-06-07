@@ -7,6 +7,11 @@
 
 ### Bug Fixes
 - **TTS no longer speaks the model's reasoning** — `<thinking>…</thinking>` blocks (persisted in assistant content for renderer replay) are now stripped before TTS, so they are neither spoken nor fed to the summary model. Strip logic centralized in a single `stripThinkingBlocks` helper reused by history replay, auto-title, compaction, and TTS
+- **TTS plays in the web client** — when you drive text-to-speech from the web/mobile client, the generated audio (Piper, edge-tts) is now streamed to the browser and played there, instead of only playing on the server machine. Local playback is skipped while a web client is connected; the desktop app is unaffected. (Direct-playback providers `spd-say`/`say` remain server-only.)
+- **TTS stop no longer logged as a playback error** — `mpv` (and similar players) trap `SIGTERM` and exit gracefully with a non-zero code (mpv exits 4) instead of dying by signal. Deliberately stopping playback — at the start of each new utterance, via the stop-TTS shortcut, or when the Quick Voice overlay closes — no longer surfaces a spurious `Audio player mpv exited with code 4` error. Genuine playback failures are still reported.
+
+### Internal
+- **`tsc` type-checks cleanly across all three projects** — added the missing `tsconfig` project references (node/web reference core) and excluded test files from the app type-check, then fixed the pre-existing type errors this surfaced (SDK type drift in the PI pipeline, DB adapter boundary casts, React 19 ref typing, `WebkitAppRegion` CSS augmentation, preload event-callback typing, and more). The PI SDK loader/model-registry modules moved from `src/main/services` to `src/core/services/pi` to break a core to main dependency cycle. No runtime behavior change.
 
 ---
 

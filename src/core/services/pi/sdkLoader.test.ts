@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// The Function('return import(...)') pattern used by piSdk.ts (and anthropic.ts)
+// The Function('return import(...)') pattern used by sdkLoader.ts (and anthropic.ts)
 // bypasses Vitest's module resolution, so we can't mock the actual import.
 // Instead, we test the caching logic by mocking the Function constructor.
 const mockPISdk = {
@@ -20,7 +20,7 @@ describe('loadPISdk', () => {
   })
 
   it('returns the PI SDK module', async () => {
-    const { loadPISdk } = await import('./piSdk')
+    const { loadPISdk } = await import('./sdkLoader')
     const sdk = await loadPISdk()
     expect(sdk).toBe(mockPISdk)
     expect(sdk.createAgentSession).toBeDefined()
@@ -28,7 +28,7 @@ describe('loadPISdk', () => {
   })
 
   it('caches the SDK after first load', async () => {
-    const { loadPISdk } = await import('./piSdk')
+    const { loadPISdk } = await import('./sdkLoader')
     const first = await loadPISdk()
     const second = await loadPISdk()
     expect(first).toBe(second)
