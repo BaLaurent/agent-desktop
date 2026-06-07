@@ -30,6 +30,20 @@ files:
       - tslib/**
       - undici/**
       - "@mariozechner/**"
+      # Native STT addon (sherpa-onnx-node) + its per-platform prebuilt binaries.
+      # esbuild can't inline a native .node, so these must ship unbundled. Only the
+      # prebuild matching the target arch/os is present in node_modules at build time
+      # (see scripts/fetch-sherpa-prebuilds.mjs); absent globs are silently skipped.
+      # No win-arm64 prebuild exists upstream → Sherpa degrades gracefully there.
+      - sherpa-onnx-node/**
+      - sherpa-onnx-linux-x64/**
+      - sherpa-onnx-linux-arm64/**
+      - sherpa-onnx-win-x64/**
+      - sherpa-onnx-darwin-arm64/**
+      - sherpa-onnx-darwin-x64/**
+      # onnxruntime-web (WASM) — served to the openWakeWord renderer worker via
+      # agent-model://ort/. Not inlined; the wakeword 404s without it in packaged builds.
+      - onnxruntime-web/**
 extraResources:
   - from: build/trayTemplate.png
     to: trayTemplate.png

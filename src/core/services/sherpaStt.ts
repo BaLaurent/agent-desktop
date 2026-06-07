@@ -108,7 +108,13 @@ function loadSherpa(): any {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require('sherpa-onnx-node')
   } catch {
-    throw new Error('sherpa-onnx-node is not installed. Run: npm install sherpa-onnx-node')
+    // Either not installed (dev) or no native prebuild for this platform/arch
+    // (e.g. Windows ARM64, which sherpa-onnx-node does not ship). Whisper STT still works.
+    throw new Error(
+      `Sherpa STT is unavailable on this platform (${process.platform}/${process.arch}) — ` +
+        'the sherpa-onnx-node native binary is missing. Use the Whisper engine instead, ' +
+        'or install it with: npm install sherpa-onnx-node',
+    )
   }
 }
 
