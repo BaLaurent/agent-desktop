@@ -30,10 +30,12 @@ describe('downloadPreset', () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-dl-'))
     homedirMock.mockReturnValue(dir)
     const body = new Uint8Array([1, 2, 3])
+    // Stream-based download: provide a fresh WHATWG ReadableStream per fetch call.
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
-      headers: { get: () => String(body.length) },
-      arrayBuffer: async () => body.buffer,
+      body: new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(body); controller.close() },
+      }),
     })))
     const seen: number[] = []
     const out = await downloadPreset('parakeet-tdt-0.6b-v3-int8', (p) => seen.push(p.index))
@@ -41,6 +43,9 @@ describe('downloadPreset', () => {
     expect(seen.length).toBeGreaterThan(0)
     const written = await fs.readdir(out)
     expect(written.length).toBeGreaterThan(0)
+    // Each written file contains the streamed bytes.
+    const first = await fs.readFile(path.join(out, written[0]))
+    expect(first.length).toBeGreaterThan(0)
     await fs.rm(dir, { recursive: true, force: true })
   })
 })

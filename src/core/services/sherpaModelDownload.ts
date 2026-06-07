@@ -1,6 +1,9 @@
 import * as os from 'os'
 import * as path from 'path'
 import * as fs from 'fs/promises'
+import { createWriteStream } from 'fs'
+import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
 import { SHERPA_MODEL_PRESETS } from './sherpaPresets'
 
 export interface DownloadProgress {
@@ -31,9 +34,9 @@ export async function downloadPreset(
     const file = preset.files[i]
     const url = `https://huggingface.co/${preset.repo}/resolve/main/${file}`
     const res = await fetch(url)
-    if (!res.ok) throw new Error(`Download failed (${res.status}) for ${file}`)
-    const buf = Buffer.from(await res.arrayBuffer())
-    await fs.writeFile(path.join(destDir, path.basename(file)), buf)
+    if (!res.ok || !res.body) throw new Error(`Download failed (${res.status}) for ${file}`)
+    // Stream to disk — the encoder is 600 MB+, so never buffer the whole file in memory.
+    await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(path.join(destDir, path.basename(file))))
     onProgress?.({ file, index: i, total: preset.files.length })
   }
   return destDir
