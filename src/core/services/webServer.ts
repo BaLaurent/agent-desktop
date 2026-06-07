@@ -317,6 +317,12 @@ export function generateShim(token: string): string {
       transcribe: function(buf) { return invoke('whisper:transcribe', [buf]); },
       validateConfig: function() { return invoke('whisper:validateConfig', []); },
     },
+    sherpa: {
+      transcribe: function(buf) { return invoke('sherpa:transcribe', [buf]); },
+      validateConfig: function() { return invoke('sherpa:validateConfig', []); },
+      downloadModel: function(id) { return invoke('sherpa:downloadModel', [id]); },
+      onDownloadProgress: function() { return function() {}; },
+    },
     voice: {
       duck: noopAsync,
       restore: noopAsync,
