@@ -1,20 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mockAgent } from '../__tests__/setup'
-import { useSettingsStore } from './settingsStore'
 
-// Mock encodeWav/decodeToMono16k — must be before store import (ES module hoisting)
+// Mock encodeWav — must be before store import (ES module hoisting)
 vi.mock('../utils/wavEncoder', () => ({
   encodeWav: vi.fn().mockReturnValue(new ArrayBuffer(100)),
-  decodeToMono16k: vi.fn().mockReturnValue(new Float32Array([0.1, 0.2])),
 }))
-
-// Mock the Parakeet worker facade so the STT-backend branch is exercised without ORT.
-const parakeetMock = vi.hoisted(() => ({
-  isParakeetLoaded: vi.fn(() => true),
-  loadParakeet: vi.fn().mockResolvedValue(undefined),
-  transcribeParakeet: vi.fn().mockResolvedValue('bonjour le monde'),
-}))
-vi.mock('../services/parakeet', () => parakeetMock)
 
 // --- MediaRecorder class mock ---
 let mockRecorderInstance: InstanceType<typeof FakeMediaRecorder> | null = null
@@ -201,46 +191,4 @@ describe('voiceInputStore', () => {
     })
   })
 
-  describe('Parakeet backend', () => {
-    beforeEach(() => {
-      useSettingsStore.setState({
-        settings: { stt_backend: 'parakeet', parakeet_modelSource: 'download', parakeet_backend: 'auto' },
-      })
-      parakeetMock.isParakeetLoaded.mockReturnValue(true)
-      parakeetMock.loadParakeet.mockResolvedValue(undefined)
-      parakeetMock.transcribeParakeet.mockResolvedValue('bonjour le monde')
-    })
-    afterEach(() => {
-      useSettingsStore.setState({ settings: {} })
-    })
-
-    it('skips Whisper validation and opens the mic directly', async () => {
-      await useVoiceInputStore.getState().startRecording()
-      expect(mockAgent.whisper.validateConfig).not.toHaveBeenCalled()
-      expect(useVoiceInputStore.getState().isRecording).toBe(true)
-    })
-
-    it('transcribes through the Parakeet worker, not Whisper IPC', async () => {
-      await useVoiceInputStore.getState().startRecording()
-      mockRecorderInstance!.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) })
-      await useVoiceInputStore.getState().stopAndTranscribe()
-
-      expect(parakeetMock.transcribeParakeet).toHaveBeenCalled()
-      expect(mockAgent.whisper.transcribe).not.toHaveBeenCalled()
-      expect(useVoiceInputStore.getState().lastTranscription?.text).toBe('bonjour le monde')
-    })
-
-    it('loads the model first when not yet resident', async () => {
-      parakeetMock.isParakeetLoaded.mockReturnValue(false)
-      await useVoiceInputStore.getState().startRecording()
-      mockRecorderInstance!.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) })
-      await useVoiceInputStore.getState().stopAndTranscribe()
-
-      expect(parakeetMock.loadParakeet).toHaveBeenCalledWith(
-        { source: 'download', backend: 'auto', decoderQuant: 'int8', cpuThreads: undefined },
-        expect.any(Function),
-      )
-      expect(useVoiceInputStore.getState().lastTranscription?.text).toBe('bonjour le monde')
-    })
-  })
 })

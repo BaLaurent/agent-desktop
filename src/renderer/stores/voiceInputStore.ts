@@ -4,9 +4,9 @@ import { getSttBackend, transcribeAudioBuffer } from '../services/transcription/
 interface VoiceInputState {
   isRecording: boolean
   isTranscribing: boolean
-  /** Parakeet only: the model is downloading/initializing in the worker (first use). */
+  /** Reserved: model is downloading/initializing (unused by current backends). */
   modelLoading: boolean
-  /** Parakeet model download progress in [0, 1], or null when not downloading. */
+  /** Reserved: model download progress in [0, 1], or null (unused by current backends). */
   modelProgress: number | null
   error: string | null
   lastTranscription: { text: string; id: number } | null
@@ -56,8 +56,8 @@ export const useVoiceInputStore = create<VoiceInputState>((set, get) => ({
       set({ error: null })
 
       // Validate the active STT backend before opening the mic. Whisper needs its
-      // external binary + model; Parakeet loads its ONNX model lazily at transcription
-      // time (from IndexedDB cache or the manual folder), so nothing to check here.
+      // external binary + model; Sherpa validates its config lazily at transcription time,
+      // so nothing to check here.
       if (getSttBackend() === 'whisper') {
         const config = await window.agent.whisper.validateConfig()
         if (!config.modelFound) {

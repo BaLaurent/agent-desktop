@@ -1,19 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useSettingsStore } from '../../stores/settingsStore'
 
-// Mock parakeet worker facade — must be before module import (ES module hoisting).
-vi.mock('../parakeet', () => ({
-  loadParakeet: vi.fn(),
-  transcribeParakeet: vi.fn(),
-  isParakeetLoaded: vi.fn(() => true),
-  resetParakeet: vi.fn(),
-  selftestParakeet: vi.fn(),
-}))
-
 // Mock wavEncoder utilities — must be before module import.
 vi.mock('../../utils/wavEncoder', () => ({
   encodeWav: vi.fn(() => new ArrayBuffer(8)),
-  decodeToMono16k: vi.fn(() => new Float32Array(8)),
 }))
 
 const fakeAudioBuffer = {

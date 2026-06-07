@@ -6,7 +6,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 beforeEach(() => {
   useSettingsStore.setState({ settings: { sherpa_modelPath: '' } as any, setSetting: vi.fn() } as any)
   ;(window as any).agent = {
-    system: { selectFolder: vi.fn(async () => '/models/parakeet') },
+    system: { selectFolder: vi.fn(async () => '/models/sherpa') },
     sherpa: {
       validateConfig: vi.fn(async () => ({ modelPath: '/m', files: ['encoder.onnx'], detected: 'transducer', ok: true })),
       downloadModel: vi.fn(async () => ({ modelPath: '/m' })),

@@ -58,21 +58,8 @@ function seedSettings(db: Database.Database): void {
     ['whisper_autoSend', 'false'],
     // Sherpa-onnx model folder (native addon STT). '' = unset.
     ['sherpa_modelPath', ''],
-    // STT engine selection: 'whisper' (whisper.cpp, default) | 'parakeet' (Parakeet TDT v3 via ONNX/WASM) | 'sherpa' (sherpa-onnx native addon)
+    // STT engine selection: 'whisper' (whisper.cpp, default) | 'sherpa' (sherpa-onnx native addon)
     ['stt_backend', 'whisper'],
-    // Parakeet model acquisition: 'download' (HuggingFace → IndexedDB cache) | 'manual' (local folder)
-    ['parakeet_modelSource', 'download'],
-    // Local model directory used when parakeet_modelSource === 'manual'
-    ['parakeet_modelPath', ''],
-    // ONNX Runtime execution provider: 'wasm' (int8, ~600 MB, universal — default) |
-    // 'webgpu' (faster, but forces an fp32 encoder ≈ multi-GB download/VRAM) | 'auto'
-    ['parakeet_backend', 'wasm'],
-    // Decoder precision (load-time): 'int8' (default, lighter) | 'fp32' (more accurate, larger)
-    ['parakeet_decoderQuant', 'int8'],
-    // WASM threads (load-time); '' = auto (navigator.hardwareConcurrency)
-    ['parakeet_cpuThreads', ''],
-    // Long-audio window length in seconds (transcribe-time); '' / 0 = auto-windowing
-    ['parakeet_chunkLengthS', ''],
     ['openscad_binaryPath', 'openscad'],
     ['hooks_cwdRestriction', 'true'],
     ['hooks_cwdWhitelist', '[]'],

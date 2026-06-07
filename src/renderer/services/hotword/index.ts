@@ -9,7 +9,7 @@
  * continuous-voice engine forces a 16 kHz AudioContext) and act on the returned per-model scores.
  *
  * Models + the onnxruntime-web WASM runtime are served over the `agent-model://` protocol (file://
- * can't fetch() in the packaged app), version-aligned with Parakeet on ORT 1.24.1.
+ * can't fetch() in the packaged app), pinned to ORT 1.24.1.
  */
 
 import { Model } from 'openwakeword-js'

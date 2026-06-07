@@ -38,14 +38,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'whisper_modelPath',
   'whisper_advancedParams',
   'whisper_autoSend',
-  // STT engine selection + Parakeet (ONNX/WASM)
+  // STT engine selection
   'stt_backend',
-  'parakeet_modelSource',
-  'parakeet_modelPath',
-  'parakeet_backend',
-  'parakeet_decoderQuant',
-  'parakeet_cpuThreads',
-  'parakeet_chunkLengthS',
   // Sherpa-onnx (native addon STT)
   'sherpa_modelPath',
   // Voice ducking

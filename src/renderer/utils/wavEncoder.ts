@@ -2,9 +2,8 @@
  * Downmix an AudioBuffer to mono and resample to targetSampleRate via linear
  * interpolation, returning Float32 PCM in [-1, 1].
  *
- * Shared by the two STT backends: `encodeWav` wraps this output as a 16-bit WAV
- * for whisper.cpp, while the Parakeet (ONNX) path feeds the Float32 array directly
- * to the model's mel preprocessor.
+ * Shared by the STT backends: `encodeWav` wraps this output as a 16-bit WAV
+ * for whisper.cpp and sherpa-onnx (both accept PCM WAV over IPC).
  */
 export function decodeToMono16k(audioBuffer: AudioBuffer, targetSampleRate = 16000): Float32Array {
   // Downmix to mono

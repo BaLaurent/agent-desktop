@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { ParakeetSettings } from './ParakeetSettings'
 import { SherpaSettings } from './SherpaSettings'
 import { ContinuousVoiceSettings } from './ContinuousVoiceSettings'
 
@@ -121,10 +120,7 @@ export function VoiceInputSettings() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [advanced, setAdvanced] = useState<WhisperAdvancedParams>(ADVANCED_DEFAULTS)
 
-  const sttBackend =
-    settings.stt_backend === 'parakeet' ? 'parakeet'
-    : settings.stt_backend === 'sherpa' ? 'sherpa'
-    : 'whisper'
+  const sttBackend = settings.stt_backend === 'sherpa' ? 'sherpa' : 'whisper'
 
   // Sync from store when settings load
   useEffect(() => {
@@ -210,7 +206,7 @@ export function VoiceInputSettings() {
           Speech-to-Text Engine
         </label>
         <div className="flex gap-2">
-          {(['whisper', 'parakeet', 'sherpa'] as const).map((engine) => (
+          {(['whisper', 'sherpa'] as const).map((engine) => (
             <button
               key={engine}
               onClick={() => setSetting('stt_backend', engine)}
@@ -221,18 +217,14 @@ export function VoiceInputSettings() {
               }}
               aria-pressed={sttBackend === engine}
             >
-              {engine === 'whisper' ? 'Whisper (whisper.cpp)'
-                : engine === 'parakeet' ? 'Parakeet (ONNX, multilingue)'
-                : 'Sherpa (ONNX natif)'}
+              {engine === 'whisper' ? 'Whisper (whisper.cpp)' : 'Sherpa (ONNX natif)'}
             </button>
           ))}
         </div>
         <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Whisper runs an external binary; Parakeet runs NVIDIA's multilingual TDT model locally via ONNX/WebAssembly (no install).
+          Whisper runs an external binary; Sherpa runs ONNX models natively via the sherpa-onnx addon (no external binary required).
         </span>
       </div>
-
-      {sttBackend === 'parakeet' && <ParakeetSettings />}
 
       {sttBackend === 'sherpa' && <SherpaSettings />}
 
