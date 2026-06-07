@@ -195,6 +195,7 @@ const api: AgentAPI = {
     transcribe: (wavBuffer) => withTimeout(ipcRenderer.invoke('sherpa:transcribe', wavBuffer), 45000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('sherpa:validateConfig')),
     downloadModel: (presetId: string) => withTimeout(ipcRenderer.invoke('sherpa:downloadModel', presetId), 600000),
+    listInstalledModels: () => withTimeout(ipcRenderer.invoke('sherpa:listInstalledModels')),
     onDownloadProgress: (cb: (p: { file: string; index: number; total: number }) => void) => {
       const listener = (_e: unknown, p: { file: string; index: number; total: number }) => cb(p)
       ipcRenderer.on('sherpa:downloadProgress', listener)

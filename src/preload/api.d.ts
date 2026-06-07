@@ -183,6 +183,7 @@ export interface AgentAPI {
     transcribe(wavBuffer: Uint8Array): Promise<{ text: string }>
     validateConfig(): Promise<{ modelPath: string; files: string[]; detected: 'transducer' | 'whisper' | 'paraformer' | 'nemoCtc' | null; ok: boolean; detail?: string }>
     downloadModel(presetId: string): Promise<{ modelPath: string }>
+    listInstalledModels(): Promise<{ id: string; dir: string }[]>
     onDownloadProgress(cb: (p: { file: string; index: number; total: number }) => void): () => void
   }
   voice: {

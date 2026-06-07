@@ -1,7 +1,7 @@
 import type { HandleRegistrar } from '../dispatch'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
 import { transcribe, validateConfig, resetRecognizerCache } from '../services/sherpaStt'
-import { downloadPreset } from '../services/sherpaModelDownload'
+import { downloadPreset, listInstalledPresets } from '../services/sherpaModelDownload'
 
 export function registerSherpaHandlers(registrar: HandleRegistrar, db: SqlJsAdapter): void {
   registrar.handle('sherpa:transcribe', async (_event, wavBuffer: unknown) => {
@@ -22,5 +22,9 @@ export function registerSherpaHandlers(registrar: HandleRegistrar, db: SqlJsAdap
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('sherpa_modelPath', dir)
     resetRecognizerCache()
     return { modelPath: dir }
+  })
+
+  registrar.handle('sherpa:listInstalledModels', async () => {
+    return listInstalledPresets()
   })
 }

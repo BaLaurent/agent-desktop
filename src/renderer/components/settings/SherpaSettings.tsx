@@ -28,13 +28,21 @@ export function SherpaSettings() {
     ok: boolean
     detail?: string
   } | null>(null)
+  const [installed, setInstalled] = useState<Map<string, string>>(new Map())
 
+  const refreshInstalled = useCallback(() => {
+    window.agent.sherpa
+      .listInstalledModels()
+      .then((list) => setInstalled(new Map(list.map(({ id, dir }) => [id, dir]))))
+      .catch(() => {})
+  }, [])
   useEffect(() => {
+    refreshInstalled()
     const off = window.agent.sherpa.onDownloadProgress((p: { index: number; total: number; file: string }) =>
       setProgress(p)
     )
     return off
-  }, [])
+  }, [refreshInstalled])
 
   const handleBrowse = useCallback(async () => {
     const dir = await window.agent.system.selectFolder()
@@ -51,12 +59,21 @@ export function SherpaSettings() {
         const { modelPath: dir } = await window.agent.sherpa.downloadModel(presetId)
         setSetting('sherpa_modelPath', dir)
         setStatus(`Model ready at ${dir}`)
+        refreshInstalled()
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
       } finally {
         setDownloading(false)
         setProgress(null)
       }
+    },
+    [setSetting, refreshInstalled]
+  )
+
+  const handleUse = useCallback(
+    (dir: string) => {
+      setSetting('sherpa_modelPath', dir)
+      setStatus(`Active: ${dir}`)
     },
     [setSetting]
   )
@@ -96,28 +113,55 @@ export function SherpaSettings() {
       {/* Preset list */}
       {mode === 'preset' && (
         <div className="flex flex-col gap-3">
-          {SHERPA_MODEL_PRESETS.map((p) => (
-            <div
-              key={p.id}
-              className="flex flex-col gap-1.5 p-3 rounded"
-              style={{ backgroundColor: 'var(--color-deep)' }}
-            >
-              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                {p.label}
-              </span>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                {p.description}
-              </span>
-              <button
-                onClick={() => handleDownload(p.id)}
-                disabled={downloading}
-                className="self-start px-3 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-base)' }}
+          {SHERPA_MODEL_PRESETS.map((p) => {
+            const presetDir = installed.get(p.id)
+            const isInstalled = presetDir !== undefined
+            const isActive = modelPath === presetDir
+            return (
+              <div
+                key={p.id}
+                className="flex flex-col gap-1.5 p-3 rounded"
+                style={{ backgroundColor: 'var(--color-deep)' }}
               >
-                {downloading ? 'Downloading…' : 'Download'}
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {p.label}
+                  </span>
+                  {isInstalled && (
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded"
+                      style={{ backgroundColor: 'var(--color-success, var(--color-primary))', color: 'var(--color-base)', opacity: 0.85 }}
+                    >
+                      Installed
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {p.description}
+                </span>
+                <div className="flex gap-2">
+                  {isInstalled && (
+                    <button
+                      onClick={() => handleUse(presetDir)}
+                      disabled={isActive}
+                      className="self-start px-3 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                      style={{ backgroundColor: 'var(--color-success, var(--color-primary))', color: 'var(--color-base)' }}
+                    >
+                      {isActive ? 'Active' : 'Use'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDownload(p.id)}
+                    disabled={downloading}
+                    className="self-start px-3 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                    style={{ backgroundColor: isInstalled ? 'var(--color-deep)' : 'var(--color-primary)', color: isInstalled ? 'var(--color-text-muted)' : 'var(--color-base)', border: isInstalled ? '1px solid var(--color-text-muted)' : 'none' }}
+                  >
+                    {downloading ? 'Downloading…' : isInstalled ? 'Re-download' : 'Download'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
           {progress && (
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               {progress.index + 1}/{progress.total} · {progress.file}

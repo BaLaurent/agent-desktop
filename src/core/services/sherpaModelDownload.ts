@@ -12,6 +12,30 @@ export interface DownloadProgress {
   total: number
 }
 
+export interface InstalledPreset {
+  id: string
+  dir: string
+}
+
+/**
+ * Returns presets whose destination folder exists and contains every expected file.
+ * Pure filesystem check — no network activity.
+ */
+export async function listInstalledPresets(): Promise<InstalledPreset[]> {
+  const installed: InstalledPreset[] = []
+  for (const preset of SHERPA_MODEL_PRESETS) {
+    const dir = path.join(getModelsRoot(), preset.id)
+    try {
+      const entries = new Set(await fs.readdir(dir))
+      const allPresent = preset.files.every((f) => entries.has(path.basename(f)))
+      if (allPresent) installed.push({ id: preset.id, dir })
+    } catch {
+      // folder absent or unreadable — not installed
+    }
+  }
+  return installed
+}
+
 export function getModelsRoot(): string {
   return path.join(os.homedir(), '.agent-desktop', 'stt-models')
 }
@@ -32,11 +56,18 @@ export async function downloadPreset(
 
   for (let i = 0; i < preset.files.length; i++) {
     const file = preset.files[i]
+    const dest = path.join(destDir, path.basename(file))
+    // Skip files already present on disk (idempotent re-use).
+    try {
+      await fs.access(dest)
+      onProgress?.({ file, index: i, total: preset.files.length })
+      continue
+    } catch { /* not present — download it */ }
     const url = `https://huggingface.co/${preset.repo}/resolve/main/${file}`
     const res = await fetch(url)
     if (!res.ok || !res.body) throw new Error(`Download failed (${res.status}) for ${file}`)
     // Stream to disk — the encoder is 600 MB+, so never buffer the whole file in memory.
-    await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(path.join(destDir, path.basename(file))))
+    await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(dest))
     onProgress?.({ file, index: i, total: preset.files.length })
   }
   return destDir
