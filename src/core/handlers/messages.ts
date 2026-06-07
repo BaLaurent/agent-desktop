@@ -33,6 +33,7 @@ import {
 } from './messages/streamPhases'
 import type { MessageStreamContext } from './messages/types'
 import { createLogger, errToCtx } from '../utils/logger'
+import { stripThinkingBlocks } from '../utils/thinking'
 
 const log = createLogger('messages')
 
@@ -133,7 +134,7 @@ export function buildMessageHistory(db: SqlJsAdapter, conversationId: number, li
   const result = rows.reverse().map((row) => ({
     role: row.role,
     content: row.role === 'assistant'
-      ? row.content.replace(/<thinking>[\s\S]*?<\/thinking>\n?/g, '')
+      ? stripThinkingBlocks(row.content)
       : row.content,
   }))
 
@@ -474,10 +475,9 @@ async function generateConversationTitle(
   assistantContent: string,
   options: MessagesHandlerOptions
 ): Promise<void> {
-  const cleanAssistant = assistantContent
-    .replace(/<hook-system-message>[\s\S]*?<\/hook-system-message>\n?/g, '')
-    .replace(/<thinking>[\s\S]*?<\/thinking>\n?/g, '')
-    .trimStart()
+  const cleanAssistant = stripThinkingBlocks(
+    assistantContent.replace(/<hook-system-message>[\s\S]*?<\/hook-system-message>\n?/g, ''),
+  ).trimStart()
   const userSnippet = userContent.slice(0, 200)
   const assistantSnippet = cleanAssistant.slice(0, 200)
 
@@ -534,7 +534,7 @@ export async function compactConversation(
   const conversationText = history
     .map((m) => {
       const stripped = m.role === 'assistant'
-        ? m.content.replace(/<thinking>[\s\S]*?<\/thinking>\n?/g, '')
+        ? stripThinkingBlocks(m.content)
         : m.content
       return `${m.role === 'user' ? 'User' : 'Assistant'}: ${stripped}`
     })

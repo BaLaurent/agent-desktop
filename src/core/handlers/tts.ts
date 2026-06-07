@@ -15,6 +15,7 @@ import { injectApiKeyEnv } from '../services/streaming'
 import { getAgentDirectives, formatAgentDirectives } from './messages'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { createLogger, errToCtx } from '../utils/logger'
+import { stripThinkingBlocks } from '../utils/thinking'
 
 const log = createLogger('tts')
 
@@ -347,19 +348,23 @@ export async function speakResponse(
   const mode = aiSettings.ttsResponseMode
   if (!mode || mode === 'off') return
 
+  // Thinking blocks are persisted in the assistant content as <thinking>…</thinking>
+  // for renderer replay. They must never be spoken nor fed to the summary model.
+  const clean = stripThinkingBlocks(content)
+
   try {
     if (mode === 'full') {
-      await speak(content, db)
+      await speak(clean, db)
     } else if (mode === 'summary') {
-      const summary = await generateSummary(content, db, conversationId, aiSettings)
+      const summary = await generateSummary(clean, db, conversationId, aiSettings)
       await speak(summary, db)
     } else if (mode === 'auto') {
       const wordLimit = aiSettings.ttsAutoWordLimit || 200
-      const wordCount = countWords(stripMarkdown(content))
+      const wordCount = countWords(stripMarkdown(clean))
       if (wordCount <= wordLimit) {
-        await speak(content, db)
+        await speak(clean, db)
       } else {
-        const summary = await generateSummary(content, db, conversationId, aiSettings)
+        const summary = await generateSummary(clean, db, conversationId, aiSettings)
         await speak(summary, db)
       }
     }

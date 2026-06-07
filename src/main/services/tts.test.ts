@@ -609,6 +609,47 @@ describe('tts service', () => {
       // speak was called
       expect(mockGetSetting).toHaveBeenCalledWith(db, 'tts_provider')
     })
+    it('mode full: strips <thinking> blocks before speaking', async () => {
+      settingsMap({ tts_provider: 'spd-say' })
+      mockFindBinary.mockReturnValue('/usr/bin/spd-say')
+
+      const promise = speakResponse(
+        '<thinking>secret reasoning the user must never hear</thinking>\nthe real answer',
+        db,
+        1,
+        { ttsResponseMode: 'full' },
+      )
+      await flush()
+
+      const spawnArgs = mockSpawn.mock.calls[0][1] as string[]
+      expect(spawnArgs[1]).toBe('the real answer')
+      expect(spawnArgs[1]).not.toContain('secret reasoning')
+
+      resolveSpawnExit(0, 0)
+      await promise
+    })
+
+    it('mode summary: strips <thinking> blocks from the summary prompt', async () => {
+      settingsMap({ tts_provider: 'off' })
+
+      const mockQuery = vi.fn()
+      mockQuery.mockReturnValue((async function* () {
+        yield { type: 'result', subtype: 'success', result: 'A summary' }
+      })())
+      mockLoadSDK.mockResolvedValue({ query: mockQuery } as any)
+      mockInjectApiKey.mockReturnValue(vi.fn())
+
+      await speakResponse(
+        '<thinking>secret reasoning the model must never see</thinking>\nthe real answer',
+        db,
+        1,
+        { ttsResponseMode: 'summary' },
+      )
+
+      const prompt = mockQuery.mock.calls[0][0].prompt as string
+      expect(prompt).toContain('the real answer')
+      expect(prompt).not.toContain('secret reasoning')
+    })
 
     it('mode auto: speaks full when word count under limit', async () => {
       settingsMap({ tts_provider: 'off' })

@@ -5,6 +5,9 @@
 ### New Features
 - **Quick Voice audio cues** — a short rising tone plays when Quick Voice starts recording and a descending tone when it stops, so you know when capture begins and ends. Works in both the visible overlay and headless (notifications-only) mode
 
+### Bug Fixes
+- **TTS no longer speaks the model's reasoning** — `<thinking>…</thinking>` blocks (persisted in assistant content for renderer replay) are now stripped before TTS, so they are neither spoken nor fed to the summary model. Strip logic centralized in a single `stripThinkingBlocks` helper reused by history replay, auto-title, compaction, and TTS
+
 ---
 
 ## [0.17.0] - 2026-05-27
