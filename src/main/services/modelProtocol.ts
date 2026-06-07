@@ -3,20 +3,21 @@ import { pathToFileURL } from 'url'
 import path from 'path'
 import { createLogger } from '../../core/utils/logger'
 
-const log = createLogger('parakeet-protocol')
+const log = createLogger('model-protocol')
 
 const SCHEME = 'agent-model'
 
 /**
- * The Parakeet STT engine runs onnxruntime-web in a renderer Web Worker. Under the
- * packaged app the renderer is served from file://, where `fetch()` is blocked — so
- * ORT's WASM artifacts and any manually-provided model files must be delivered through
- * a privileged, fetch-capable protocol (same rationale as `agent-preview:`).
+ * The openWakeWord hotword engine runs onnxruntime-web in a renderer Web Worker. Under the
+ * packaged app the renderer is served from file://, where `fetch()` is blocked — so ORT's
+ * WASM artifacts and the hotword model files must be delivered through a privileged,
+ * fetch-capable protocol (same rationale as `agent-preview:`).
  *
- *   agent-model://ort/<file>     → onnxruntime-web/dist/<file>   (WASM runtime, dev + prod)
- *   agent-model://model/<file>   → <manual model dir>/<file>     (parakeet_modelSource='manual')
+ *   agent-model://ort/<file>            → onnxruntime-web/dist/<file>   (WASM runtime, dev + prod)
+ *   agent-model://hotword/<file>        → bundled hotword-models/<file> (melspec, embedding, presets)
+ *   agent-model://hotword-model/<file>  → <custom wakeword dir>/<file>  (hotword_modelSource='manual')
  *
- * `stream: true` lets ORT range-request the large encoder/decoder .onnx files.
+ * `stream: true` lets ORT range-request large .onnx files.
  */
 export function registerModelScheme(): void {
   protocol.registerSchemesAsPrivileged([
@@ -64,15 +65,11 @@ function confine(baseDir: string, rest: string): string | null {
 /**
  * Register the agent-model: handler. Must be called after app.ready.
  *
- * @param getManualModelDir Returns the user's manual model directory, or null when
- *   download mode is active / no directory is configured. Read lazily per request so
- *   settings changes take effect without re-registration.
  * @param opts.getHotwordModelDir Returns the folder holding the active custom/trained wakeword
  *   .onnx (host 'hotword-model'); null when bundled mode. Melspec/embedding always come from the
  *   bundled dir (host 'hotword').
  */
 export function registerModelProtocol(
-  getManualModelDir: () => string | null,
   opts?: { getHotwordModelDir?: () => string | null },
 ): void {
   protocol.handle(SCHEME, (request) => {
@@ -89,10 +86,6 @@ export function registerModelProtocol(
     let baseDir: string
     if (host === 'ort') {
       baseDir = ortDistDir()
-    } else if (host === 'model') {
-      const dir = getManualModelDir()
-      if (!dir) return new Response('Model directory not configured', { status: 404 })
-      baseDir = path.resolve(dir)
     } else if (host === 'hotword') {
       baseDir = bundledHotwordDir()
     } else if (host === 'hotword-model') {

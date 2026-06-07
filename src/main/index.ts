@@ -20,7 +20,7 @@ import { createTray, setTrayUpdateCallbacks, rebuildTrayMenu, toggleAppWindow } 
 import { initAutoUpdater, stopAutoUpdater, checkForUpdates, installUpdate } from './services/updater'
 import { setupDeepLinks } from './services/deeplink'
 import { registerPreviewScheme, registerPreviewProtocol } from './services/protocol'
-import { registerModelScheme, registerModelProtocol } from './services/parakeetProtocol'
+import { registerModelScheme, registerModelProtocol } from './services/modelProtocol'
 import { registerStreamWindow } from './services/streaming'
 import { cleanupPastedFiles } from './services/files'
 import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } from './services/globalShortcuts'
@@ -301,19 +301,9 @@ if (!gotLock) {
 
     registerPreviewProtocol()
 
-    // agent-model: serves the Parakeet STT worker its onnxruntime-web WASM runtime
-    // (host 'ort') and, in manual mode, the user's local model files (host 'model').
+    // agent-model: serves the openWakeWord hotword worker its onnxruntime-web WASM runtime
+    // (host 'ort') and the hotword model files (hosts 'hotword' / 'hotword-model').
     registerModelProtocol(
-      () => {
-        try {
-          const db = getDatabase()
-          if (getSetting(db, 'parakeet_modelSource') !== 'manual') return null
-          const dir = getSetting(db, 'parakeet_modelPath')
-          return dir && dir.trim() ? dir : null
-        } catch {
-          return null
-        }
-      },
       {
         getHotwordModelDir: () => {
           try {
