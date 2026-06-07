@@ -92,8 +92,6 @@ export async function validateConfig(db: Database.Database): Promise<SherpaValid
 
 // ── transcribe (lazy addon + cached recognizer) ───────────────────────────────
 
-import * as os from 'os'
-
 const MAX_BUFFER_SIZE = 50 * 1024 * 1024
 
 // Loading a model is expensive; cache the OfflineRecognizer keyed by absolute model path.
@@ -105,10 +103,12 @@ export function resetRecognizerCache(): void {
 
 function loadSherpa(): any {
   try {
+    // sherpa-onnx-node is the NATIVE N-API addon (not the WASM `sherpa-onnx` package):
+    // no WASM memory limits, and it handles NeMo transducer decoders correctly.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('sherpa-onnx')
+    return require('sherpa-onnx-node')
   } catch {
-    throw new Error('sherpa-onnx is not installed. Run: npm install sherpa-onnx')
+    throw new Error('sherpa-onnx-node is not installed. Run: npm install sherpa-onnx-node')
   }
 }
 
@@ -129,12 +129,38 @@ function buildModelConfig(dir: string, d: SherpaDetection) {
 
 function getRecognizer(sherpa: any, modelPath: string, d: SherpaDetection): unknown {
   if (cached && cached.modelPath === modelPath) return cached.recognizer
-  const recognizer = sherpa.createOfflineRecognizer({
+  // Native API: OfflineRecognizer is a class (no createOfflineRecognizer factory).
+  const recognizer = new sherpa.OfflineRecognizer({
     featConfig: { sampleRate: 16000, featureDim: 80 },
     modelConfig: buildModelConfig(modelPath, d),
   })
   cached = { modelPath, recognizer }
   return recognizer
+}
+
+/**
+ * Parse a PCM16 WAV (mono or multi-channel) into an in-cage Float32Array + sample rate.
+ * Channel 0 is taken for multi-channel input. The renderer sends 16 kHz mono PCM16.
+ */
+export function parseWavPcm16(buf: Buffer): { samples: Float32Array; sampleRate: number } {
+  const numChannels = buf.readUInt16LE(22) || 1
+  const sampleRate = buf.readUInt32LE(24)
+  let offset = 12
+  let dataOffset = -1
+  let dataLen = 0
+  while (offset + 8 <= buf.length) {
+    const id = buf.toString('ascii', offset, offset + 4)
+    const sz = buf.readUInt32LE(offset + 4)
+    if (id === 'data') { dataOffset = offset + 8; dataLen = sz; break }
+    offset += 8 + sz + (sz & 1)
+  }
+  if (dataOffset < 0) throw new Error('Invalid WAV: no data chunk')
+  const frames = Math.floor(dataLen / 2 / numChannels)
+  const samples = new Float32Array(frames)
+  for (let i = 0; i < frames; i++) {
+    samples[i] = buf.readInt16LE(dataOffset + i * numChannels * 2) / 32768
+  }
+  return { samples, sampleRate }
 }
 
 export async function transcribe(db: Database.Database, wavBuffer: Buffer): Promise<{ text: string }> {
@@ -148,17 +174,13 @@ export async function transcribe(db: Database.Database, wavBuffer: Buffer): Prom
   const sherpa = loadSherpa()
   const recognizer: any = getRecognizer(sherpa, modelPath, detection)
 
-  // sherpa reads WAV from disk; mirror whisper's tmp-file approach.
-  const tmpFile = path.join(os.tmpdir(), `agent-sherpa-${process.pid}-${wavBuffer.length}.wav`)
-  try {
-    await fs.writeFile(tmpFile, wavBuffer)
-    const wave = sherpa.readWave(tmpFile) // { samples: Float32Array, sampleRate: number }
-    const stream = recognizer.createStream()
-    stream.acceptWaveform({ sampleRate: wave.sampleRate, samples: wave.samples })
-    recognizer.decode(stream)
-    const result = recognizer.getResult(stream)
-    return { text: (result?.text || '').trim() }
-  } finally {
-    await fs.unlink(tmpFile).catch(() => {})
-  }
+  // Parse the WAV in JS into an in-cage Float32Array and feed acceptWaveform directly.
+  // We deliberately avoid the native readWave: under Electron's V8 memory cage the external
+  // (C++-allocated) buffer it returns is rejected with "External buffers are not allowed".
+  const wave = parseWavPcm16(wavBuffer)
+  const stream = recognizer.createStream()
+  stream.acceptWaveform({ sampleRate: wave.sampleRate, samples: wave.samples })
+  recognizer.decode(stream)
+  const result = recognizer.getResult(stream)
+  return { text: (result?.text || '').trim() }
 }

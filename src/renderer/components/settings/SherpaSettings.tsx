@@ -72,7 +72,7 @@ export function SherpaSettings() {
       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
         sherpa-onnx runs ONNX speech models locally via a native addon (no browser/WASM).
         Download a preset or point to a model folder — the architecture is auto-detected.
-        Requires <code>npm install sherpa-onnx</code>.
+        Requires <code>npm install sherpa-onnx-node</code>.
       </p>
 
       {/* Source mode toggle */}
