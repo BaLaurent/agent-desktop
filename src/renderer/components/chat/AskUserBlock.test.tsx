@@ -57,7 +57,7 @@ describe('AskUserBlock', () => {
 
     expect(window.agent.messages.respondToApproval).toHaveBeenCalledWith(
       'req_456',
-      { answers: { Library: 'React' } }
+      { answers: { '0': 'React' } }
     )
   })
 

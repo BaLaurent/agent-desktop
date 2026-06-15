@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { AskUserQuestion, AskUserResponse, ToolApprovalResponse } from '../types/types'
+import type { AskUserQuestion, ToolApprovalResponse } from '../types/types'
 
 export type CanUseToolResult =
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
@@ -68,10 +68,29 @@ export function createCanUseTool(deps: CanUseToolDeps): CanUseToolFn {
           pendingRequests.set(requestId, { resolve, conversationId: pendingRequestsKey })
         })
 
-        const askResponse = response as AskUserResponse
+        const askResponse = response as { answers?: Record<string, string>; message?: string }
+        // A real answer carries `answers`. A cancellation (abort / WS disconnect /
+        // session close) resolves the pending with a deny that has no `answers` —
+        // surface it as a denial so the SDK records "user declined" instead of
+        // silently proceeding with an empty answer set (which the model reads as
+        // "no answer → use the defaults").
+        if (!askResponse.answers) {
+          return { behavior: 'deny', message: askResponse.message || 'User did not answer the question' }
+        }
+        // The Claude Agent SDK matches answers to questions by the full question
+        // TEXT. UI clients key submitted answers by question index ("0", "1", …),
+        // header, or text; normalize every variant to question-text keys here — the
+        // one place all backends and clients funnel through — so the user's choices
+        // register regardless of which client sent them.
+        const rawAnswers = askResponse.answers
+        const answers: Record<string, string> = {}
+        questions.forEach((q, i) => {
+          const value = rawAnswers[String(i)] ?? rawAnswers[q.question] ?? rawAnswers[q.header]
+          if (value != null && value !== '') answers[q.question] = value
+        })
         return {
           behavior: 'allow',
-          updatedInput: { ...input, answers: askResponse.answers },
+          updatedInput: { ...input, answers },
         }
       } finally {
         onApprovalEnd()

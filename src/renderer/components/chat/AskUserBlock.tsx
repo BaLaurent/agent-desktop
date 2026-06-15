@@ -11,9 +11,9 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
 
-  const handleSelect = (question: AskUserQuestion, value: string) => {
+  const handleSelect = (question: AskUserQuestion, key: string, value: string) => {
     if (question.multiSelect) {
-      const current = answers[question.header] || ''
+      const current = answers[key] || ''
       const selected = current ? current.split(',') : []
       const idx = selected.indexOf(value)
       if (idx >= 0) {
@@ -21,14 +21,14 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
       } else {
         selected.push(value)
       }
-      setAnswers({ ...answers, [question.header]: selected.join(',') })
+      setAnswers({ ...answers, [key]: selected.join(',') })
     } else {
-      setAnswers({ ...answers, [question.header]: value })
+      setAnswers({ ...answers, [key]: value })
     }
   }
 
-  const handleOtherInput = (header: string, value: string) => {
-    setAnswers({ ...answers, [header]: value })
+  const handleOtherInput = (key: string, value: string) => {
+    setAnswers({ ...answers, [key]: value })
   }
 
   const handleSubmit = () => {
@@ -42,9 +42,9 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
         <div className="font-semibold mb-1 text-primary">
           {'\u2705'} Answers submitted
         </div>
-        {Object.entries(answers).map(([header, value]) => (
-          <div key={header} className="mt-0.5 text-muted">
-            <span className="font-semibold">{header}:</span> {value}
+        {Object.entries(answers).map(([indexKey, value]) => (
+          <div key={indexKey} className="mt-0.5 text-muted">
+            <span className="font-semibold">{askUser.questions[Number(indexKey)]?.header ?? indexKey}:</span> {value}
           </div>
         ))}
       </div>
@@ -57,8 +57,8 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
       role="form"
       aria-label="User questions requiring answers"
     >
-      {askUser.questions.map((q) => (
-        <div key={q.header} className="mb-3 last:mb-0" role="group" aria-labelledby={`question-${q.header}`}>
+      {askUser.questions.map((q, i) => (
+        <div key={i} className="mb-3 last:mb-0" role="group" aria-labelledby={`question-${q.header}`}>
           <div id={`question-${q.header}`} className="font-medium mb-1 text-body">
             {q.question}
           </div>
@@ -68,8 +68,8 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
           <div className="space-y-1">
             {q.options.map((opt) => {
               const isSelected = q.multiSelect
-                ? (answers[q.header] || '').split(',').includes(opt.label)
-                : answers[q.header] === opt.label
+                ? (answers[String(i)] || '').split(',').includes(opt.label)
+                : answers[String(i)] === opt.label
               return (
                 <label
                   key={opt.label}
@@ -79,9 +79,9 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
                 >
                   <input
                     type={q.multiSelect ? 'checkbox' : 'radio'}
-                    name={q.header}
+                    name={`${askUser.requestId}-${i}`}
                     checked={isSelected}
-                    onChange={() => handleSelect(q, opt.label)}
+                    onChange={() => handleSelect(q, String(i), opt.label)}
                     className="mt-0.5"
                     aria-label={opt.label}
                   />
@@ -104,12 +104,12 @@ export function AskUserBlock({ askUser }: AskUserBlockProps) {
               placeholder="Other..."
               className="w-full text-xs px-2 py-1 rounded border bg-base border-muted text-body"
               onBlur={(e) => {
-                if (e.target.value) handleOtherInput(q.header, e.target.value)
+                if (e.target.value) handleOtherInput(String(i), e.target.value)
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const target = e.target as HTMLInputElement
-                  if (target.value) handleOtherInput(q.header, target.value)
+                  if (target.value) handleOtherInput(String(i), target.value)
                 }
               }}
               aria-label="Other answer option"

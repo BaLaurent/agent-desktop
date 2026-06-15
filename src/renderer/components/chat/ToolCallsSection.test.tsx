@@ -81,7 +81,7 @@ describe('ToolCallsSection', () => {
         id: 'ask_1',
         name: 'AskUserQuestion',
         input: '{"questions":[{"question":"Which framework?","header":"Framework","options":[{"label":"React","description":"UI lib"}],"multiSelect":false}]}',
-        output: '{"answers":{"0":"React"}}',
+        output: '{"answers":{"Which framework?":"React"}}',
         status: 'done',
       },
     ])

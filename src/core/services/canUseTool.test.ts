@@ -44,10 +44,47 @@ describe('createCanUseTool', () => {
       behavior: 'allow',
       updatedInput: {
         questions: [{ question: 'Pick', options: [{ label: 'A' }, { label: 'B' }] }],
-        answers: { '0': 'B' },
+        // Index key "0" is normalized to the question text the SDK matches on.
+        answers: { Pick: 'B' },
       },
     })
     expect(onApprovalEnd).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes header- and text-keyed answers to question text', async () => {
+    const { canUseTool, sendChunk, pendingRequests } = setup()
+    const questions = [
+      { question: 'Which deliverable?', header: 'Livrable', options: [{ label: 'MD' }] },
+      { question: 'Which extras?', header: 'Extras', options: [{ label: 'X' }, { label: 'Y' }] },
+    ]
+    const resultPromise = canUseTool('AskUserQuestion', { questions })
+    await vi.waitFor(() => expect(sendChunk).toHaveBeenCalled())
+    const requestId = latestRequestId(sendChunk, 'ask_user')
+    // First answer keyed by header, second by full question text (multi-select join).
+    pendingRequests.get(requestId)!.resolve({ answers: { Livrable: 'MD', 'Which extras?': 'X,Y' } })
+
+    const result = await resultPromise
+    expect(result).toEqual({
+      behavior: 'allow',
+      updatedInput: {
+        questions,
+        answers: { 'Which deliverable?': 'MD', 'Which extras?': 'X,Y' },
+      },
+    })
+  })
+
+  it('treats a cancelled ask (deny resolution) as a denial, not an empty answer', async () => {
+    const { canUseTool, sendChunk, pendingRequests } = setup()
+    const resultPromise = canUseTool('AskUserQuestion', {
+      questions: [{ question: 'Pick', header: 'P', options: [{ label: 'A' }] }],
+    })
+    await vi.waitFor(() => expect(sendChunk).toHaveBeenCalled())
+    const requestId = latestRequestId(sendChunk, 'ask_user')
+    // denyPendingForConversation / session close resolve with a deny (no answers).
+    pendingRequests.get(requestId)!.resolve({ behavior: 'deny', message: 'Request cancelled' })
+
+    const result = await resultPromise
+    expect(result).toEqual({ behavior: 'deny', message: 'Request cancelled' })
   })
 
   it('denies disabled skills without asking the user', async () => {

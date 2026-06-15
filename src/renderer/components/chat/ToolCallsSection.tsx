@@ -38,8 +38,8 @@ function AskUserFallback({ tc }: { tc: ToolCall }) {
       {questions.map((q, i) => (
         <div key={i} className="mb-2">
           <div className="font-medium text-body">{q.question}</div>
-          {answers[String(i)] && (
-            <div className="mt-1 text-muted italic">Answer: {answers[String(i)]}</div>
+          {answers[q.question] && (
+            <div className="mt-1 text-muted italic">Answer: {answers[q.question]}</div>
           )}
         </div>
       ))}

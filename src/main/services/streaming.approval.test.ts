@@ -218,7 +218,8 @@ describe('streaming approval', () => {
         behavior: 'allow',
         updatedInput: {
           questions: toolInput.questions,
-          answers: { '0': 'Blue' },
+          // Index key "0" is normalized to the question text the SDK matches on.
+          answers: { 'Pick a color': 'Blue' },
         },
       })
 
