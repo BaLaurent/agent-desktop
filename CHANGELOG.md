@@ -1,14 +1,18 @@
 # Changelog
 
-## [0.17.1] - Unreleased
+## [0.18.0] - 2026-06-15
 
 ### New Features
+- **Continuous voice mode** — hands-free, always-listening conversation: a local wakeword engine (openWakeWord) arms the mic and an intent gate decides when to actually send, so you can talk to the agent without touching the keyboard
+- **Local speech-to-text via sherpa-onnx** — a new native STT backend (`sherpa-onnx-node`) replaces the previous Parakeet engine: transcription runs fully on-device, with a downloadable model preset catalog (Parakeet v3 multilingual), one-click HuggingFace downloads, a manual model-folder option, and a settings panel with a detection report. Model downloads stream to disk instead of buffering the full encoder in memory
+- **Pause media during voice input (opt-in)** — when enabled, any playing MPRIS media player (Spotify, browsers, …) is paused while you dictate and resumed afterward, so background audio doesn't bleed into your recording
 - **Quick Voice audio cues** — a short rising tone plays when Quick Voice starts recording and a descending tone when it stops, so you know when capture begins and ends. Works in both the visible overlay and headless (notifications-only) mode
 
 ### Bug Fixes
 - **TTS no longer speaks the model's reasoning** — `<thinking>…</thinking>` blocks (persisted in assistant content for renderer replay) are now stripped before TTS, so they are neither spoken nor fed to the summary model. Strip logic centralized in a single `stripThinkingBlocks` helper reused by history replay, auto-title, compaction, and TTS
 - **TTS plays in the web client** — when you drive text-to-speech from the web/mobile client, the generated audio (Piper, edge-tts) is now streamed to the browser and played there, instead of only playing on the server machine. Local playback is skipped while a web client is connected; the desktop app is unaffected. (Direct-playback providers `spd-say`/`say` remain server-only.)
 - **TTS stop no longer logged as a playback error** — `mpv` (and similar players) trap `SIGTERM` and exit gracefully with a non-zero code (mpv exits 4) instead of dying by signal. Deliberately stopping playback — at the start of each new utterance, via the stop-TTS shortcut, or when the Quick Voice overlay closes — no longer surfaces a spurious `Audio player mpv exited with code 4` error. Genuine playback failures are still reported.
+- **AskUserQuestion answers are no longer dropped** — when the agent asked a multiple-choice question, your selection was ignored and the agent silently proceeded with its defaults. The Claude Agent SDK matches answers to questions by the full question text, but the UI clients keyed their submitted answers by the short header (web/desktop) or by question index (Discord), so the SDK saw no match and recorded "the user did not answer." Answers are now normalized to question-text keys at the single shared `canUseTool` chokepoint (accepting index, header, or text from any client), and a cancelled/aborted question is surfaced as a proper denial instead of leaking an empty answer set.
 
 ### Internal
 - **`tsc` type-checks cleanly across all three projects** — added the missing `tsconfig` project references (node/web reference core) and excluded test files from the app type-check, then fixed the pre-existing type errors this surfaced (SDK type drift in the PI pipeline, DB adapter boundary casts, React 19 ref typing, `WebkitAppRegion` CSS augmentation, preload event-callback typing, and more). The PI SDK loader/model-registry modules moved from `src/main/services` to `src/core/services/pi` to break a core to main dependency cycle. No runtime behavior change.
