@@ -5,9 +5,9 @@
  *   node taskRunner.js --run-task 42  # Execute a specific task by ID
  */
 
-import { resolve, join } from 'path'
-import { homedir } from 'os'
-import { mkdirSync, appendFileSync } from 'fs'
+import { resolve, join, dirname } from 'path'
+import { homedir, hostname } from 'os'
+import { mkdirSync, appendFileSync, readlinkSync } from 'fs'
 import { spawn } from 'child_process'
 import { AgentEngine, noopHookRunner } from '../core'
 import type { Broadcaster } from '../core'
@@ -24,6 +24,31 @@ const DEFAULT_DB_PATH = join(homedir(), '.config', 'agent-desktop', 'agent.db')
 const LOG_PATH = join(homedir(), '.config', 'agent-desktop', 'scheduler-headless.log')
 const HEADLESS_DIR = join(homedir(), '.config', 'agent-desktop', 'headless')
 const WASM_PATH = join(HEADLESS_DIR, 'sql-wasm.wasm')
+
+/**
+ * Detect a live Electron desktop instance via its SingletonLock symlink
+ * (target format: `{hostname}-{pid}`).
+ *
+ * Why this matters: agent.db is sql.js — every process loads the WHOLE file
+ * into RAM once and rewrites it wholesale on flush (writeFileSync). Two live
+ * writers therefore silently revert each other's changes (last flush wins, no
+ * exception, no backup). When the desktop is open it runs its own scheduler
+ * tick, so this headless runner must stand down to keep a single writer.
+ */
+function desktopInstanceAlive(dbPath: string): boolean {
+  try {
+    const target = readlinkSync(join(dirname(dbPath), 'SingletonLock'))
+    const dash = target.lastIndexOf('-')
+    if (dash === -1) return false
+    if (target.slice(0, dash) !== hostname()) return false
+    const pid = parseInt(target.slice(dash + 1), 10)
+    if (!Number.isInteger(pid) || pid <= 0) return false
+    process.kill(pid, 0) // throws ESRCH if the pid is dead
+    return true
+  } catch {
+    return false
+  }
+}
 
 function log(msg: string): void {
   const line = `[${new Date().toISOString()}] ${msg}\n`
@@ -115,6 +140,11 @@ async function runTick(): Promise<void> {
 
   const dbPath = resolve(process.env.AGENT_DB_PATH || DEFAULT_DB_PATH)
 
+  if (desktopInstanceAlive(dbPath)) {
+    log('[tick] Desktop instance alive — standing down (it owns the DB and runs its own tick)')
+    process.exit(0)
+  }
+
   const engine = new AgentEngine({
     dbPath,
     wasmPath: WASM_PATH,
@@ -164,6 +194,11 @@ async function runTask(taskId: number): Promise<void> {
   log(`[run-task] Running task ${taskId}`)
 
   const dbPath = resolve(process.env.AGENT_DB_PATH || DEFAULT_DB_PATH)
+
+  if (desktopInstanceAlive(dbPath)) {
+    log('[run-task] Desktop instance alive — standing down (it owns the DB and runs its own tick)')
+    process.exit(0)
+  }
 
   const engine = new AgentEngine({
     dbPath,

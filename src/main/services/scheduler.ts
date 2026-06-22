@@ -199,37 +199,35 @@ export async function startScheduler(db: SqlJsAdapter): Promise<void> {
   schedulerDb = db
   schedulerService = new SchedulerService(db as any)
 
-  // Check if background mode is active
+  // The desktop process is always a full read-write owner of agent.db (sql.js
+  // loads the whole file into RAM and rewrites it wholesale on flush). So it
+  // MUST run the tick whenever it's open — otherwise two writers (this process
+  // + the headless OS-timer runner) would silently clobber each other's
+  // snapshots. The headless runner stands down while this process is alive
+  // (it checks the SingletonLock), so there is no double execution.
+  schedulerService.recoverStuckTasks()
+  schedulerService.recomputeMissedRuns()
+
+  // Auto-theme: check on startup
+  const themeChange = schedulerService.checkAutoTheme()
+  if (themeChange) {
+    notifyRenderer('theme:autoSwitch', themeChange)
+  }
+
+  // 1-minute tick resolution
+  tickInterval = setInterval(tick, 60_000)
+
+  const taskCount = schedulerService.list().filter(t => t.enabled).length
+
+  // Background mode ADDITIONALLY installs an OS timer so tasks still fire when
+  // the desktop is closed. While the desktop is alive the OS timer defers to it.
   const backgroundMode = getBackgroundSchedulerEnabled(db)
-
   if (backgroundMode) {
-    // Background mode: systemd timer / cron handles scheduling.
-    // Electron does NOT run its own tick loop — avoids lock conflicts.
-    // We only do startup recovery (safe: just resets stuck tasks).
-    schedulerService.recoverStuckTasks()
-
-    const taskCount = schedulerService.list().filter(t => t.enabled).length
-    log.info('background mode — in-memory tick disabled, OS timer active', { taskCount })
-
-    // Verify platform scheduler is installed
+    log.info('background mode — in-memory tick active, OS timer installed as closed-app fallback', { taskCount })
     verifyPlatformScheduler(db).catch(err =>
       log.error('platform scheduler verification failed', err)
     )
   } else {
-    // Standard mode: in-memory tick loop. OS timer is not installed, so no lock needed.
-    schedulerService.recoverStuckTasks()
-    schedulerService.recomputeMissedRuns()
-
-    // Auto-theme: check on startup
-    const themeChange = schedulerService.checkAutoTheme()
-    if (themeChange) {
-      notifyRenderer('theme:autoSwitch', themeChange)
-    }
-
-    // 1-minute tick resolution
-    tickInterval = setInterval(tick, 60_000)
-
-    const taskCount = schedulerService.list().filter(t => t.enabled).length
     log.info('standard mode — in-memory tick active', { taskCount })
   }
 }

@@ -43,7 +43,6 @@ registerModelScheme()
 // Enrich PATH/HOME for AppImage and non-standard environments — before GPU flags
 // (enrichEnvironment discovers WAYLAND_DISPLAY which affects Ozone platform choice)
 import { enrichEnvironment } from './utils/env'
-import { killExistingInstances } from './utils/singleInstance'
 enrichEnvironment()
 
 // GPU / Ozone flags — Linux only
@@ -59,11 +58,6 @@ if (process.platform === 'linux') {
   // buffer import, ANGLE+Vulkan crashes Hyprland's EGL compositor (cross-API fence sync).
   // GPU remains available for WebGL, 3D previews, and CSS transforms.
   app.commandLine.appendSwitch('disable-gpu-compositing')
-}
-
-// Kill existing instances — new instance wins, old ones are terminated
-if (process.platform === 'linux') {
-  killExistingInstances()
 }
 
 // Windows taskbar identity — affects notifications, jump lists, taskbar pinning.
@@ -257,7 +251,12 @@ function createWindow(): void {
   })
 }
 
-// Request single instance lock for deep links
+// Single-instance guard. This is also the single-WRITER guarantee: agent.db is
+// sql.js (whole file held in RAM, rewritten wholesale on flush), so a second
+// live instance would silently revert the first's changes. If another instance
+// holds the lock, this one quits instead of running as a co-equal writer.
+// (The old "kill the existing instance and take over" path was racy — its
+// 500ms SIGTERM grace let two instances coexist and clobber each other.)
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()

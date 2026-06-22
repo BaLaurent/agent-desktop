@@ -25,6 +25,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { tmpdir, hostname } from 'os'
+import { join } from 'path'
+import { mkdirSync, symlinkSync, rmSync } from 'fs'
+
+// Isolated DB path so desktopInstanceAlive() (reads <dir>/SingletonLock) never
+// picks up a real desktop instance on the dev machine during these unit tests.
+const ISOLATED_DB_PATH = join(tmpdir(), 'taskrunner-test-isolated', 'agent.db')
 
 // ─── Mocks (must be top-of-file for vi.mock hoisting) ──────────────
 
@@ -149,6 +156,7 @@ let exitSpy: ReturnType<typeof vi.spyOn>
 
 describe('taskRunner.main', () => {
   beforeEach(() => {
+    process.env.AGENT_DB_PATH = ISOLATED_DB_PATH
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new ProcessExit(code)
     }) as never)
@@ -164,6 +172,7 @@ describe('taskRunner.main', () => {
   })
 
   afterEach(() => {
+    delete process.env.AGENT_DB_PATH
     exitSpy.mockRestore()
   })
 
@@ -207,6 +216,27 @@ describe('taskRunner.main', () => {
       expect(err).toBeInstanceOf(ProcessExit) // even on bad args, env must be enriched & SDK loaded
       expect(mockEnrichHeadlessEnv).toHaveBeenCalledTimes(1)
       expect(mockLoadAndRegisterSDK).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('single-writer gate', () => {
+    it('stands down (exit 0, no engine init) when a live desktop holds the SingletonLock', async () => {
+      const lockDir = join(tmpdir(), 'taskrunner-test-lockdir')
+      mkdirSync(lockDir, { recursive: true })
+      const lockPath = join(lockDir, 'SingletonLock')
+      rmSync(lockPath, { force: true })
+      // Point the lock at THIS process — guaranteed alive during the test.
+      symlinkSync(`${hostname()}-${process.pid}`, lockPath)
+      process.env.AGENT_DB_PATH = join(lockDir, 'agent.db')
+
+      try {
+        const err = await main(['--tick']).catch((e) => e as ProcessExit)
+        expect(err).toBeInstanceOf(ProcessExit)
+        expect((err as ProcessExit).code).toBe(0)
+        expect(mockEngineInit).not.toHaveBeenCalled()
+      } finally {
+        rmSync(lockDir, { recursive: true, force: true })
+      }
     })
   })
 
