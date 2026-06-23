@@ -66,6 +66,43 @@ describe('summarizeWithModel — Claude path', () => {
   })
 })
 
+describe('summarizeWithModel — backend override', () => {
+  beforeEach(() => {
+    claudeQueryMock.mockReset()
+    piCreateSessionMock.mockReset()
+    mockResolvePIModel.mockReset()
+    mockResolvePIModel.mockResolvedValue({ provider: 'openai', id: 'qwen2.5' })
+    mockCreatePIModelContext.mockReset()
+    mockCreatePIModelContext.mockResolvedValue({ authStorage: {}, modelRegistry: {} })
+  })
+
+  it("backend:'claude' forces the Claude path for a non-claude model id", async () => {
+    async function* mockMessages() {
+      yield { type: 'result', subtype: 'success', result: 'yes' }
+    }
+    claudeQueryMock.mockReturnValueOnce(mockMessages())
+
+    const result = await summarizeWithModel('classify', 'qwen2.5', { cwd: '/tmp', backend: 'claude' })
+    expect(result).toBe('yes')
+    expect(piCreateSessionMock).not.toHaveBeenCalled()
+    expect(claudeQueryMock).toHaveBeenCalledWith(expect.objectContaining({
+      options: expect.objectContaining({ model: 'qwen2.5' }),
+    }))
+  })
+
+  it("backend:'pi' forces the PI path for a claude-* model id", async () => {
+    piSubscribeMock.mockReturnValue(() => {})
+    piSessionPromptMock.mockResolvedValue(undefined)
+    piCreateSessionMock.mockResolvedValueOnce({
+      session: { subscribe: piSubscribeMock, prompt: piSessionPromptMock, dispose: piDisposeMock },
+    })
+
+    await summarizeWithModel('classify', 'claude-haiku-4-5', { cwd: '/tmp', backend: 'pi' })
+    expect(claudeQueryMock).not.toHaveBeenCalled()
+    expect(piCreateSessionMock).toHaveBeenCalledOnce()
+  })
+})
+
 describe('summarizeWithModel — PI path', () => {
   beforeEach(() => {
     claudeQueryMock.mockReset()

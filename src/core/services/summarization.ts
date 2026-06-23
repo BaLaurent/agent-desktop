@@ -7,6 +7,13 @@ export interface SummarizeOptions {
   apiKey?: string
   /** Optional base URL override (Claude path). */
   baseUrl?: string
+  /**
+   * Force a specific SDK path, bypassing the name-based routing. Needed when a
+   * model id doesn't follow the `claude-*` convention but must still go through
+   * the Claude Agent SDK (e.g. a local OpenAI/Anthropic-compatible endpoint
+   * reached via a custom base URL). Undefined = route by model family.
+   */
+  backend?: 'claude' | 'pi'
 }
 
 /** True if the model id is a Claude family model (routes to Claude SDK). */
@@ -28,7 +35,8 @@ export async function summarizeWithModel(
   model: string,
   opts: SummarizeOptions,
 ): Promise<string> {
-  if (isClaudeModel(model)) {
+  const useClaude = opts.backend ? opts.backend === 'claude' : isClaudeModel(model)
+  if (useClaude) {
     return summarizeClaude(prompt, model, opts)
   }
   return summarizePI(prompt, model, opts)

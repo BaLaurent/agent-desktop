@@ -10,6 +10,8 @@ vi.mock('./messages/knowledgeBase', () => ({ getAgentDirectives: vi.fn(() => ({ 
 import { registerVoiceIntentHandlers } from './voiceIntent'
 import { getAISettings } from './messages'
 import { summarizeWithModel } from '../services/summarization'
+import { injectApiKeyEnv } from '../services/streaming'
+import { mapModelToBackend } from '../services/modelBackendMap'
 import { getSetting } from '../utils/db'
 import { getAgentDirectives } from './messages/knowledgeBase'
 
@@ -78,6 +80,59 @@ describe('voice:classifyIntent', () => {
     await handler(null, 1, 'hello')
     const [, model] = (summarizeWithModel as ReturnType<typeof vi.fn>).mock.calls[0]
     expect(model).toBe('claude-haiku-4-5')
+  })
+
+  it('with a dedicated base URL: skips remapping, forces the claude backend, injects the dedicated endpoint', async () => {
+    ;(getSetting as ReturnType<typeof vi.fn>).mockImplementation((_db: unknown, key: string) => {
+      if (key === 'continuousVoice_intentModel') return 'qwen2.5'
+      if (key === 'continuousVoice_intentBaseUrl') return 'http://localhost:11434'
+      if (key === 'continuousVoice_intentApiKey') return 'local-key'
+      return ''
+    })
+    ;(summarizeWithModel as ReturnType<typeof vi.fn>).mockResolvedValue('yes')
+    const handler = getHandler()
+    await handler(null, 1, 'hello')
+
+    expect(mapModelToBackend).not.toHaveBeenCalled()
+    const [, model, opts] = (summarizeWithModel as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(model).toBe('qwen2.5')
+    expect(opts).toMatchObject({
+      backend: 'claude',
+      baseUrl: 'http://localhost:11434',
+      apiKey: 'local-key',
+    })
+    expect(injectApiKeyEnv).toHaveBeenCalledWith('local-key', 'http://localhost:11434')
+  })
+
+  it('cascades to the conversation endpoint when the dedicated fields are empty', async () => {
+    ;(getAISettings as ReturnType<typeof vi.fn>).mockReturnValue({
+      ...aiSettings,
+      apiKey: 'conv-key',
+      baseUrl: 'https://conv.example',
+    })
+    ;(getSetting as ReturnType<typeof vi.fn>).mockImplementation((_db: unknown, key: string) =>
+      key === 'continuousVoice_intentBaseUrl' ? 'http://localhost:1234' : '',
+    )
+    ;(summarizeWithModel as ReturnType<typeof vi.fn>).mockResolvedValue('yes')
+    const handler = getHandler()
+    await handler(null, 1, 'hello')
+
+    const [, , opts] = (summarizeWithModel as ReturnType<typeof vi.fn>).mock.calls[0]
+    // dedicated base URL set but no dedicated key → key falls back to the conversation
+    expect(opts).toMatchObject({ backend: 'claude', baseUrl: 'http://localhost:1234', apiKey: 'conv-key' })
+  })
+
+  it('keeps the current behavior (remap, no forced backend) when no dedicated base URL is set', async () => {
+    ;(getSetting as ReturnType<typeof vi.fn>).mockImplementation((_db: unknown, key: string) =>
+      key === 'continuousVoice_intentModel' ? 'claude-haiku-4-5' : '',
+    )
+    ;(summarizeWithModel as ReturnType<typeof vi.fn>).mockResolvedValue('yes')
+    const handler = getHandler()
+    await handler(null, 1, 'hello')
+
+    expect(mapModelToBackend).toHaveBeenCalled()
+    const [, , opts] = (summarizeWithModel as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(opts.backend).toBeUndefined()
   })
 
   it('propagates model errors (renderer applies fail-closed)', async () => {

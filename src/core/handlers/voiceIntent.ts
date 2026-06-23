@@ -38,22 +38,34 @@ export function registerVoiceIntentHandlers(
     })
 
     const intentModelOverride = getSetting(db as any, 'continuousVoice_intentModel') || ''
-    const effectiveModel = mapModelToBackend(
-      intentModelOverride || aiSettings.model || HAIKU_MODEL,
-      aiSettings.sdkBackend,
-      { lastModelByBackend: aiSettings.lastModelByBackend },
-    ) as string
+    // Dedicated endpoint for the gate, cascading to the conversation's settings when empty.
+    // A dedicated base URL is the signal the user wants a specific endpoint (e.g. a local
+    // Ollama/vLLM/gateway speaking the Anthropic protocol) — in that mode we skip the
+    // conversation-backend remap and force the Claude HTTP path against that base URL.
+    const intentBaseUrl = getSetting(db as any, 'continuousVoice_intentBaseUrl') || ''
+    const intentApiKey = getSetting(db as any, 'continuousVoice_intentApiKey') || ''
+    const baseUrl = intentBaseUrl || aiSettings.baseUrl
+    const apiKey = intentApiKey || aiSettings.apiKey
+
+    const requestedModel = intentModelOverride || aiSettings.model || HAIKU_MODEL
+    const customEndpoint = intentBaseUrl !== ''
+    const effectiveModel = customEndpoint
+      ? requestedModel
+      : (mapModelToBackend(requestedModel, aiSettings.sdkBackend, {
+          lastModelByBackend: aiSettings.lastModelByBackend,
+        }) as string)
 
     const template = getSetting(db as any, 'continuousVoice_intentPrompt') || DEFAULT_INTENT_PROMPT
     const agentName = resolveAgentDisplayName(getAgentDirectives(db, convId).name, aiSettings.sdkBackend)
     const prompt = buildIntentPrompt(template, { utterance, agent_name: agentName })
 
-    const restoreEnv = injectApiKeyEnv(aiSettings.apiKey, aiSettings.baseUrl)
+    const restoreEnv = injectApiKeyEnv(apiKey, baseUrl)
     try {
       const raw = await summarizeWithModel(prompt, effectiveModel, {
         cwd: aiSettings.cwd || process.cwd(),
-        apiKey: aiSettings.apiKey,
-        baseUrl: aiSettings.baseUrl,
+        apiKey,
+        baseUrl,
+        ...(customEndpoint ? { backend: 'claude' as const } : {}),
       })
       const addressed = raw.trim().toLowerCase().startsWith('y')
       return { addressed }

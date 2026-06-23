@@ -226,15 +226,38 @@ export function ContinuousVoiceSettings() {
                   options={[...INTENT_MODEL_PRESETS, { label: 'Custom…', value: '__custom__' }]}
                 />
                 {isCustomIntentModel && (
-                  <input
-                    type="text"
-                    value={intentModel}
-                    onChange={(e) => setSetting('continuousVoice_intentModel', e.target.value)}
-                    placeholder="provider/model-id"
-                    className="w-full px-3 py-2 rounded text-sm outline-none"
-                    style={inputStyle}
-                    aria-label="Custom intent model"
-                  />
+                  <>
+                    <input
+                      type="text"
+                      value={intentModel}
+                      onChange={(e) => setSetting('continuousVoice_intentModel', e.target.value)}
+                      placeholder="model id (e.g. qwen2.5)"
+                      className="w-full px-3 py-2 rounded text-sm outline-none"
+                      style={inputStyle}
+                      aria-label="Custom intent model"
+                    />
+                    <input
+                      type="text"
+                      value={settings['continuousVoice_intentBaseUrl'] || ''}
+                      onChange={(e) => setSetting('continuousVoice_intentBaseUrl', e.target.value)}
+                      placeholder="Base URL (e.g. http://localhost:11434) — empty: use conversation"
+                      className="w-full px-3 py-2 rounded text-sm outline-none"
+                      style={inputStyle}
+                      aria-label="Custom intent endpoint base URL"
+                    />
+                    <input
+                      type="password"
+                      value={settings['continuousVoice_intentApiKey'] || ''}
+                      onChange={(e) => setSetting('continuousVoice_intentApiKey', e.target.value)}
+                      placeholder="API key — empty: use conversation key"
+                      className="w-full px-3 py-2 rounded text-sm outline-none"
+                      style={inputStyle}
+                      aria-label="Custom intent endpoint API key"
+                    />
+                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      Set a Base URL to point the gate at a local model (Ollama, vLLM, or any OpenAI/Anthropic-compatible gateway). The model id and key apply to that endpoint; leave a field empty to inherit the conversation&apos;s.
+                    </span>
+                  </>
                 )}
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                   &quot;Auto&quot; uses the conversation&apos;s model (falling back to Haiku). Cheapest/fastest is Haiku.
