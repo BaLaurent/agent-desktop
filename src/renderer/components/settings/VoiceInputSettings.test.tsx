@@ -27,9 +27,15 @@ beforeEach(() => {
   } as any)
 })
 
+/** The button lives inside the collapsed Advanced Parameters section — reveal it first. */
+function expandAdvanced() {
+  fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced parameters' }))
+}
+
 describe('VoiceInputSettings — apply lexicon to prompt', () => {
   it('writes the lexicon into the whisper prompt', () => {
     render(<VoiceInputSettings />)
+    expandAdvanced()
     fireEvent.click(screen.getByRole('button', { name: 'Apply lexicon to prompt' }))
     expect(mockSetSetting).toHaveBeenCalledWith('whisper_advancedParams', JSON.stringify({ prompt: 'Zorglub, Toto' }))
   })
@@ -40,6 +46,7 @@ describe('VoiceInputSettings — apply lexicon to prompt', () => {
       setSetting: mockSetSetting,
     } as any)
     render(<VoiceInputSettings />)
+    expandAdvanced()
     const btn = screen.getByRole('button', { name: 'Apply lexicon to prompt' })
     expect(btn).toBeDisabled()
   })
@@ -50,6 +57,7 @@ describe('VoiceInputSettings — apply lexicon to prompt', () => {
       setSetting: mockSetSetting,
     } as any)
     render(<VoiceInputSettings />)
+    expandAdvanced()
     const btn = screen.getByRole('button', { name: 'Apply lexicon to prompt' })
     expect(btn).toBeDisabled()
   })

@@ -360,20 +360,6 @@ export function VoiceInputSettings() {
         hint="Send the transcribed text as a message immediately instead of pasting it into the input"
       />
 
-      {/* Lexicon → prompt (Whisper only) */}
-      {sttBackend === 'whisper' && (
-        <button
-          type="button"
-          onClick={() => updateParam('prompt', lexiconWords.join(', '))}
-          disabled={lexiconWords.length === 0}
-          className="self-start px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
-          aria-label="Apply lexicon to prompt"
-        >
-          Apply lexicon to prompt
-        </button>
-      )}
-
       {/* Advanced Parameters (Whisper only) */}
       {sttBackend === 'whisper' && (
       <div className="flex flex-col gap-2">
@@ -439,6 +425,16 @@ export function VoiceInputSettings() {
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                   Helps with domain-specific vocabulary and context
                 </span>
+                <button
+                  type="button"
+                  onClick={() => updateParam('prompt', lexiconWords.join(', '))}
+                  disabled={lexiconWords.length === 0}
+                  className="self-start px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
+                  aria-label="Apply lexicon to prompt"
+                >
+                  Apply lexicon to prompt
+                </button>
               </div>
             </div>
 
