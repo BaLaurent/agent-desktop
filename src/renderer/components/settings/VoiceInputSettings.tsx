@@ -123,6 +123,15 @@ export function VoiceInputSettings() {
 
   const sttBackend = settings.stt_backend === 'sherpa' ? 'sherpa' : 'whisper'
 
+  const lexiconWords = (() => {
+    try {
+      const v = JSON.parse(settings.stt_lexicon || '[]')
+      return Array.isArray(v) ? v.filter((e: unknown): e is string => typeof e === 'string') : []
+    } catch {
+      return []
+    }
+  })()
+
   // Sync from store when settings load
   useEffect(() => {
     setBinaryPath(settings.whisper_binaryPath || 'whisper-cli')
@@ -350,6 +359,20 @@ export function VoiceInputSettings() {
         onChange={(v) => setSetting('whisper_autoSend', v ? 'true' : 'false')}
         hint="Send the transcribed text as a message immediately instead of pasting it into the input"
       />
+
+      {/* Lexicon → prompt (Whisper only) */}
+      {sttBackend === 'whisper' && (
+        <button
+          type="button"
+          onClick={() => updateParam('prompt', lexiconWords.join(', '))}
+          disabled={lexiconWords.length === 0}
+          className="self-start px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
+          aria-label="Apply lexicon to prompt"
+        >
+          Apply lexicon to prompt
+        </button>
+      )}
 
       {/* Advanced Parameters (Whisper only) */}
       {sttBackend === 'whisper' && (
