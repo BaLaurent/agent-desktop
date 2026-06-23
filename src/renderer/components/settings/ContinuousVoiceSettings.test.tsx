@@ -94,4 +94,14 @@ describe('ContinuousVoiceSettings — custom intent model toggle', () => {
     const modelInput = screen.getByLabelText('Custom intent model') as HTMLInputElement
     expect(modelInput.value).toBe('qwen2.5')
   })
+
+  it('lets the user type into the base URL field (instant local draft despite async persist)', () => {
+    const setSpy = (window as unknown as { agent: { settings: { set: ReturnType<typeof vi.fn> } } }).agent.settings.set
+    setup({ continuousVoice_intentModel: 'qwen2.5' })
+    const baseUrl = screen.getByLabelText('Custom intent endpoint base URL') as HTMLInputElement
+    fireEvent.change(baseUrl, { target: { value: 'http://localhost:11434' } })
+    // display updates immediately from local draft, not gated on the async store write
+    expect(baseUrl.value).toBe('http://localhost:11434')
+    expect(setSpy).toHaveBeenCalledWith('continuousVoice_intentBaseUrl', 'http://localhost:11434')
+  })
 })

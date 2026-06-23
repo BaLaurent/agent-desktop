@@ -74,6 +74,35 @@ function SegButtons<T extends string>({ options, value, onChange, ariaLabel }: {
   )
 }
 
+/**
+ * Text input backed by local draft state so typing stays instant even though
+ * persistence (`onPersist` → setSetting) is async: a directly-controlled input
+ * bound to the async store value drops keystrokes. Mirrors IntentPromptEditor's
+ * local-draft pattern. The effect re-syncs when the stored value changes
+ * externally (e.g. the field is cleared programmatically).
+ */
+function TextSetting({ value, onPersist, type = 'text', placeholder, ariaLabel }: {
+  value: string
+  onPersist: (v: string) => void
+  type?: 'text' | 'password'
+  placeholder: string
+  ariaLabel: string
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => { setDraft(value) }, [value])
+  return (
+    <input
+      type={type}
+      value={draft}
+      onChange={(e) => { setDraft(e.target.value); onPersist(e.target.value) }}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 rounded text-sm outline-none"
+      style={inputStyle}
+      aria-label={ariaLabel}
+    />
+  )
+}
+
 export function IntentPromptEditor({ stored, onPersist }: { stored: string; onPersist: (storedValue: string) => void }) {
   const [draft, setDraft] = useState(stored || DEFAULT_INTENT_PROMPT)
 
@@ -243,32 +272,24 @@ export function ContinuousVoiceSettings() {
                 />
                 {customIntentModel && (
                   <>
-                    <input
-                      type="text"
+                    <TextSetting
                       value={intentModel}
-                      onChange={(e) => setSetting('continuousVoice_intentModel', e.target.value)}
+                      onPersist={(v) => setSetting('continuousVoice_intentModel', v)}
                       placeholder="model id (e.g. qwen2.5)"
-                      className="w-full px-3 py-2 rounded text-sm outline-none"
-                      style={inputStyle}
-                      aria-label="Custom intent model"
+                      ariaLabel="Custom intent model"
                     />
-                    <input
-                      type="text"
+                    <TextSetting
                       value={settings['continuousVoice_intentBaseUrl'] || ''}
-                      onChange={(e) => setSetting('continuousVoice_intentBaseUrl', e.target.value)}
+                      onPersist={(v) => setSetting('continuousVoice_intentBaseUrl', v)}
                       placeholder="Base URL (e.g. http://localhost:11434) — empty: use conversation"
-                      className="w-full px-3 py-2 rounded text-sm outline-none"
-                      style={inputStyle}
-                      aria-label="Custom intent endpoint base URL"
+                      ariaLabel="Custom intent endpoint base URL"
                     />
-                    <input
+                    <TextSetting
                       type="password"
                       value={settings['continuousVoice_intentApiKey'] || ''}
-                      onChange={(e) => setSetting('continuousVoice_intentApiKey', e.target.value)}
+                      onPersist={(v) => setSetting('continuousVoice_intentApiKey', v)}
                       placeholder="API key — optional for local endpoints"
-                      className="w-full px-3 py-2 rounded text-sm outline-none"
-                      style={inputStyle}
-                      aria-label="Custom intent endpoint API key"
+                      ariaLabel="Custom intent endpoint API key"
                     />
                     <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                       Set a Base URL to point the gate at a local model (Ollama, vLLM, or any OpenAI/Anthropic-compatible gateway). The model id applies to that endpoint. The key is optional — local endpoints usually ignore it; leave it empty if your server needs none.
