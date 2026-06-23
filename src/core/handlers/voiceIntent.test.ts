@@ -122,6 +122,27 @@ describe('voice:classifyIntent', () => {
     expect(opts).toMatchObject({ backend: 'claude', baseUrl: 'http://localhost:1234', apiKey: 'conv-key' })
   })
 
+  it('with a base URL but no key anywhere (OAuth + local model): still injects the base URL via a placeholder key', async () => {
+    // aiSettings has no apiKey (OAuth) and the user leaves the gate key empty —
+    // the common local-model case. injectApiKeyEnv drops the base URL on a falsy
+    // key, so the handler must pass a non-empty key to keep ANTHROPIC_BASE_URL set.
+    ;(getSetting as ReturnType<typeof vi.fn>).mockImplementation((_db: unknown, key: string) => {
+      if (key === 'continuousVoice_intentModel') return 'qwen2.5'
+      if (key === 'continuousVoice_intentBaseUrl') return 'http://localhost:11434'
+      return ''
+    })
+    ;(summarizeWithModel as ReturnType<typeof vi.fn>).mockResolvedValue('yes')
+    const handler = getHandler()
+    await handler(null, 1, 'hello')
+
+    const [injectedKey, injectedBaseUrl] = (injectApiKeyEnv as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(injectedKey).toBeTruthy()
+    expect(injectedBaseUrl).toBe('http://localhost:11434')
+    const [, , opts] = (summarizeWithModel as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(opts).toMatchObject({ backend: 'claude', baseUrl: 'http://localhost:11434' })
+    expect(opts.apiKey).toBeTruthy()
+  })
+
   it('keeps the current behavior (remap, no forced backend) when no dedicated base URL is set', async () => {
     ;(getSetting as ReturnType<typeof vi.fn>).mockImplementation((_db: unknown, key: string) =>
       key === 'continuousVoice_intentModel' ? 'claude-haiku-4-5' : '',

@@ -249,13 +249,13 @@ export function ContinuousVoiceSettings() {
                       type="password"
                       value={settings['continuousVoice_intentApiKey'] || ''}
                       onChange={(e) => setSetting('continuousVoice_intentApiKey', e.target.value)}
-                      placeholder="API key — empty: use conversation key"
+                      placeholder="API key — optional for local endpoints"
                       className="w-full px-3 py-2 rounded text-sm outline-none"
                       style={inputStyle}
                       aria-label="Custom intent endpoint API key"
                     />
                     <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                      Set a Base URL to point the gate at a local model (Ollama, vLLM, or any OpenAI/Anthropic-compatible gateway). The model id and key apply to that endpoint; leave a field empty to inherit the conversation&apos;s.
+                      Set a Base URL to point the gate at a local model (Ollama, vLLM, or any OpenAI/Anthropic-compatible gateway). The model id applies to that endpoint. The key is optional — local endpoints usually ignore it; leave it empty if your server needs none.
                     </span>
                   </>
                 )}

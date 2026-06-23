@@ -45,10 +45,16 @@ export function registerVoiceIntentHandlers(
     const intentBaseUrl = getSetting(db as any, 'continuousVoice_intentBaseUrl') || ''
     const intentApiKey = getSetting(db as any, 'continuousVoice_intentApiKey') || ''
     const baseUrl = intentBaseUrl || aiSettings.baseUrl
-    const apiKey = intentApiKey || aiSettings.apiKey
 
     const requestedModel = intentModelOverride || aiSettings.model || HAIKU_MODEL
     const customEndpoint = intentBaseUrl !== ''
+    // injectApiKeyEnv only sets ANTHROPIC_BASE_URL when a key is present (it
+    // early-returns otherwise). A local endpoint usually needs no real key, so
+    // in custom mode supply a placeholder when none resolves — otherwise the
+    // custom base URL would be silently dropped and the gate would hit the
+    // default Anthropic endpoint.
+    const resolvedApiKey = intentApiKey || aiSettings.apiKey
+    const apiKey = customEndpoint ? (resolvedApiKey || 'local') : resolvedApiKey
     const effectiveModel = customEndpoint
       ? requestedModel
       : (mapModelToBackend(requestedModel, aiSettings.sdkBackend, {
