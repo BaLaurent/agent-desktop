@@ -55,19 +55,21 @@ function getNotifConfig(settings: Record<string, string>): NotificationConfig {
 export function GeneralSettings() {
   const { settings, loadSettings, setSetting } = useSettingsStore()
   const loadFolders = useConversationsStore((s) => s.loadFolders)
+  const loadConversations = useConversationsStore((s) => s.loadConversations)
   const [showNotifDetails, setShowNotifDetails] = useState(false)
 
   const reseedGuides = async () => {
     try {
       const { created } = await window.agent.guides.reseed()
-      await loadFolders()
+      // Refresh both: reseed inserts folders AND their guide conversations.
+      await Promise.all([loadFolders(), loadConversations()])
       window.alert(
         created > 0
-          ? `${created} dossier(s)-guide recréé(s).`
-          : 'Tous les dossiers-guides sont déjà présents.',
+          ? `${created} guide folder(s) recreated.`
+          : 'All guide folders are already present.',
       )
     } catch (err) {
-      window.alert(`Erreur : ${(err as Error).message}`)
+      window.alert(`Error: ${(err as Error).message}`)
     }
   }
 
@@ -288,14 +290,14 @@ export function GeneralSettings() {
 
       {/* Guide folders */}
       <SettingRow
-        label="Dossiers-guides"
-        description="Recrée les dossiers Macros, Fonctions et Thèmes avec leur guide. Les dossiers déjà présents sont conservés."
+        label="Guide folders"
+        description="Recreate the Macros, Functions and Themes folders with their guide. Folders already present are kept."
       >
         <button
           onClick={reseedGuides}
           className="text-xs rounded px-2 py-1 border mobile:text-base mobile:py-2"
         >
-          Recréer
+          Recreate
         </button>
       </SettingRow>
     </div>
