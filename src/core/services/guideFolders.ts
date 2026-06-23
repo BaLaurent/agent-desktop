@@ -17,10 +17,10 @@ interface GuideSeed {
   guideMarkdown: string
 }
 
-// Les répertoires viennent des résolveurs propriétaires (DRY). Exception thèmes :
-// le dir thèmes est résolu côté electron (main/services/themes.ts via app.getPath),
-// la ThemesService (core) le reçoit par injection — pas de résolveur core.
-// ponytail: même connaissance que le câblage electron, ré-énoncée pour le runtime core.
+// Directories come from the owning resolvers (DRY). Themes exception:
+// the themes dir is resolved on the electron side (main/services/themes.ts via app.getPath),
+// and ThemesService (core) receives it by injection — there is no core resolver.
+// ponytail: same knowledge as the electron wiring, restated for the core runtime.
 const THEMES_DIR = join(homedir(), '.agent-desktop', 'themes')
 
 const GUIDE_SEEDS: GuideSeed[] = [
@@ -105,11 +105,11 @@ export async function seedGuideFolders(db: Database.Database): Promise<{ created
     const existing = db.prepare('SELECT id FROM folders WHERE guide_type = ?').get(seed.guideType)
     if (existing) continue
 
-    // Le default_cwd doit pointer vers un répertoire réel ; mkdir best-effort par type.
+    // default_cwd must point to a real directory; best-effort mkdir per type.
     try {
       await mkdir(seed.dir, { recursive: true })
     } catch (e) {
-      log.warn(`mkdir échoué pour ${seed.dir}, dossier-guide ${seed.guideType} sauté`, errToCtx(e))
+      log.warn(`mkdir failed for ${seed.dir}, skipping guide folder ${seed.guideType}`, errToCtx(e))
       continue
     }
 
@@ -119,8 +119,8 @@ export async function seedGuideFolders(db: Database.Database): Promise<{ created
         `INSERT INTO folders (name, default_cwd, guide_type, position, updated_at)
          VALUES (?, ?, ?, ?, datetime('now'))`
       ).run(seed.name, seed.dir, seed.guideType, maxPos.max + 1)
-      // cwd posé explicitement = seed.dir : l'insert brut court-circuite
-      // ConversationService.create, qui sinon hérite du default_cwd du dossier.
+      // cwd set explicitly to seed.dir: the raw insert bypasses
+      // ConversationService.create, which would otherwise inherit the folder's default_cwd.
       const conv = db.prepare(
         `INSERT INTO conversations (title, folder_id, cwd, updated_at)
          VALUES (?, ?, ?, datetime('now'))`

@@ -6,7 +6,7 @@ describe('seedGuideFolders', () => {
   let db: any
   beforeEach(async () => { db = await createTestDb() })
 
-  it('crée 3 dossiers-guides, chacun avec une conversation + un message assistant', async () => {
+  it('creates 3 guide folders, each with a conversation + an assistant message', async () => {
     const { created } = await seedGuideFolders(db)
     expect(created).toBe(3)
     const folders = db.prepare("SELECT * FROM folders WHERE guide_type IS NOT NULL").all()
@@ -17,7 +17,7 @@ describe('seedGuideFolders', () => {
       expect(f.default_cwd).toBeTruthy()
       const conv = db.prepare('SELECT * FROM conversations WHERE folder_id = ?').get(f.id)
       expect(conv).toBeTruthy()
-      // La conversation seedée pointe vers le même répertoire que le dossier.
+      // The seeded conversation points to the same directory as its folder.
       expect(conv.cwd).toBe(f.default_cwd)
       const msg = db.prepare('SELECT * FROM messages WHERE conversation_id = ?').get(conv.id)
       expect(msg.role).toBe('assistant')
@@ -25,14 +25,14 @@ describe('seedGuideFolders', () => {
     }
   })
 
-  it('est idempotent — un 2e appel ne crée rien', async () => {
+  it('is idempotent — a second call creates nothing', async () => {
     await seedGuideFolders(db)
     const { created } = await seedGuideFolders(db)
     expect(created).toBe(0)
     expect(db.prepare("SELECT COUNT(*) c FROM folders WHERE guide_type IS NOT NULL").get().c).toBe(3)
   })
 
-  it('ne recrée que le type manquant', async () => {
+  it('recreates only the missing type', async () => {
     await seedGuideFolders(db)
     db.prepare("DELETE FROM folders WHERE guide_type = 'macros'").run()
     const { created } = await seedGuideFolders(db)
@@ -45,11 +45,11 @@ describe('seedGuideFoldersOnce', () => {
   let db: any
   beforeEach(async () => { db = await createTestDb() })
 
-  it('seede une fois puis pose le flag ; un 2e appel ne re-seede pas après suppression', async () => {
+  it('seeds once then sets the flag; a second call does not re-seed after deletion', async () => {
     await seedGuideFoldersOnce(db)
     expect(db.prepare("SELECT COUNT(*) c FROM folders WHERE guide_type IS NOT NULL").get().c).toBe(3)
     expect(db.prepare("SELECT value FROM settings WHERE key = 'guideFolders_seeded'").get().value).toBe('1')
-    // L'utilisateur supprime tout ; le flag empêche la recréation auto.
+    // The user deletes everything; the flag prevents auto re-creation.
     db.prepare("DELETE FROM folders WHERE guide_type IS NOT NULL").run()
     await seedGuideFoldersOnce(db)
     expect(db.prepare("SELECT COUNT(*) c FROM folders WHERE guide_type IS NOT NULL").get().c).toBe(0)
