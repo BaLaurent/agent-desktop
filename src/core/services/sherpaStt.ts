@@ -208,6 +208,46 @@ export function parseWavPcm16(buf: Buffer): { samples: Float32Array; sampleRate:
   return { samples, sampleRate }
 }
 
+/**
+ * Resolve the custom-word lexicon into recognizer hotwords. Returns null (→ greedy_search) when:
+ * the lexicon is empty, the family is not transducer, the built content is empty, OR any error
+ * occurs (token load / build / writing the hotwords file). A read-only model dir must NOT break
+ * STT — it degrades gracefully to greedy decoding.
+ */
+export async function resolveHotwords(
+  db: Database.Database,
+  modelPath: string,
+  files: string[],
+  detection: SherpaDetection,
+): Promise<RecognizerHotwords | null> {
+  let lexicon: string[] = []
+  try {
+    const parsed = JSON.parse(getSetting(db, 'stt_lexicon') || '[]')
+    if (Array.isArray(parsed)) lexicon = parsed.filter((e): e is string => typeof e === 'string')
+  } catch {
+    lexicon = []
+  }
+  if (lexicon.length === 0 || detection.family !== 'transducer') return null
+
+  try {
+    const pieces = await loadTokenPieces(path.join(modelPath, detection.tokens))
+    const built = buildHotwords({ modelDir: modelPath, fileNames: files, lexicon, pieces })
+    if (built.content.trim().length === 0) return null
+    const file = path.join(modelPath, '.agent-hotwords.txt')
+    await fs.writeFile(file, built.content, 'utf8')
+    const score = resolveScore(
+      getSetting(db, 'sherpa_hotwordsSensitivity') || 'normal',
+      getSetting(db, 'sherpa_hotwordsScoreOverride') || '',
+    )
+    // signature encodes the tokenized lexicon content + score so any lexicon edit busts the cache.
+    const signature = `${score}:${built.content}`
+    return { file, score, signature, modelingUnit: built.modelingUnit, bpeVocabPath: built.bpeVocabPath }
+  } catch {
+    // Token load / build / file write failed (e.g. read-only model dir) — degrade to greedy.
+    return null
+  }
+}
+
 export async function transcribe(db: Database.Database, wavBuffer: Buffer): Promise<{ text: string }> {
   if (!wavBuffer || wavBuffer.length === 0) throw new Error('Empty audio buffer')
   if (wavBuffer.length > MAX_BUFFER_SIZE) throw new Error(`Audio buffer too large (max ${MAX_BUFFER_SIZE / 1024 / 1024}MB)`)
@@ -217,30 +257,7 @@ export async function transcribe(db: Database.Database, wavBuffer: Buffer): Prom
   const files = await fs.readdir(modelPath)
   const detection = detectArchitecture(files)
 
-  // Resolve the custom-word lexicon into hotwords (transducer only; no-op otherwise).
-  let hot: RecognizerHotwords | null = null
-  let lexicon: string[] = []
-  try {
-    const parsed = JSON.parse(getSetting(db, 'stt_lexicon') || '[]')
-    if (Array.isArray(parsed)) lexicon = parsed.filter((e): e is string => typeof e === 'string')
-  } catch {
-    lexicon = []
-  }
-  if (lexicon.length > 0 && detection.family === 'transducer') {
-    const pieces = await loadTokenPieces(path.join(modelPath, detection.tokens))
-    const built = buildHotwords({ modelDir: modelPath, fileNames: files, lexicon, pieces })
-    if (built.content.trim().length > 0) {
-      const file = path.join(modelPath, '.agent-hotwords.txt')
-      await fs.writeFile(file, built.content, 'utf8')
-      const score = resolveScore(
-        getSetting(db, 'sherpa_hotwordsSensitivity') || 'normal',
-        getSetting(db, 'sherpa_hotwordsScoreOverride') || '',
-      )
-      // signature encodes the tokenized lexicon content + score so any lexicon edit busts the cache.
-      const signature = `${score}:${built.content}`
-      hot = { file, score, signature, modelingUnit: built.modelingUnit, bpeVocabPath: built.bpeVocabPath }
-    }
-  }
+  const hot = await resolveHotwords(db, modelPath, files, detection)
 
   const sherpa = loadSherpa()
   const recognizer: any = getRecognizer(sherpa, modelPath, detection, hot)

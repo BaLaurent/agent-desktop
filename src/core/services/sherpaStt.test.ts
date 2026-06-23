@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
-import { detectArchitecture, validateConfig, parseWavPcm16, buildRecognizerConfig, recognizerCacheKey } from './sherpaStt'
+import { detectArchitecture, validateConfig, parseWavPcm16, buildRecognizerConfig, recognizerCacheKey, resolveHotwords } from './sherpaStt'
 
 function makeWav(samples: number[], sampleRate = 16000): Buffer {
   const dataLen = samples.length * 2
@@ -178,5 +178,65 @@ describe('recognizerCacheKey', () => {
   it('produces identical keys for identical inputs', () => {
     const hot = { file: '/m/.agent-hotwords.txt', score: 4.0, signature: '4:▁hello\n' }
     expect(recognizerCacheKey('/m', hot)).toBe(recognizerCacheKey('/m', hot))
+  })
+})
+
+describe('resolveHotwords', () => {
+  const transducer = {
+    family: 'transducer' as const,
+    models: { encoder: 'encoder.onnx', decoder: 'decoder.onnx', joiner: 'joiner.onnx' },
+    tokens: 'tokens.txt',
+  }
+
+  async function dbWith(settings: Record<string, string>) {
+    const { createTestDb } = await import('../../main/__tests__/db-helper')
+    const db = await createTestDb()
+    const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+    for (const [k, v] of Object.entries(settings)) stmt.run(k, v)
+    return db
+  }
+
+  it('returns null when the lexicon is empty (no hotwords, no write)', async () => {
+    const db = await dbWith({ stt_lexicon: '[]' })
+    const r = await resolveHotwords(db as any, '/no/such/model', ['tokens.txt'], transducer)
+    expect(r).toBeNull()
+  })
+
+  it('returns null when the family is not transducer', async () => {
+    const whisper = { family: 'whisper' as const, models: { encoder: 'e.onnx', decoder: 'd.onnx' }, tokens: 'tokens.txt' }
+    const db = await dbWith({ stt_lexicon: JSON.stringify(['hello']) })
+    const r = await resolveHotwords(db as any, '/no/such/model', ['tokens.txt'], whisper)
+    expect(r).toBeNull()
+  })
+
+  it('degrades to null when writing the hotwords file fails (read-only model dir)', async () => {
+    // Non-empty lexicon + transducer, but the model path does not exist → loadTokenPieces /
+    // writeFile throw. resolveHotwords must catch and return null (greedy fallback), not throw.
+    const db = await dbWith({ stt_lexicon: JSON.stringify(['hello', 'world']) })
+    const r = await resolveHotwords(db as any, '/no/such/model/dir', ['tokens.txt'], transducer)
+    expect(r).toBeNull()
+  })
+
+  it('builds hotwords when the lexicon is non-empty, transducer, and the dir is writable', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-hot-'))
+    // Minimal tokens.txt so loadTokenPieces + greedy tokenization can encode "hi".
+    await fs.writeFile(path.join(dir, 'tokens.txt'), '<blk> 0\n▁hi 1\n', 'utf8')
+    const db = await dbWith({ stt_lexicon: JSON.stringify(['hi']) })
+    const r = await resolveHotwords(db as any, dir, ['tokens.txt'], transducer)
+    expect(r).not.toBeNull()
+    expect(r!.file).toBe(path.join(dir, '.agent-hotwords.txt'))
+    expect(r!.signature).toContain(':')
+    await expect(fs.readFile(path.join(dir, '.agent-hotwords.txt'), 'utf8')).resolves.toContain('▁hi')
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  it('returns null when every lexicon entry is unencodable (empty built content)', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sherpa-hot-'))
+    // tokens.txt cannot encode "zzz" → buildHotwords yields empty content → null.
+    await fs.writeFile(path.join(dir, 'tokens.txt'), '<blk> 0\n▁hi 1\n', 'utf8')
+    const db = await dbWith({ stt_lexicon: JSON.stringify(['zzz']) })
+    const r = await resolveHotwords(db as any, dir, ['tokens.txt'], transducer)
+    expect(r).toBeNull()
+    await fs.rm(dir, { recursive: true, force: true })
   })
 })
