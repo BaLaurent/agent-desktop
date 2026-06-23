@@ -164,6 +164,9 @@ export interface AgentAPI {
     save(name: string, description: string, messages: string[], oldName?: string): Promise<void>
     delete(name: string): Promise<void>
   }
+  guides: {
+    reseed(): Promise<{ created: number }>
+  }
   quickChat: {
     getConversationId(mode?: 'text' | 'voice'): Promise<number>
     purge(): Promise<void>

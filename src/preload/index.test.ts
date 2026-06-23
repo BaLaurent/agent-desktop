@@ -45,6 +45,19 @@ function callStreaming(method: 'send' | 'regenerate' | 'edit' | 'compact'): Prom
   }
 }
 
+describe('guides namespace', () => {
+  beforeEach(() => {
+    h.invoke.mockReset()
+  })
+
+  it('guides.reseed invoque le canal guides:reseed', async () => {
+    h.invoke.mockResolvedValueOnce({ created: 3 })
+    const res = await (h.store.api as any).guides.reseed()
+    expect(h.invoke).toHaveBeenCalledWith('guides:reseed')
+    expect(res).toEqual({ created: 3 })
+  })
+})
+
 describe('preload streaming RPCs', () => {
   beforeEach(() => {
     h.invoke.mockReset()

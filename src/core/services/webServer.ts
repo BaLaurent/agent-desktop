@@ -302,6 +302,9 @@ export function generateShim(token: string): string {
       save: function(name, description, messages, oldName) { return invoke('macros:save', [name, description, messages, oldName]); },
       delete: function(name) { return invoke('macros:delete', [name]); },
     },
+    guides: {
+      reseed: function() { return invoke('guides:reseed', []); },
+    },
     quickChat: {
       getConversationId: function(m) { return invoke('quickChat:getConversationId', [m]); },
       purge: function() { return invoke('quickChat:purge', []); },
