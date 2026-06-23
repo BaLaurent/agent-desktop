@@ -26,7 +26,7 @@ const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/
 const DESCRIPTION_RE = /^description:\s*(.+)$/m
 const NAME_RE = /^name:\s*(.+)$/m
 
-function getMacrosDir(): string {
+export function getMacrosDir(): string {
   return expandTilde('~/.agent-desktop/macros')
 }
 

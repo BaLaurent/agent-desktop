@@ -9,6 +9,11 @@ import { createLogger } from '../../utils/logger'
 const log = createLogger('variableResolver')
 
 const DEFAULT_DIR = join(homedir(), '.agent-desktop', 'functions')
+
+export function getFunctionsDir(): string {
+  return DEFAULT_DIR
+}
+
 const CACHE_SUBDIR = '.cache'
 
 interface CacheEntry {
