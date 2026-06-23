@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { CustomWakewordTrainer } from './CustomWakewordTrainer'
 import { DEFAULT_INTENT_PROMPT, draftToStored } from '../../../core/services/voiceIntentPrompt'
@@ -119,7 +119,14 @@ export function ContinuousVoiceSettings() {
   const gateMode = settings['continuousVoice_gateMode'] === 'intent' ? 'intent' : 'wakeword'
   const modelSource = settings['hotword_modelSource'] === 'manual' ? 'manual' : 'bundled'
   const intentModel = settings['continuousVoice_intentModel'] || ''
-  const isCustomIntentModel = intentModel !== '' && !INTENT_MODEL_PRESETS.some((p) => p.value === intentModel)
+  const intentModelIsPreset = INTENT_MODEL_PRESETS.some((p) => p.value === intentModel)
+  // "Custom mode" can't be derived from intentModel alone: an empty custom field is
+  // indistinguishable from "Auto" (''). Track it explicitly, and switch it on when a
+  // stored non-preset model id loads (reload case).
+  const [customIntentModel, setCustomIntentModel] = useState(false)
+  useEffect(() => {
+    if (intentModel !== '' && !intentModelIsPreset) setCustomIntentModel(true)
+  }, [intentModel, intentModelIsPreset])
 
   const num = (key: string, fallback: number) => {
     const v = Number(settings[key])
@@ -221,11 +228,20 @@ export function ContinuousVoiceSettings() {
                 <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Intent model</label>
                 <SegButtons
                   ariaLabel="Intent model preset"
-                  value={isCustomIntentModel ? '__custom__' : intentModel}
-                  onChange={(v) => setSetting('continuousVoice_intentModel', v === '__custom__' ? intentModel || 'custom-model' : v)}
+                  value={customIntentModel ? '__custom__' : (intentModelIsPreset ? intentModel : '')}
+                  onChange={(v) => {
+                    if (v === '__custom__') {
+                      setCustomIntentModel(true)
+                      // entering custom from a preset: start the field blank, not pre-filled with the preset id
+                      if (intentModelIsPreset) setSetting('continuousVoice_intentModel', '')
+                    } else {
+                      setCustomIntentModel(false)
+                      setSetting('continuousVoice_intentModel', v)
+                    }
+                  }}
                   options={[...INTENT_MODEL_PRESETS, { label: 'Custom…', value: '__custom__' }]}
                 />
-                {isCustomIntentModel && (
+                {customIntentModel && (
                   <>
                     <input
                       type="text"
