@@ -32,6 +32,8 @@ const GUIDE_SEEDS: GuideSeed[] = [
 
 Une **macro** est une séquence de messages que tu rejoues d'un coup en tapant \`/nom\` dans le chat.
 
+> 💡 **Le plus simple :** demande-moi directement de créer ou modifier une macro (« crée une macro qui… ») — j'écris le fichier moi-même. La suite explique le format si tu préfères le faire à la main.
+
 Ce dossier pointe vers \`~/.agent-desktop/macros/\` (son répertoire de travail). Chaque macro est un fichier \`.json\` :
 
 \`\`\`json
@@ -54,6 +56,8 @@ Tu peux aussi gérer tes macros dans **Paramètres → Macros**. Ce dossier-guid
 
 Une **fonction** est une variable dynamique que tu insères dans tes prompts : elle s'exécute et son résultat remplace l'appel.
 
+> 💡 **Le plus simple :** demande-moi directement de créer ou modifier une fonction (« crée une fonction qui… ») — j'écris le fichier moi-même. La suite explique le format si tu préfères le faire à la main.
+
 Ce dossier pointe vers \`~/.agent-desktop/functions/\`. Chaque fonction est un fichier \`.ts\` exportant une fonction par défaut :
 
 \`\`\`ts
@@ -75,6 +79,8 @@ Ce dossier-guide est supprimable ; recrée-le depuis **Paramètres → Général
     guideMarkdown: `# Les thèmes
 
 Un **thème** personnalise les couleurs de l'interface via des variables CSS.
+
+> 💡 **Le plus simple :** demande-moi directement de créer ou modifier un thème (« crée un thème sombre violet… ») — j'écris le fichier moi-même. La suite explique le format si tu préfères le faire à la main.
 
 Ce dossier pointe vers \`~/.agent-desktop/themes/\`. Chaque thème est un fichier \`.css\` qui redéfinit les variables :
 
@@ -113,10 +119,12 @@ export async function seedGuideFolders(db: Database.Database): Promise<{ created
         `INSERT INTO folders (name, default_cwd, guide_type, position, updated_at)
          VALUES (?, ?, ?, ?, datetime('now'))`
       ).run(seed.name, seed.dir, seed.guideType, maxPos.max + 1)
+      // cwd posé explicitement = seed.dir : l'insert brut court-circuite
+      // ConversationService.create, qui sinon hérite du default_cwd du dossier.
       const conv = db.prepare(
-        `INSERT INTO conversations (title, folder_id, updated_at)
-         VALUES (?, ?, datetime('now'))`
-      ).run(`Guide : ${seed.name}`, folder.lastInsertRowid)
+        `INSERT INTO conversations (title, folder_id, cwd, updated_at)
+         VALUES (?, ?, ?, datetime('now'))`
+      ).run(`Guide : ${seed.name}`, folder.lastInsertRowid, seed.dir)
       db.prepare(
         `INSERT INTO messages (conversation_id, role, content, created_at)
          VALUES (?, 'assistant', ?, datetime('now'))`

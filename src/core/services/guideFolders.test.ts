@@ -17,6 +17,8 @@ describe('seedGuideFolders', () => {
       expect(f.default_cwd).toBeTruthy()
       const conv = db.prepare('SELECT * FROM conversations WHERE folder_id = ?').get(f.id)
       expect(conv).toBeTruthy()
+      // La conversation seedée pointe vers le même répertoire que le dossier.
+      expect(conv.cwd).toBe(f.default_cwd)
       const msg = db.prepare('SELECT * FROM messages WHERE conversation_id = ?').get(conv.id)
       expect(msg.role).toBe('assistant')
       expect(msg.content.length).toBeGreaterThan(0)
