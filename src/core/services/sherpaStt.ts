@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { getSetting } from '../utils/db'
+import { loadTokenPieces, buildHotwords, resolveScore } from './sherpaHotwords'
 
 export type SherpaFamily = 'transducer' | 'whisper' | 'paraformer' | 'nemoCtc'
 
@@ -94,11 +95,39 @@ export async function validateConfig(db: Database.Database): Promise<SherpaValid
 
 const MAX_BUFFER_SIZE = 50 * 1024 * 1024
 
-// Loading a model is expensive; cache the OfflineRecognizer keyed by absolute model path.
-let cached: { modelPath: string; recognizer: unknown } | null = null
+// Loading a model is expensive; cache the OfflineRecognizer keyed by model path + hotwords signature.
+let cached: { key: string; recognizer: unknown } | null = null
 
 export function resetRecognizerCache(): void {
   cached = null
+}
+
+export interface RecognizerHotwords {
+  file: string
+  score: number
+  modelingUnit?: string
+  bpeVocabPath?: string
+}
+
+/** Assemble the OfflineRecognizer config. Pure: no addon, no I/O — safe to unit test. */
+export function buildRecognizerConfig(
+  modelPath: string,
+  detection: SherpaDetection,
+  hot: RecognizerHotwords | null,
+): Record<string, unknown> {
+  const modelConfig = buildModelConfig(modelPath, detection) as Record<string, unknown>
+  const config: Record<string, unknown> = {
+    featConfig: { sampleRate: 16000, featureDim: 80 },
+    modelConfig,
+  }
+  if (hot) {
+    config.decodingMethod = 'modified_beam_search'
+    config.hotwordsFile = hot.file
+    config.hotwordsScore = hot.score
+    if (hot.modelingUnit) modelConfig.modelingUnit = hot.modelingUnit
+    if (hot.bpeVocabPath) modelConfig.bpeVocab = hot.bpeVocabPath
+  }
+  return config
 }
 
 function loadSherpa(): any {
@@ -133,14 +162,17 @@ function buildModelConfig(dir: string, d: SherpaDetection) {
   }
 }
 
-function getRecognizer(sherpa: any, modelPath: string, d: SherpaDetection): unknown {
-  if (cached && cached.modelPath === modelPath) return cached.recognizer
+function getRecognizer(
+  sherpa: any,
+  modelPath: string,
+  d: SherpaDetection,
+  hot: RecognizerHotwords | null,
+): unknown {
+  const key = modelPath + '|' + (hot ? `${hot.score}:${hot.file}` : '')
+  if (cached && cached.key === key) return cached.recognizer
   // Native API: OfflineRecognizer is a class (no createOfflineRecognizer factory).
-  const recognizer = new sherpa.OfflineRecognizer({
-    featConfig: { sampleRate: 16000, featureDim: 80 },
-    modelConfig: buildModelConfig(modelPath, d),
-  })
-  cached = { modelPath, recognizer }
+  const recognizer = new sherpa.OfflineRecognizer(buildRecognizerConfig(modelPath, d, hot))
+  cached = { key, recognizer }
   return recognizer
 }
 
@@ -177,8 +209,32 @@ export async function transcribe(db: Database.Database, wavBuffer: Buffer): Prom
 
   const files = await fs.readdir(modelPath)
   const detection = detectArchitecture(files)
+
+  // Resolve the custom-word lexicon into hotwords (transducer only; no-op otherwise).
+  let hot: RecognizerHotwords | null = null
+  let lexicon: string[] = []
+  try {
+    const parsed = JSON.parse(getSetting(db, 'stt_lexicon') || '[]')
+    if (Array.isArray(parsed)) lexicon = parsed.filter((e): e is string => typeof e === 'string')
+  } catch {
+    lexicon = []
+  }
+  if (lexicon.length > 0 && detection.family === 'transducer') {
+    const pieces = await loadTokenPieces(path.join(modelPath, detection.tokens))
+    const built = buildHotwords({ modelDir: modelPath, fileNames: files, lexicon, pieces })
+    if (built.content.trim().length > 0) {
+      const file = path.join(modelPath, '.agent-hotwords.txt')
+      await fs.writeFile(file, built.content, 'utf8')
+      const score = resolveScore(
+        getSetting(db, 'sherpa_hotwordsSensitivity') || 'normal',
+        getSetting(db, 'sherpa_hotwordsScoreOverride') || '',
+      )
+      hot = { file, score, modelingUnit: built.modelingUnit, bpeVocabPath: built.bpeVocabPath }
+    }
+  }
+
   const sherpa = loadSherpa()
-  const recognizer: any = getRecognizer(sherpa, modelPath, detection)
+  const recognizer: any = getRecognizer(sherpa, modelPath, detection, hot)
 
   // Parse the WAV in JS into an in-cage Float32Array and feed acceptWaveform directly.
   // We deliberately avoid the native readWave: under Electron's V8 memory cage the external

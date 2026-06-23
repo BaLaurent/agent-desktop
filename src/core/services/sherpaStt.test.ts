@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
-import { detectArchitecture, validateConfig, parseWavPcm16 } from './sherpaStt'
+import { detectArchitecture, validateConfig, parseWavPcm16, buildRecognizerConfig } from './sherpaStt'
 
 function makeWav(samples: number[], sampleRate = 16000): Buffer {
   const dataLen = samples.length * 2
@@ -123,5 +123,41 @@ describe.skipIf(!hasAddon)('transcribe (requires sherpa-onnx-node + a model)', (
     const { transcribe } = await import('./sherpaStt')
     const db = await makeDb('')
     await expect(transcribe(db as any, Buffer.from([]))).rejects.toThrow(/model|empty/i)
+  })
+})
+
+describe('buildRecognizerConfig', () => {
+  const detection = {
+    family: 'transducer' as const,
+    models: { encoder: 'encoder.onnx', decoder: 'decoder.onnx', joiner: 'joiner.onnx' },
+    tokens: 'tokens.txt',
+  }
+
+  it('uses greedy_search with no hotwords when hot is null', () => {
+    const cfg = buildRecognizerConfig('/m', detection, null) as any
+    expect(cfg.decodingMethod ?? 'greedy_search').toBe('greedy_search')
+    expect(cfg.hotwordsFile).toBeUndefined()
+    expect(cfg.modelConfig.transducer.encoder).toBe('/m/encoder.onnx')
+  })
+
+  it('switches to modified_beam_search and sets the hotwords file/score', () => {
+    const cfg = buildRecognizerConfig('/m', detection, {
+      file: '/m/.agent-hotwords.txt',
+      score: 4.0,
+    }) as any
+    expect(cfg.decodingMethod).toBe('modified_beam_search')
+    expect(cfg.hotwordsFile).toBe('/m/.agent-hotwords.txt')
+    expect(cfg.hotwordsScore).toBe(4.0)
+  })
+
+  it('adds modelingUnit + bpeVocab on the model config for the official path', () => {
+    const cfg = buildRecognizerConfig('/m', detection, {
+      file: '/m/.agent-hotwords.txt',
+      score: 4.0,
+      modelingUnit: 'cjkchar+bpe',
+      bpeVocabPath: '/m/bpe.vocab',
+    }) as any
+    expect(cfg.modelConfig.modelingUnit).toBe('cjkchar+bpe')
+    expect(cfg.modelConfig.bpeVocab).toBe('/m/bpe.vocab')
   })
 })
