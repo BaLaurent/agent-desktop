@@ -22,6 +22,7 @@ function num(key: string, fallback: number): number {
 export interface ContinuousVoiceFlags {
   enabled: boolean
   pauseDuringTts: boolean
+  pauseDuringProcessing: boolean
 }
 
 export function readContinuousVoiceFlags(): ContinuousVoiceFlags {
@@ -30,6 +31,8 @@ export function readContinuousVoiceFlags(): ContinuousVoiceFlags {
     enabled: s['continuousVoice_enabled'] === 'true',
     // default ON (half-duplex anti-echo); only 'false' disables it
     pauseDuringTts: s['continuousVoice_pauseDuringTts'] !== 'false',
+    // default ON (suspend capture during classify + reply); only 'false' disables it
+    pauseDuringProcessing: s['continuousVoice_pauseDuringProcessing'] !== 'false',
   }
 }
 
