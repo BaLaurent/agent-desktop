@@ -199,6 +199,8 @@ function runMigrations(db: Database.Database): void {
     applyMigration(db, columnsByTable, 'folders', 'default_cwd', 'TEXT')
     applyMigration(db, columnsByTable, 'folders', 'color', 'TEXT')
     applyMigration(db, columnsByTable, 'folders', 'is_default', 'INTEGER DEFAULT 0')
+    // Marqueur des dossiers-guides seedés (macros|functions|themes). NULL = dossier utilisateur normal.
+    applyMigration(db, columnsByTable, 'folders', 'guide_type', 'TEXT')
 
     // messages
     applyMigration(db, columnsByTable, 'messages', 'tool_calls', 'TEXT')
