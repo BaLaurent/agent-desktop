@@ -144,6 +144,7 @@ describe('buildRecognizerConfig', () => {
     const cfg = buildRecognizerConfig('/m', detection, {
       file: '/m/.agent-hotwords.txt',
       score: 4.0,
+      signature: '4:test',
     }) as any
     expect(cfg.decodingMethod).toBe('modified_beam_search')
     expect(cfg.hotwordsFile).toBe('/m/.agent-hotwords.txt')
@@ -154,6 +155,7 @@ describe('buildRecognizerConfig', () => {
     const cfg = buildRecognizerConfig('/m', detection, {
       file: '/m/.agent-hotwords.txt',
       score: 4.0,
+      signature: '4:test',
       modelingUnit: 'cjkchar+bpe',
       bpeVocabPath: '/m/bpe.vocab',
     }) as any
