@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { CustomWakewordTrainer } from './CustomWakewordTrainer'
+import { DEFAULT_INTENT_PROMPT, draftToStored } from '../../../core/services/voiceIntentPrompt'
 
 const inputStyle = {
   backgroundColor: 'var(--color-bg)',
@@ -69,6 +70,43 @@ function SegButtons<T extends string>({ options, value, onChange, ariaLabel }: {
           {o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+export function IntentPromptEditor({ stored, onPersist }: { stored: string; onPersist: (storedValue: string) => void }) {
+  const [draft, setDraft] = useState(stored || DEFAULT_INTENT_PROMPT)
+
+  const update = (value: string) => {
+    setDraft(value)
+    onPersist(draftToStored(value))
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Intent prompt</label>
+        {stored !== '' && (
+          <button
+            onClick={() => { setDraft(DEFAULT_INTENT_PROMPT); onPersist('') }}
+            className="px-2 py-1 rounded text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
+          >
+            Reset to default
+          </button>
+        )}
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => update(e.target.value)}
+        rows={8}
+        className="w-full px-3 py-2 rounded text-sm outline-none resize-y font-mono"
+        style={inputStyle}
+        aria-label="Intent classification prompt"
+      />
+      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        Placeholders: {'{utterance}'} (the transcribed text) and {'{agent_name}'} (the assistant&apos;s name). Editing this only saves when it differs from the built-in default.
+      </span>
     </div>
   )
 }
@@ -203,18 +241,10 @@ export function ContinuousVoiceSettings() {
                 </span>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Intent prompt (optional)</label>
-                <textarea
-                  value={settings['continuousVoice_intentPrompt'] || ''}
-                  onChange={(e) => setSetting('continuousVoice_intentPrompt', e.target.value)}
-                  placeholder="Leave empty to use the built-in yes/no classifier prompt. Use {utterance} as the placeholder."
-                  rows={4}
-                  className="w-full px-3 py-2 rounded text-sm outline-none resize-y"
-                  style={inputStyle}
-                  aria-label="Intent classification prompt"
-                />
-              </div>
+              <IntentPromptEditor
+                stored={settings['continuousVoice_intentPrompt'] || ''}
+                onPersist={(v) => setSetting('continuousVoice_intentPrompt', v)}
+              />
             </>
           )}
 
