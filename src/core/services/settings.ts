@@ -42,6 +42,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   'stt_backend',
   // Sherpa-onnx (native addon STT)
   'sherpa_modelPath',
+  // STT custom-word lexicon (shared) + Sherpa hotwords tuning
+  'stt_lexicon',
+  'sherpa_hotwordsSensitivity',
+  'sherpa_hotwordsScoreOverride',
   // Voice ducking
   'voice_volumeDuck',
   'voice_pauseMediaPlayers',
