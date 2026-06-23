@@ -55,7 +55,7 @@ describe('SherpaSettings hotwords sensitivity', () => {
 
   it('writes a custom override score', () => {
     render(<SherpaSettings />)
-    const input = screen.getByLabelText('Custom hotwords score')
+    const input = screen.getByLabelText('Custom Boost score')
     fireEvent.change(input, { target: { value: '8' } })
     expect(mockSetSetting).toHaveBeenCalledWith('sherpa_hotwordsScoreOverride', '8')
   })

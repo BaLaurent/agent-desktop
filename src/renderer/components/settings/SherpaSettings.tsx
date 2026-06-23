@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { SHERPA_MODEL_PRESETS } from '../../../core/services/sherpaPresets'
+import { SHERPA_MODEL_PRESETS, BOOST_SCORE_MIN, BOOST_SCORE_MAX } from '../../../core/services/sherpaPresets'
 
 const inputStyle = {
   backgroundColor: 'var(--color-base)',
@@ -254,22 +254,24 @@ export function SherpaSettings() {
         </div>
         <details>
           <summary className="text-xs cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
-            Advanced: custom score
+            Advanced: custom Boost score
           </summary>
           <div className="flex flex-col gap-1 mt-2">
             <input
               type="number"
               step="0.5"
-              min="0"
+              min={BOOST_SCORE_MIN}
+              max={BOOST_SCORE_MAX}
               value={scoreOverride}
               onChange={(e) => setSetting('sherpa_hotwordsScoreOverride', e.target.value)}
               placeholder="(use preset)"
               className="w-32 px-3 py-1.5 rounded text-sm outline-none"
               style={inputStyle}
-              aria-label="Custom hotwords score"
+              aria-label="Custom Boost score"
             />
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Overrides the preset above. Leave empty to use the slider. Typical range 1.5–6.
+              Overrides the preset above. Leave empty to use the buttons. Accepted {BOOST_SCORE_MIN}–
+              {BOOST_SCORE_MAX} (out-of-range values are clamped); typical 1.5–6.
             </span>
           </div>
         </details>

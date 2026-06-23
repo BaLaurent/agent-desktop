@@ -1,13 +1,22 @@
 /**
- * Single source of truth for downloadable sherpa-onnx STT models.
+ * Single source of truth for sherpa-onnx STT presets and tuning constants.
  *
- * To add or fix a preset, edit ONLY this array. Read by both the renderer (settings UI list)
- * and the main process (download handler). Pure data — no electron/node imports.
+ * Pure data — no electron/node imports — so it is read by both the renderer (settings UI)
+ * and the main process (download handler + hotword scoring).
  *
- * Files are fetched from https://huggingface.co/<repo>/resolve/main/<file> into
- * ~/.agent-desktop/stt-models/<id>/. Architecture is auto-detected from the downloaded
- * filenames (see detectArchitecture), so any valid sherpa layout works.
+ * To add or fix a model preset, edit ONLY the SHERPA_MODEL_PRESETS array. Files are fetched
+ * from https://huggingface.co/<repo>/resolve/main/<file> into ~/.agent-desktop/stt-models/<id>/.
+ * Architecture is auto-detected from the downloaded filenames (see detectArchitecture).
  */
+
+/**
+ * Acceptable bounds for a custom lexicon "Boost score" (sherpa hotwords-score). Shared so the
+ * settings input (min/max) and the resolver's defensive clamp stay in lock-step.
+ * - Below ~0.5 the bias is negligible; use a preset instead.
+ * - Above ~10 lexicon words start surfacing even when not spoken (false insertions).
+ */
+export const BOOST_SCORE_MIN = 0.5
+export const BOOST_SCORE_MAX = 10
 export interface SherpaModelPreset {
   /** Target folder name under ~/.agent-desktop/stt-models/. */
   id: string

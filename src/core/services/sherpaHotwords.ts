@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { BOOST_SCORE_MIN, BOOST_SCORE_MAX } from './sherpaPresets'
 
 /** SentencePiece word-boundary marker (U+2581). */
 const WORD_START = '▁'
@@ -50,7 +51,9 @@ export function tokenizeEntry(text: string, pieces: Set<string>): string | null 
 /** Resolve the hotwords-score from the sensitivity preset, with an optional numeric override. */
 export function resolveScore(sensitivity: string, override: string): number {
   const o = Number(override)
-  if (override.trim() !== '' && Number.isFinite(o) && o > 0) return o
+  if (override.trim() !== '' && Number.isFinite(o) && o > 0) {
+    return Math.min(BOOST_SCORE_MAX, Math.max(BOOST_SCORE_MIN, o))
+  }
   return SENSITIVITY_SCORES[sensitivity] ?? SENSITIVITY_SCORES.normal
 }
 

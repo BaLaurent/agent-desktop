@@ -37,6 +37,11 @@ describe('resolveScore', () => {
     expect(resolveScore('soft', '9.5')).toBe(9.5)
   })
 
+  it('clamps an override to the accepted boost-score bounds', () => {
+    expect(resolveScore('normal', '50')).toBe(10)
+    expect(resolveScore('normal', '0.1')).toBe(0.5)
+  })
+
   it('ignores a blank or invalid override', () => {
     expect(resolveScore('normal', '')).toBe(4.0)
     expect(resolveScore('normal', 'abc')).toBe(4.0)
