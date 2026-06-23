@@ -5,7 +5,7 @@ export type {
   ContinuousVoiceCallbacks,
   EngineUtterance,
 } from './engine'
-export { useContinuousVoiceStore } from './continuousVoiceStore'
+export { useContinuousVoiceStore, type ProcessingState } from './continuousVoiceStore'
 export { useContinuousVoice } from './useContinuousVoice'
 export {
   readContinuousVoiceFlags,

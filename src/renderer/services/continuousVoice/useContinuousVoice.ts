@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { startContinuousVoiceEngine, type ContinuousVoiceEngine } from './engine'
 import { readEngineConfig, readGateConfig, readHotwordConfig, readContinuousVoiceFlags } from './config'
 import { useContinuousVoiceStore } from './continuousVoiceStore'
-import { createVoiceGate, type VoiceGate } from '../voiceGate'
+import { createVoiceGate, type VoiceGate, type GateDecision } from '../voiceGate'
 import { createHotword, type Hotword } from '../hotword'
 import { useTtsStore } from '../../stores/ttsStore'
 
@@ -85,10 +85,22 @@ export function useContinuousVoice(opts: {
 
       engineRef.current = startContinuousVoiceEngine(stream, readEngineConfig(), {
         onUtterance: async (u) => {
-          const decision = await gate.evaluate(u)
+          store.getState().setProcessing('classifying')
+          const pause = readContinuousVoiceFlags().pauseDuringProcessing
+          if (pause) engineRef.current?.suspend()
+          let decision: GateDecision
+          try {
+            decision = await gate.evaluate(u)
+          } catch {
+            // Unexpected gate failure — fail closed (never send an unverified utterance).
+            decision = { action: 'ignore', reason: 'classify-error' }
+          }
           if (decision.action === 'send') {
+            store.getState().setProcessing('replying')
             onSendRef.current(decision.text)
           } else {
+            store.getState().setProcessing(null)
+            if (pause) engineRef.current?.resume()
             store.getState().setIgnored(decision.reason, performance.now())
           }
         },
@@ -111,10 +123,12 @@ export function useContinuousVoice(opts: {
     }
   }, [conversationId, store, stop])
 
-  /** Call when an AI exchange finishes — opens the follow-up window. */
+  /** Call when an AI exchange finishes — opens the follow-up window, ends the processing state. */
   const notifyExchangeComplete = useCallback(() => {
     gateRef.current?.notifyExchangeComplete()
-  }, [])
+    store.getState().setProcessing(null)
+    if (readContinuousVoiceFlags().pauseDuringProcessing) engineRef.current?.resume()
+  }, [store])
 
   // Half-duplex: pause listening (and thus the hotword feed) while the assistant speaks.
   useEffect(() => {

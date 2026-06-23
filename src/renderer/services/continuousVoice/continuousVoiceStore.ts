@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { ContinuousPhase } from './engine'
 import type { GateIgnoreReason } from '../voiceGate'
 
+export type ProcessingState = 'classifying' | 'replying'
+
 /**
  * Coarse UI state for a continuous-voice session. Deliberately holds ONLY low-frequency state —
  * the live level meter is pushed via an engine callback to a component ref, never through here,
@@ -13,10 +15,13 @@ interface ContinuousVoiceState {
   error: string | null
   /** Last utterance the gate discarded, for a subtle transient hint. */
   lastIgnored: { reason: GateIgnoreReason; at: number } | null
+  /** Orchestrator-driven post-transcription state: intent check, then replying. Null when idle. */
+  processing: ProcessingState | null
   setActive: (active: boolean) => void
   setPhase: (phase: ContinuousPhase) => void
   setError: (error: string | null) => void
   setIgnored: (reason: GateIgnoreReason, at: number) => void
+  setProcessing: (p: ProcessingState | null) => void
   reset: () => void
 }
 
@@ -25,9 +30,11 @@ export const useContinuousVoiceStore = create<ContinuousVoiceState>((set) => ({
   phase: 'idle',
   error: null,
   lastIgnored: null,
+  processing: null,
   setActive: (active) => set({ active }),
   setPhase: (phase) => set({ phase }),
   setError: (error) => set({ error }),
   setIgnored: (reason, at) => set({ lastIgnored: { reason, at } }),
-  reset: () => set({ active: false, phase: 'idle', error: null, lastIgnored: null }),
+  setProcessing: (processing) => set({ processing }),
+  reset: () => set({ active: false, phase: 'idle', error: null, lastIgnored: null, processing: null }),
 }))

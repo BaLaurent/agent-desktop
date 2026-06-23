@@ -11,6 +11,11 @@ const PHASE_LABEL: Record<string, string> = {
   error: 'Error',
 }
 
+const PROCESSING_LABEL: Record<'classifying' | 'replying', string> = {
+  classifying: "Checking if you're talking to me…",
+  replying: '✓ Got it — replying…',
+}
+
 const IGNORE_LABEL: Record<string, string> = {
   'no-wakeword': 'Ignored — say the wake word first',
   'not-addressed': "Ignored — didn't sound like you were talking to me",
@@ -26,6 +31,7 @@ export function OverlayContinuousVoice({ conversationId }: { conversationId: num
   const phase = useContinuousVoiceStore((s) => s.phase)
   const error = useContinuousVoiceStore((s) => s.error)
   const lastIgnored = useContinuousVoiceStore((s) => s.lastIgnored)
+  const processing = useContinuousVoiceStore((s) => s.processing)
 
   const [lastResponse, setLastResponse] = useState('')
   const prevStreamingRef = useRef(false)
@@ -77,12 +83,16 @@ export function OverlayContinuousVoice({ conversationId }: { conversationId: num
         <span
           className="w-2.5 h-2.5 rounded-full"
           style={{
-            backgroundColor: phase === 'speaking' ? 'var(--color-primary, #6366f1)' : 'rgba(255,255,255,0.4)',
-            animation: phase === 'listening' ? 'pulse 1.5s ease-in-out infinite' : undefined,
+            backgroundColor:
+              processing === 'replying' || phase === 'speaking'
+                ? 'var(--color-primary, #6366f1)'
+                : 'rgba(255,255,255,0.4)',
+            animation:
+              processing === 'classifying' || phase === 'listening' ? 'pulse 1.5s ease-in-out infinite' : undefined,
           }}
         />
         <span className="text-sm" style={{ color: 'var(--color-text, #eee)' }}>
-          {error || PHASE_LABEL[phase] || 'Listening…'}
+          {error || (processing ? PROCESSING_LABEL[processing] : PHASE_LABEL[phase]) || 'Listening…'}
         </span>
       </div>
 
