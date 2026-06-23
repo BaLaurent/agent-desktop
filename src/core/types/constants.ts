@@ -12,6 +12,15 @@ export const BACKEND_DISPLAY_NAMES: Record<string, string> = {
   'pi': 'PI',
 }
 
+/**
+ * The assistant's effective display name: the user-set name, else the backend's
+ * default (Claude / PI), else 'Claude'. Single source of truth for both the
+ * renderer (useAgentDisplayName) and core (voice intent classifier).
+ */
+export function resolveAgentDisplayName(name?: string, backend?: string): string {
+  return name || BACKEND_DISPLAY_NAMES[backend ?? 'claude-agent-sdk'] || 'Claude'
+}
+
 // ─── Model Constants ─────────────────────────────────────────
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6'

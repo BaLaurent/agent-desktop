@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   shortenModelName,
+  resolveAgentDisplayName,
   DEFAULT_MODEL,
   HAIKU_MODEL,
   MODEL_OPTIONS,
@@ -49,5 +50,25 @@ describe('constants integrity', () => {
     for (const def of SETTING_DEFS) {
       expect(AI_OVERRIDE_KEYS).toContain(def.key)
     }
+  })
+})
+
+describe('resolveAgentDisplayName', () => {
+  it('returns the explicit name when set', () => {
+    expect(resolveAgentDisplayName('Clawd', 'pi')).toBe('Clawd')
+  })
+
+  it('falls back to the PI backend display name', () => {
+    expect(resolveAgentDisplayName('', 'pi')).toBe('PI')
+    expect(resolveAgentDisplayName(undefined, 'pi')).toBe('PI')
+  })
+
+  it('falls back to the Claude backend display name', () => {
+    expect(resolveAgentDisplayName('', 'claude-agent-sdk')).toBe('Claude')
+  })
+
+  it('defaults to Claude for unknown or missing backend', () => {
+    expect(resolveAgentDisplayName('', 'mystery')).toBe('Claude')
+    expect(resolveAgentDisplayName(undefined, undefined)).toBe('Claude')
   })
 })
