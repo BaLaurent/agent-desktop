@@ -3,6 +3,7 @@ import { initAdapter, SqlJsAdapter } from './sqljs-adapter'
 import { createTables } from './schema'
 import { runMigrations } from './migrations'
 import { seedDefaults } from './seed'
+import { seedGuideFoldersOnce } from '../services/guideFolders'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('database')
@@ -56,6 +57,15 @@ export async function initDatabase(dbPath: string, wasmPath?: string): Promise<v
     createTables(db as any)
     seedDefaults(db as any)
     log.error('Recreated after corruption', undefined, { backupPath })
+  }
+
+  // Seed one-shot des dossiers-guides. Défensif : ne JAMAIS bloquer le boot
+  // (la branche de récupération-corruption saute runMigrations → guide_type peut manquer ;
+  // mkdir peut échouer). Le bouton Paramètres reste le filet de secours.
+  try {
+    await seedGuideFoldersOnce(db as any)
+  } catch (err) {
+    log.error('seedGuideFoldersOnce échoué (non bloquant)', err as Error)
   }
 }
 
