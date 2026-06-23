@@ -266,6 +266,13 @@ export function ContinuousVoiceSettings() {
             hint="Half-duplex: avoids the assistant hearing its own text-to-speech (feedback loop). Recommended."
           />
 
+          <Toggle
+            checked={settings['continuousVoice_pauseDuringProcessing'] !== 'false'}
+            onChange={(v) => setSetting('continuousVoice_pauseDuringProcessing', v ? 'true' : 'false')}
+            label="Pause while processing your request"
+            hint="Stops listening from the moment a request is detected until the assistant finishes replying, so chained sentences don't pile up."
+          />
+
           {/* VAD advanced */}
           <div className="flex flex-col gap-2">
             <button
