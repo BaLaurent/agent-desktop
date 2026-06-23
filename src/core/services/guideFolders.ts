@@ -28,61 +28,61 @@ const GUIDE_SEEDS: GuideSeed[] = [
     guideType: 'macros',
     name: 'Macros',
     dir: getMacrosDir(),
-    guideMarkdown: `# Les macros
+    guideMarkdown: `# Macros
 
-Une **macro** est une séquence de messages que tu rejoues d'un coup en tapant \`/nom\` dans le chat.
+A **macro** is a sequence of messages you replay in one shot by typing \`/name\` in the chat.
 
-> 💡 **Le plus simple :** demande-moi directement de créer ou modifier une macro (« crée une macro qui… ») — j'écris le fichier moi-même. La suite explique le format si tu préfères le faire à la main.
+> 💡 **Easiest way:** just ask me to create or edit a macro ("create a macro that…") — I'll write the file myself. The rest explains the format if you'd rather do it by hand.
 
-Ce dossier pointe vers \`~/.agent-desktop/macros/\` (son répertoire de travail). Chaque macro est un fichier \`.json\` :
+This folder points to \`~/.agent-desktop/macros/\` (its working directory). Each macro is a \`.json\` file:
 
 \`\`\`json
 {
-  "description": "Lance la revue de code",
-  "messages": ["Analyse le diff courant", "Propose des correctifs"]
+  "description": "Run the code review",
+  "messages": ["Analyze the current diff", "Propose fixes"]
 }
 \`\`\`
 
-- Nom du fichier = nom de la commande (\`revue.json\` → \`/revue\`). Lettres, chiffres, \`-\`, \`_\`.
-- \`messages\` : tableau non vide, envoyé en rafale.
+- File name = command name (\`review.json\` → \`/review\`). Letters, digits, \`-\`, \`_\`.
+- \`messages\`: non-empty array, sent in a burst.
 
-Tu peux aussi gérer tes macros dans **Paramètres → Macros**. Ce dossier-guide est supprimable ; recrée-le depuis **Paramètres → Général**.`,
+You can also manage your macros in **Settings → Macros**. This guide folder is deletable; recreate it from **Settings → General**.`,
   },
   {
     guideType: 'functions',
-    name: 'Fonctions',
+    name: 'Functions',
     dir: getFunctionsDir(),
-    guideMarkdown: `# Les fonctions
+    guideMarkdown: `# Functions
 
-Une **fonction** est une variable dynamique que tu insères dans tes prompts : elle s'exécute et son résultat remplace l'appel.
+A **function** is a dynamic variable you insert into your prompts: it runs and its result replaces the call.
 
-> 💡 **Le plus simple :** demande-moi directement de créer ou modifier une fonction (« crée une fonction qui… ») — j'écris le fichier moi-même. La suite explique le format si tu préfères le faire à la main.
+> 💡 **Easiest way:** just ask me to create or edit a function ("create a function that…") — I'll write the file myself. The rest explains the format if you'd rather do it by hand.
 
-Ce dossier pointe vers \`~/.agent-desktop/functions/\`. Chaque fonction est un fichier \`.ts\` exportant une fonction par défaut :
+This folder points to \`~/.agent-desktop/functions/\`. Each function is a \`.ts\` file exporting a default function:
 
 \`\`\`ts
-/** Renvoie la date du jour */
+/** Returns today's date */
 export default async function () {
   return new Date().toISOString().slice(0, 10)
 }
 \`\`\`
 
-- Nom du fichier = nom de la variable.
-- Le \`.ts\` est transpilé et mis en cache automatiquement.
+- File name = variable name.
+- The \`.ts\` is transpiled and cached automatically.
 
-Ce dossier-guide est supprimable ; recrée-le depuis **Paramètres → Général**.`,
+This guide folder is deletable; recreate it from **Settings → General**.`,
   },
   {
     guideType: 'themes',
-    name: 'Thèmes',
+    name: 'Themes',
     dir: THEMES_DIR,
-    guideMarkdown: `# Les thèmes
+    guideMarkdown: `# Themes
 
-Un **thème** personnalise les couleurs de l'interface via des variables CSS.
+A **theme** customizes the interface colors via CSS variables.
 
-> 💡 **Le plus simple :** demande-moi directement de créer ou modifier un thème (« crée un thème sombre violet… ») — j'écris le fichier moi-même. La suite explique le format si tu préfères le faire à la main.
+> 💡 **Easiest way:** just ask me to create or edit a theme ("create a dark purple theme…") — I'll write the file myself. The rest explains the format if you'd rather do it by hand.
 
-Ce dossier pointe vers \`~/.agent-desktop/themes/\`. Chaque thème est un fichier \`.css\` qui redéfinit les variables :
+This folder points to \`~/.agent-desktop/themes/\`. Each theme is a \`.css\` file that redefines the variables:
 
 \`\`\`css
 :root {
@@ -92,10 +92,10 @@ Ce dossier pointe vers \`~/.agent-desktop/themes/\`. Chaque thème est un fichie
 }
 \`\`\`
 
-- Le fichier \`cheatsheet.md\` du répertoire liste toutes les variables disponibles.
-- Sélectionne ton thème dans **Paramètres → Apparence**.
+- The \`cheatsheet.md\` file in the directory lists all available variables.
+- Select your theme in **Settings → Appearance**.
 
-Ce dossier-guide est supprimable ; recrée-le depuis **Paramètres → Général**.`,
+This guide folder is deletable; recreate it from **Settings → General**.`,
   },
 ]
 
@@ -124,7 +124,7 @@ export async function seedGuideFolders(db: Database.Database): Promise<{ created
       const conv = db.prepare(
         `INSERT INTO conversations (title, folder_id, cwd, updated_at)
          VALUES (?, ?, ?, datetime('now'))`
-      ).run(`Guide : ${seed.name}`, folder.lastInsertRowid, seed.dir)
+      ).run(`Guide: ${seed.name}`, folder.lastInsertRowid, seed.dir)
       db.prepare(
         `INSERT INTO messages (conversation_id, role, content, created_at)
          VALUES (?, 'assistant', ?, datetime('now'))`
