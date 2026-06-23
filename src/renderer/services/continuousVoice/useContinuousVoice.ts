@@ -85,10 +85,15 @@ export function useContinuousVoice(opts: {
 
       engineRef.current = startContinuousVoiceEngine(stream, readEngineConfig(), {
         onUtterance: async (u) => {
+          store.getState().setProcessing('classifying')
+          if (readContinuousVoiceFlags().pauseDuringProcessing) engineRef.current?.suspend()
           const decision = await gate.evaluate(u)
           if (decision.action === 'send') {
+            store.getState().setProcessing('replying')
             onSendRef.current(decision.text)
           } else {
+            store.getState().setProcessing(null)
+            if (readContinuousVoiceFlags().pauseDuringProcessing) engineRef.current?.resume()
             store.getState().setIgnored(decision.reason, performance.now())
           }
         },
@@ -111,10 +116,12 @@ export function useContinuousVoice(opts: {
     }
   }, [conversationId, store, stop])
 
-  /** Call when an AI exchange finishes — opens the follow-up window. */
+  /** Call when an AI exchange finishes — opens the follow-up window, ends the processing state. */
   const notifyExchangeComplete = useCallback(() => {
     gateRef.current?.notifyExchangeComplete()
-  }, [])
+    store.getState().setProcessing(null)
+    if (readContinuousVoiceFlags().pauseDuringProcessing) engineRef.current?.resume()
+  }, [store])
 
   // Half-duplex: pause listening (and thus the hotword feed) while the assistant speaks.
   useEffect(() => {
