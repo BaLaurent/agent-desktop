@@ -164,6 +164,7 @@ function buildBasePrompt(
 
 /** Cascaded agent persona/language directives for a conversation. */
 export interface AgentDirectives {
+  name?: string
   personality?: string
   language?: string
 }
@@ -177,6 +178,7 @@ export function getAgentDirectives(db: SqlJsAdapter, conversationId: number): Ag
   const { folderId, aiOverridesRaw } = getConversationOverrideContext(db, conversationId)
   const convOv = parseConvOverrides(aiOverridesRaw)
   return {
+    name: cascadeStringKey(db, 'agent_name', convOv, folderId),
     personality: cascadeStringKey(db, 'agent_personality', convOv, folderId),
     language: cascadeStringKey(db, 'agent_language', convOv, folderId),
   }

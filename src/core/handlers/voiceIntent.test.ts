@@ -5,11 +5,13 @@ vi.mock('../services/summarization', () => ({ summarizeWithModel: vi.fn() }))
 vi.mock('../services/streaming', () => ({ injectApiKeyEnv: vi.fn(() => vi.fn()) }))
 vi.mock('../services/modelBackendMap', () => ({ mapModelToBackend: vi.fn((m: string) => m) }))
 vi.mock('../utils/db', () => ({ getSetting: vi.fn(() => '') }))
+vi.mock('./messages/knowledgeBase', () => ({ getAgentDirectives: vi.fn(() => ({ name: undefined })) }))
 
 import { registerVoiceIntentHandlers } from './voiceIntent'
 import { getAISettings } from './messages'
 import { summarizeWithModel } from '../services/summarization'
 import { getSetting } from '../utils/db'
+import { getAgentDirectives } from './messages/knowledgeBase'
 
 const aiSettings = {
   model: 'claude-sonnet-4-6',
@@ -82,5 +84,17 @@ describe('voice:classifyIntent', () => {
     ;(summarizeWithModel as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('no creds'))
     const handler = getHandler()
     await expect(handler(null, 1, 'hello')).rejects.toThrow('no creds')
+  })
+
+  it('substitutes {agent_name} with the resolved display name in the prompt', async () => {
+    ;(getAgentDirectives as ReturnType<typeof vi.fn>).mockReturnValue({ name: 'Clawd' })
+    ;(summarizeWithModel as ReturnType<typeof vi.fn>).mockResolvedValue('yes')
+    const handler = getHandler()
+    await handler(null, 1, 'turn the lights on')
+    const promptArg = (summarizeWithModel as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(promptArg).toContain('voice assistant named "Clawd"')
+    expect(promptArg).toContain('turn the lights on')
+    expect(promptArg).not.toContain('{agent_name}')
+    expect(promptArg).not.toContain('{utterance}')
   })
 })
