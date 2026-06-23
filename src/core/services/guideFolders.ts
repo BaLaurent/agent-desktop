@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { getMacrosDir } from '../handlers/commands'
 import { getFunctionsDir } from './variableResolver/customLoader'
-import { createLogger } from '../utils/logger'
+import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('guideFolders')
 
@@ -103,7 +103,7 @@ export async function seedGuideFolders(db: Database.Database): Promise<{ created
     try {
       await mkdir(seed.dir, { recursive: true })
     } catch (e) {
-      log.warn(`mkdir échoué pour ${seed.dir}, dossier-guide ${seed.guideType} sauté`, e as Error)
+      log.warn(`mkdir échoué pour ${seed.dir}, dossier-guide ${seed.guideType} sauté`, errToCtx(e))
       continue
     }
 
