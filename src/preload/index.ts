@@ -177,6 +177,9 @@ const api: AgentAPI = {
       withTimeout(ipcRenderer.invoke('macros:save', name, description, messages, oldName)),
     delete: (name: string) => withTimeout(ipcRenderer.invoke('macros:delete', name)),
   },
+  guides: {
+    reseed: () => withTimeout(ipcRenderer.invoke('guides:reseed')),
+  },
   quickChat: {
     getConversationId: (mode?: string) => withTimeout(ipcRenderer.invoke('quickChat:getConversationId', mode)),
     purge: () => withTimeout(ipcRenderer.invoke('quickChat:purge')),

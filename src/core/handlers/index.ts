@@ -16,6 +16,7 @@ import { registerMessagesHandlers } from './messages'
 import { registerFilesHandlers } from './files'
 import { registerThemesHandlers } from './themes'
 import { registerCommandsHandlers } from './commands'
+import { registerGuidesHandlers } from './guides'
 import { registerKnowledgeHandlers } from './knowledge'
 import { registerSchedulerHandlers } from './scheduler'
 import { registerTtsHandlers, speakResponse, stop as ttsStop } from './tts'
@@ -71,6 +72,7 @@ export function registerCoreHandlers(
   registerFilesHandlers(registrar, db, { sessionsBase: options.sessionsBase })
   registerThemesHandlers(registrar, options.themesDir)
   registerCommandsHandlers(registrar, db)
+  registerGuidesHandlers(registrar, db)
   registerKnowledgeHandlers(registrar, options.knowledgesDir)
   registerSchedulerHandlers(registrar, db)
   registerTtsHandlers(registrar, db)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useConversationsStore } from '../../stores/conversationsStore'
 import { NOTIFICATION_EVENTS, DEFAULT_NOTIFICATION_CONFIG } from '../../../shared/constants'
 import type { NotificationConfig, NotificationEvent } from '../../../shared/types'
 import { ChevronDownIcon } from '../icons/ChevronDownIcon'
@@ -53,7 +54,22 @@ function getNotifConfig(settings: Record<string, string>): NotificationConfig {
 
 export function GeneralSettings() {
   const { settings, loadSettings, setSetting } = useSettingsStore()
+  const loadFolders = useConversationsStore((s) => s.loadFolders)
   const [showNotifDetails, setShowNotifDetails] = useState(false)
+
+  const reseedGuides = async () => {
+    try {
+      const { created } = await window.agent.guides.reseed()
+      await loadFolders()
+      window.alert(
+        created > 0
+          ? `${created} dossier(s)-guide recréé(s).`
+          : 'Tous les dossiers-guides sont déjà présents.',
+      )
+    } catch (err) {
+      window.alert(`Erreur : ${(err as Error).message}`)
+    }
+  }
 
   useEffect(() => {
     loadSettings()
@@ -268,6 +284,19 @@ export function GeneralSettings() {
             <option value="asc">Ascending</option>
           </select>
         </div>
+      </SettingRow>
+
+      {/* Guide folders */}
+      <SettingRow
+        label="Dossiers-guides"
+        description="Recrée les dossiers Macros, Fonctions et Thèmes avec leur guide. Les dossiers déjà présents sont conservés."
+      >
+        <button
+          onClick={reseedGuides}
+          className="text-xs rounded px-2 py-1 border mobile:text-base mobile:py-2"
+        >
+          Recréer
+        </button>
       </SettingRow>
     </div>
   )
