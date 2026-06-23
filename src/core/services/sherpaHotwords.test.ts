@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tokenizeEntry, resolveScore } from './sherpaHotwords'
+import { tokenizeEntry, resolveScore, buildHotwords } from './sherpaHotwords'
 
 // Minimal piece set spelling "Zorglub" as ▁Z + or + gl + ub (mirrors the real tokens.txt).
 const PIECES = new Set<string>(['▁Z', 'or', 'gl', 'ub', '▁To', 'to', 'lu', 'b'])
@@ -41,5 +41,52 @@ describe('resolveScore', () => {
     expect(resolveScore('normal', '')).toBe(4.0)
     expect(resolveScore('normal', 'abc')).toBe(4.0)
     expect(resolveScore('normal', '-3')).toBe(4.0)
+  })
+})
+
+describe('buildHotwords', () => {
+  const pieces = new Set<string>(['▁Z', 'or', 'gl', 'ub'])
+
+  it('self-tokenizes when no bpe.vocab is present (fallback path)', () => {
+    const r = buildHotwords({
+      modelDir: '/models/parakeet',
+      fileNames: ['encoder.int8.onnx', 'tokens.txt'],
+      lexicon: ['Zorglub'],
+      pieces,
+    })
+    expect(r.content).toBe('▁Z or gl ub\n')
+    expect(r.modelingUnit).toBeUndefined()
+    expect(r.bpeVocabPath).toBeUndefined()
+    expect(r.skipped).toEqual([])
+  })
+
+  it('reports entries that cannot be tokenized', () => {
+    const r = buildHotwords({
+      modelDir: '/models/parakeet',
+      fileNames: ['tokens.txt'],
+      lexicon: ['Zorglub', 'Zx'],
+      pieces,
+    })
+    expect(r.content).toBe('▁Z or gl ub\n')
+    expect(r.skipped).toEqual(['Zx'])
+  })
+
+  it('uses the official path with plain text when a bpe.vocab is present', () => {
+    const r = buildHotwords({
+      modelDir: '/models/parakeet',
+      fileNames: ['encoder.int8.onnx', 'tokens.txt', 'bpe.vocab'],
+      lexicon: ['Zorglub', 'Toto'],
+      pieces,
+    })
+    expect(r.content).toBe('Zorglub\nToto\n')
+    expect(r.modelingUnit).toBe('cjkchar+bpe')
+    expect(r.bpeVocabPath).toBe('/models/parakeet/bpe.vocab')
+    expect(r.skipped).toEqual([])
+  })
+
+  it('returns empty content for an empty lexicon', () => {
+    const r = buildHotwords({ modelDir: '/m', fileNames: ['tokens.txt'], lexicon: [], pieces })
+    expect(r.content).toBe('')
+    expect(r.skipped).toEqual([])
   })
 })

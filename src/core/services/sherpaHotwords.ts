@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises'
+import * as path from 'path'
 
 /** SentencePiece word-boundary marker (U+2581). */
 const WORD_START = '▁'
@@ -51,4 +52,45 @@ export function resolveScore(sensitivity: string, override: string): number {
   const o = Number(override)
   if (override.trim() !== '' && Number.isFinite(o) && o > 0) return o
   return SENSITIVITY_SCORES[sensitivity] ?? SENSITIVITY_SCORES.normal
+}
+
+export interface HotwordsBuild {
+  content: string
+  modelingUnit?: string
+  bpeVocabPath?: string
+  skipped: string[]
+}
+
+/**
+ * Build the hotwords file body for a model folder. Hybrid strategy:
+ * - if a dedicated bpe.vocab is present → official path: plain-text entries + modeling unit.
+ * - otherwise → fallback: self-tokenize each entry against tokens.txt pieces.
+ */
+export function buildHotwords(args: {
+  modelDir: string
+  fileNames: string[]
+  lexicon: string[]
+  pieces: Set<string>
+}): HotwordsBuild {
+  const { modelDir, fileNames, lexicon, pieces } = args
+  const entries = lexicon.map((s) => s.trim()).filter(Boolean)
+
+  const bpeVocab = fileNames.find((f) => f === 'bpe.vocab' || /\.bpe\.vocab$/i.test(f))
+  if (bpeVocab) {
+    return {
+      content: entries.length ? entries.join('\n') + '\n' : '',
+      modelingUnit: 'cjkchar+bpe',
+      bpeVocabPath: path.join(modelDir, bpeVocab),
+      skipped: [],
+    }
+  }
+
+  const lines: string[] = []
+  const skipped: string[] = []
+  for (const entry of entries) {
+    const tok = tokenizeEntry(entry, pieces)
+    if (tok) lines.push(tok)
+    else skipped.push(entry)
+  }
+  return { content: lines.length ? lines.join('\n') + '\n' : '', skipped }
 }
