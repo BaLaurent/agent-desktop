@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
-import { detectArchitecture, validateConfig, parseWavPcm16, buildRecognizerConfig } from './sherpaStt'
+import { detectArchitecture, validateConfig, parseWavPcm16, buildRecognizerConfig, recognizerCacheKey } from './sherpaStt'
 
 function makeWav(samples: number[], sampleRate = 16000): Buffer {
   const dataLen = samples.length * 2
@@ -159,5 +159,22 @@ describe('buildRecognizerConfig', () => {
     }) as any
     expect(cfg.modelConfig.modelingUnit).toBe('cjkchar+bpe')
     expect(cfg.modelConfig.bpeVocab).toBe('/m/bpe.vocab')
+  })
+})
+
+describe('recognizerCacheKey', () => {
+  it('returns modelPath + "|" when hot is null', () => {
+    expect(recognizerCacheKey('/m', null)).toBe('/m|')
+  })
+
+  it('produces different keys for the same score+file but different signature (lexicon content)', () => {
+    const a = { file: '/m/.agent-hotwords.txt', score: 4.0, signature: '4:▁hello\n' }
+    const b = { file: '/m/.agent-hotwords.txt', score: 4.0, signature: '4:▁hello ▁world\n' }
+    expect(recognizerCacheKey('/m', a)).not.toBe(recognizerCacheKey('/m', b))
+  })
+
+  it('produces identical keys for identical inputs', () => {
+    const hot = { file: '/m/.agent-hotwords.txt', score: 4.0, signature: '4:▁hello\n' }
+    expect(recognizerCacheKey('/m', hot)).toBe(recognizerCacheKey('/m', hot))
   })
 })

@@ -105,8 +105,15 @@ export function resetRecognizerCache(): void {
 export interface RecognizerHotwords {
   file: string
   score: number
+  /** Encodes the built hotwords content + score; changes whenever the lexicon does. */
+  signature: string
   modelingUnit?: string
   bpeVocabPath?: string
+}
+
+/** Cache key for the recognizer: model path + hotwords signature (lexicon-content-sensitive). */
+export function recognizerCacheKey(modelPath: string, hot: RecognizerHotwords | null): string {
+  return modelPath + '|' + (hot ? hot.signature : '')
 }
 
 /** Assemble the OfflineRecognizer config. Pure: no addon, no I/O — safe to unit test. */
@@ -168,7 +175,7 @@ function getRecognizer(
   d: SherpaDetection,
   hot: RecognizerHotwords | null,
 ): unknown {
-  const key = modelPath + '|' + (hot ? `${hot.score}:${hot.file}` : '')
+  const key = recognizerCacheKey(modelPath, hot)
   if (cached && cached.key === key) return cached.recognizer
   // Native API: OfflineRecognizer is a class (no createOfflineRecognizer factory).
   const recognizer = new sherpa.OfflineRecognizer(buildRecognizerConfig(modelPath, d, hot))
@@ -229,7 +236,9 @@ export async function transcribe(db: Database.Database, wavBuffer: Buffer): Prom
         getSetting(db, 'sherpa_hotwordsSensitivity') || 'normal',
         getSetting(db, 'sherpa_hotwordsScoreOverride') || '',
       )
-      hot = { file, score, modelingUnit: built.modelingUnit, bpeVocabPath: built.bpeVocabPath }
+      // signature encodes the tokenized lexicon content + score so any lexicon edit busts the cache.
+      const signature = `${score}:${built.content}`
+      hot = { file, score, signature, modelingUnit: built.modelingUnit, bpeVocabPath: built.bpeVocabPath }
     }
   }
 
