@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { SherpaSettings } from './SherpaSettings'
 import { ContinuousVoiceSettings } from './ContinuousVoiceSettings'
+import { LexiconSettings } from './LexiconSettings'
 
 interface ValidationResult {
   binaryFound: boolean
@@ -122,6 +123,15 @@ export function VoiceInputSettings() {
 
   const sttBackend = settings.stt_backend === 'sherpa' ? 'sherpa' : 'whisper'
 
+  const lexiconWords = (() => {
+    try {
+      const v = JSON.parse(settings.stt_lexicon || '[]')
+      return Array.isArray(v) ? v.filter((e: unknown): e is string => typeof e === 'string') : []
+    } catch {
+      return []
+    }
+  })()
+
   // Sync from store when settings load
   useEffect(() => {
     setBinaryPath(settings.whisper_binaryPath || 'whisper-cli')
@@ -225,6 +235,9 @@ export function VoiceInputSettings() {
           Whisper runs an external binary; Sherpa runs ONNX models natively via the sherpa-onnx addon (no external binary required).
         </span>
       </div>
+
+      {/* Engine-agnostic custom-word lexicon */}
+      <LexiconSettings />
 
       {sttBackend === 'sherpa' && <SherpaSettings />}
 
@@ -412,6 +425,16 @@ export function VoiceInputSettings() {
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                   Helps with domain-specific vocabulary and context
                 </span>
+                <button
+                  type="button"
+                  onClick={() => updateParam('prompt', lexiconWords.join(', '))}
+                  disabled={lexiconWords.length === 0}
+                  className="self-start px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-deep)', color: 'var(--color-text)' }}
+                  aria-label="Apply lexicon to prompt"
+                >
+                  Apply lexicon to prompt
+                </button>
               </div>
             </div>
 

@@ -17,6 +17,8 @@ type SourceMode = 'preset' | 'manual'
 export function SherpaSettings() {
   const { settings, setSetting } = useSettingsStore()
   const modelPath = settings.sherpa_modelPath || ''
+  const sensitivity = settings.sherpa_hotwordsSensitivity || 'normal'
+  const scoreOverride = settings.sherpa_hotwordsScoreOverride || ''
   const [mode, setMode] = useState<SourceMode>('preset')
   const [downloading, setDownloading] = useState(false)
   const [progress, setProgress] = useState<{ index: number; total: number; file: string } | null>(null)
@@ -225,6 +227,53 @@ export function SherpaSettings() {
           {error}
         </span>
       )}
+
+      {/* Hotwords boost strength (custom-word lexicon → contextual biasing) */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          Lexicon boost strength
+        </label>
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          How strongly lexicon words are favored. Too strong makes them appear when not spoken.
+        </span>
+        <div className="flex gap-2">
+          {(['soft', 'normal', 'strong'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSetting('sherpa_hotwordsSensitivity', s)}
+              aria-pressed={sensitivity === s}
+              className="px-3 py-2 rounded text-sm font-medium transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: sensitivity === s ? 'var(--color-primary)' : 'var(--color-deep)',
+                color: sensitivity === s ? 'var(--color-base)' : 'var(--color-text)',
+              }}
+            >
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+        <details>
+          <summary className="text-xs cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
+            Advanced: custom score
+          </summary>
+          <div className="flex flex-col gap-1 mt-2">
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={scoreOverride}
+              onChange={(e) => setSetting('sherpa_hotwordsScoreOverride', e.target.value)}
+              placeholder="(use preset)"
+              className="w-32 px-3 py-1.5 rounded text-sm outline-none"
+              style={inputStyle}
+              aria-label="Custom hotwords score"
+            />
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Overrides the preset above. Leave empty to use the slider. Typical range 1.5–6.
+            </span>
+          </div>
+        </details>
+      </div>
     </div>
   )
 }

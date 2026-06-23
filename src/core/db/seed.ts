@@ -58,6 +58,12 @@ function seedSettings(db: Database.Database): void {
     ['whisper_autoSend', 'false'],
     // Sherpa-onnx model folder (native addon STT). '' = unset.
     ['sherpa_modelPath', ''],
+    // Custom-word lexicon (shared across STT engines). JSON string[]. '[]' = empty.
+    ['stt_lexicon', '[]'],
+    // Sherpa hotwords boost strength: 'soft' | 'normal' | 'strong'.
+    ['sherpa_hotwordsSensitivity', 'normal'],
+    // Advanced override for the raw hotwords-score. '' = use the sensitivity preset.
+    ['sherpa_hotwordsScoreOverride', ''],
     // STT engine selection: 'whisper' (whisper.cpp, default) | 'sherpa' (sherpa-onnx native addon)
     ['stt_backend', 'whisper'],
     ['openscad_binaryPath', 'openscad'],

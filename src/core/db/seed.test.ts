@@ -54,4 +54,13 @@ describe('seedDefaults', () => {
     const shortcuts = db.prepare('SELECT * FROM keyboard_shortcuts').all()
     expect(shortcuts).toHaveLength(13)
   })
+
+  it('seeds the STT lexicon defaults', () => {
+    const settings = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[]
+    const map = Object.fromEntries(settings.map((s) => [s.key, s.value]))
+
+    expect(map.stt_lexicon).toBe('[]')
+    expect(map.sherpa_hotwordsSensitivity).toBe('normal')
+    expect(map.sherpa_hotwordsScoreOverride).toBe('')
+  })
 })
