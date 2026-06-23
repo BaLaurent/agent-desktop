@@ -77,6 +77,20 @@ describe('useContinuousVoice processing + suspension', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it('gate.evaluate throwing fails closed: clears processing, resumes, marks classify-error', async () => {
+    h.gate.evaluate.mockRejectedValue(new Error('boom'))
+    const { onSend } = await startHook()
+
+    await act(async () => {
+      await h.cb!.onUtterance({ text: 'whatever', startedAt: 0, endedAt: 1 })
+    })
+    expect(useContinuousVoiceStore.getState().processing).toBeNull()
+    expect(h.engine.suspend).toHaveBeenCalledTimes(1)
+    expect(h.engine.resume).toHaveBeenCalledTimes(1)
+    expect(useContinuousVoiceStore.getState().lastIgnored?.reason).toBe('classify-error')
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
   it('toggle off: still sets processing for feedback but never suspends/resumes', async () => {
     h.flags.pauseDuringProcessing = false
     h.gate.evaluate.mockResolvedValue({ action: 'send', text: 'hi' })
