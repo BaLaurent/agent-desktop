@@ -36,3 +36,7 @@ coverage/
 # Vidéos de présentation HyperFrames (livrables hors-repo, régénérables via music.py + npx hyperframes)
 presentation-video/
 presentation-video-en/
+
+#Icons
+robot_icon_512.png
+icon.drawkov
