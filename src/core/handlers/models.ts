@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as os from 'os'
 import type { HandleRegistrar } from '../dispatch'
 import { MODEL_OPTIONS, shortenModelName } from '../types/constants'
-import { discoverPIModels } from '../services/pi/modelRegistry'
+import { discoverOmpModels } from '../services/pi/ompModels'
 import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('models')
@@ -103,7 +103,7 @@ export function _resetModelsCache(): void {
 }
 
 async function loadModelsForBackend(backend?: string, forceRefresh = false): Promise<ModelOption[]> {
-  if (backend === 'pi') return discoverPIModels()
+  if (backend === 'pi') return discoverOmpModels()
   return loadModels(forceRefresh)
 }
 

@@ -13,8 +13,8 @@ vi.mock('../../core/services/anthropic', () => ({
   loadAgentSDK: vi.fn(),
 }))
 
-vi.mock('../../core/services/streamingPI', () => ({
-  streamMessagePI: vi.fn(),
+vi.mock('../../core/services/streamingOmp', () => ({
+  streamMessageOmp: vi.fn(),
 }))
 
 vi.mock('./schedulerBridge', () => ({

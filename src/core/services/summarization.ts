@@ -1,4 +1,5 @@
 import { loadAgentSDK } from './anthropic'
+import { runOmpOneShot } from './pi/ompOneShot'
 
 export interface SummarizeOptions {
   /** Working directory passed to the underlying SDK. */
@@ -76,38 +77,8 @@ async function summarizeClaude(prompt: string, model: string, _opts: SummarizeOp
   return text
 }
 
-async function summarizePI(prompt: string, _model: string, opts: SummarizeOptions): Promise<string> {
-  // Dynamic import — the PI SDK loader lives under src/core/services/pi and we
-  // avoid loading it in renderer/test contexts that don't need the PI subprocess machinery.
-  const { loadPISdk } = await import('./pi/sdkLoader')
-  const { createPIModelContext, resolvePIModel } = await import('./pi/modelRegistry')
-  const pi = await loadPISdk()
-  const { authStorage, modelRegistry } = await createPIModelContext()
-  const model = await resolvePIModel(_model)
-
-  const { session } = await pi.createAgentSession({
-    cwd: opts.cwd,
-    model,
-    authStorage,
-    modelRegistry,
-    sessionManager: pi.SessionManager.inMemory(),
-    tools: [],
-    customTools: [],
-  })
-
-  let text = ''
-  const unsubscribe = session.subscribe((event: unknown) => {
-    const e = event as { type?: string; assistantMessageEvent?: { type?: string; delta?: string } }
-    if (e.type === 'message_update' && e.assistantMessageEvent?.type === 'text_delta' && e.assistantMessageEvent.delta) {
-      text += e.assistantMessageEvent.delta
-    }
-  })
-
-  try {
-    await session.prompt(prompt)
-  } finally {
-    try { unsubscribe() } catch { /* ignore */ }
-    try { session.dispose() } catch { /* ignore */ }
-  }
-  return text.trim()
+async function summarizePI(prompt: string, model: string, opts: SummarizeOptions): Promise<string> {
+  // Non-Claude models run through the omp RPC subprocess (Oh My Pi). One-shot:
+  // no tools, no session, auto-approve. omp owns auth/model resolution itself.
+  return runOmpOneShot(prompt, { cwd: opts.cwd, model })
 }

@@ -70,6 +70,7 @@ cat > "$DIST/package.json" << PKGJSON
     "@anthropic-ai/claude-agent-sdk": "^0.2.37"
   },
   "optionalDependencies": {
+    "sherpa-onnx-node": "^1.13.2",
     "bufferutil": "^4.0.8",
     "utf-8-validate": "^6.0.3"
   },

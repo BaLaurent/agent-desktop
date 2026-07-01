@@ -4,9 +4,9 @@ import { DispatchRegistry } from '../dispatch'
 import { registerModelsHandlers, _resetModelsCache } from './models'
 import { MODEL_OPTIONS } from '../types/constants'
 
-const mockDiscoverPIModels = vi.fn()
-vi.mock('../services/pi/modelRegistry', () => ({
-  discoverPIModels: (...args: unknown[]) => mockDiscoverPIModels(...args),
+const mockDiscoverOmpModels = vi.fn()
+vi.mock('../services/pi/ompModels', () => ({
+  discoverOmpModels: (...args: unknown[]) => mockDiscoverOmpModels(...args),
 }))
 
 describe('models handlers', () => {
@@ -33,7 +33,7 @@ describe('models handlers', () => {
   })
 
   it('returns PI models when backend is pi', async () => {
-    mockDiscoverPIModels.mockResolvedValueOnce([
+    mockDiscoverOmpModels.mockResolvedValueOnce([
       { value: 'openai/gpt-4o', label: 'GPT-4o' },
     ])
 
@@ -41,7 +41,7 @@ describe('models handlers', () => {
     const result = (await list('pi')) as { value: string; label: string }[]
 
     expect(result).toEqual([{ value: 'openai/gpt-4o', label: 'GPT-4o' }])
-    expect(mockDiscoverPIModels).toHaveBeenCalledOnce()
+    expect(mockDiscoverOmpModels).toHaveBeenCalledOnce()
   })
 
   it('returns static fallback when no credentials file', async () => {
@@ -136,7 +136,7 @@ describe('models handlers', () => {
   })
 
   it('models:refresh uses PI discovery when backend is pi', async () => {
-    mockDiscoverPIModels.mockResolvedValueOnce([
+    mockDiscoverOmpModels.mockResolvedValueOnce([
       { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
     ])
 

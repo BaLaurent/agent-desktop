@@ -97,10 +97,10 @@ vi.mock('../core/services/streaming', () => ({
   setPIBackend: vi.fn(),
 }))
 
-// taskRunner now wires the PI backend after loading the SDK. Stub the import
-// so the test doesn't pull pi-coding-agent into the module graph.
-vi.mock('../core/services/streamingPI', () => ({
-  streamMessagePI: vi.fn(),
+// taskRunner now wires the omp backend after loading the SDK. Stub the import
+// so the test doesn't pull the omp RPC orchestrator into the module graph.
+vi.mock('../core/services/streamingOmp', () => ({
+  streamMessageOmp: vi.fn(),
 }))
 
 // child_process.spawn is used by headlessNotify; stub to avoid touching `notify-send`.

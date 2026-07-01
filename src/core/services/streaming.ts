@@ -67,19 +67,6 @@ let _streamMessagePI: StreamMessagePIFn | null = null
 /** Inject PI backend streaming implementation. */
 export function setPIBackend(fn: StreamMessagePIFn): void { _streamMessagePI = fn }
 
-// ─── PI UI window provider injection ─────────────────
-// streamingPI binds an Electron BrowserWindow to PiUIContext so extensions can
-// send IPC events to the renderer. Headless wires this to a no-op.
-type PIUIWindowLike = {
-  webContents: { send: (channel: string, data: unknown) => void }
-  isDestroyed: () => boolean
-}
-type PIUIWindowProviderFn = () => PIUIWindowLike | null
-let _piUIWindowProvider: PIUIWindowProviderFn | null = null
-/** Inject the PI UI window provider. Called by the adapter (Electron sets it to getMainWindow). */
-export function setPIUIWindowProvider(fn: PIUIWindowProviderFn): void { _piUIWindowProvider = fn }
-export function getPIUIWindowProvider(): PIUIWindowProviderFn | null { return _piUIWindowProvider }
-
 // ─── PI scheduler bridge injection ───────────────────
 // streamingPI exposes a custom `agent_scheduler` PI tool when a scheduler bridge
 // socket is available. Electron registers the in-process scheduler bridge here;
@@ -98,19 +85,6 @@ let _ensureFreshMacOSToken: EnsureFreshTokenFn | null = null
 
 /** Inject macOS OAuth token refresh function. */
 export function setEnsureFreshToken(fn: EnsureFreshTokenFn): void { _ensureFreshMacOSToken = fn }
-
-// ─── Conversation overrides writer injection ─────────
-// Used by the PI parity extension (permission-modes' exit_plan_mode)
-// to persist mode changes back to the conversation's ai_overrides.
-// Implemented by the adapter (main) which has the db handle.
-type UpdateConversationOverridesFn = (conversationId: number, patch: Record<string, string>) => void
-let _updateConversationOverrides: UpdateConversationOverridesFn | null = null
-export function setConversationOverridesWriter(fn: UpdateConversationOverridesFn): void {
-  _updateConversationOverrides = fn
-}
-export function getConversationOverridesWriter(): UpdateConversationOverridesFn | null {
-  return _updateConversationOverrides
-}
 
 // Per-conversation abort controllers: Map<conversationId, AbortController>
 // Allows aborting a specific stream without affecting others

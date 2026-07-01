@@ -6,22 +6,9 @@ vi.mock('./anthropic', () => ({
   loadAgentSDK: async () => ({ query: claudeQueryMock }),
 }))
 
-const piSessionPromptMock = vi.fn()
-const piSubscribeMock = vi.fn()
-const piDisposeMock = vi.fn()
-const piCreateSessionMock = vi.fn()
-const mockResolvePIModel = vi.fn()
-const mockCreatePIModelContext = vi.fn()
-vi.mock('./pi/sdkLoader', () => ({
-  loadPISdk: async () => ({
-    createAgentSession: piCreateSessionMock,
-    SessionManager: { inMemory: () => ({}) },
-    codingTools: [],
-  }),
-}))
-vi.mock('./pi/modelRegistry', () => ({
-  resolvePIModel: (...args: unknown[]) => mockResolvePIModel(...args),
-  createPIModelContext: (...args: unknown[]) => mockCreatePIModelContext(...args),
+const mockRunOmpOneShot = vi.fn()
+vi.mock('./pi/ompOneShot', () => ({
+  runOmpOneShot: (...args: unknown[]) => mockRunOmpOneShot(...args),
 }))
 
 import { summarizeWithModel, isClaudeModel } from './summarization'
@@ -43,7 +30,7 @@ describe('isClaudeModel', () => {
 describe('summarizeWithModel — Claude path', () => {
   beforeEach(() => {
     claudeQueryMock.mockReset()
-    piCreateSessionMock.mockReset()
+    mockRunOmpOneShot.mockReset()
   })
 
   it('routes Claude model to sdk.query and returns assistant text', async () => {
@@ -55,7 +42,7 @@ describe('summarizeWithModel — Claude path', () => {
 
     const result = await summarizeWithModel('summarize this', 'claude-haiku-4-5-20251001', { cwd: '/tmp' })
     expect(result).toBe('a summary')
-    expect(piCreateSessionMock).not.toHaveBeenCalled()
+    expect(mockRunOmpOneShot).not.toHaveBeenCalled()
     expect(claudeQueryMock).toHaveBeenCalledWith(expect.objectContaining({
       options: expect.objectContaining({
         model: 'claude-haiku-4-5-20251001',
@@ -69,11 +56,7 @@ describe('summarizeWithModel — Claude path', () => {
 describe('summarizeWithModel — backend override', () => {
   beforeEach(() => {
     claudeQueryMock.mockReset()
-    piCreateSessionMock.mockReset()
-    mockResolvePIModel.mockReset()
-    mockResolvePIModel.mockResolvedValue({ provider: 'openai', id: 'qwen2.5' })
-    mockCreatePIModelContext.mockReset()
-    mockCreatePIModelContext.mockResolvedValue({ authStorage: {}, modelRegistry: {} })
+    mockRunOmpOneShot.mockReset()
   })
 
   it("backend:'claude' forces the Claude path for a non-claude model id", async () => {
@@ -84,81 +67,40 @@ describe('summarizeWithModel — backend override', () => {
 
     const result = await summarizeWithModel('classify', 'qwen2.5', { cwd: '/tmp', backend: 'claude' })
     expect(result).toBe('yes')
-    expect(piCreateSessionMock).not.toHaveBeenCalled()
+    expect(mockRunOmpOneShot).not.toHaveBeenCalled()
     expect(claudeQueryMock).toHaveBeenCalledWith(expect.objectContaining({
       options: expect.objectContaining({ model: 'qwen2.5' }),
     }))
   })
 
   it("backend:'pi' forces the PI path for a claude-* model id", async () => {
-    piSubscribeMock.mockReturnValue(() => {})
-    piSessionPromptMock.mockResolvedValue(undefined)
-    piCreateSessionMock.mockResolvedValueOnce({
-      session: { subscribe: piSubscribeMock, prompt: piSessionPromptMock, dispose: piDisposeMock },
-    })
+    mockRunOmpOneShot.mockResolvedValueOnce('chat summary')
 
-    await summarizeWithModel('classify', 'claude-haiku-4-5', { cwd: '/tmp', backend: 'pi' })
+    const result = await summarizeWithModel('classify', 'claude-haiku-4-5', { cwd: '/tmp', backend: 'pi' })
+    expect(result).toBe('chat summary')
     expect(claudeQueryMock).not.toHaveBeenCalled()
-    expect(piCreateSessionMock).toHaveBeenCalledOnce()
+    expect(mockRunOmpOneShot).toHaveBeenCalledWith('classify', { cwd: '/tmp', model: 'claude-haiku-4-5' })
   })
 })
 
 describe('summarizeWithModel — PI path', () => {
   beforeEach(() => {
     claudeQueryMock.mockReset()
-    piCreateSessionMock.mockReset()
-    piSessionPromptMock.mockReset()
-    piSubscribeMock.mockReset()
-    piDisposeMock.mockReset()
-    mockResolvePIModel.mockReset()
-    mockResolvePIModel.mockResolvedValue({ provider: 'openai', id: 'gpt-4o-mini' })
-    mockCreatePIModelContext.mockReset()
-    mockCreatePIModelContext.mockResolvedValue({
-      authStorage: { type: 'auth' },
-      modelRegistry: { type: 'registry' },
-    })
+    mockRunOmpOneShot.mockReset()
   })
 
-  it('routes non-Claude model to pi.createAgentSession and collects text_delta events', async () => {
-    let capturedHandler: ((event: unknown) => void) | null = null
-    piSubscribeMock.mockImplementation((handler: (event: unknown) => void) => {
-      capturedHandler = handler
-      return () => {}
-    })
-    piSessionPromptMock.mockImplementation(async () => {
-      capturedHandler?.({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'chat ' } })
-      capturedHandler?.({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'summary' } })
-    })
-    piCreateSessionMock.mockResolvedValueOnce({
-      session: {
-        subscribe: piSubscribeMock,
-        prompt: piSessionPromptMock,
-        dispose: piDisposeMock,
-      },
-    })
+  it('routes non-Claude model to runOmpOneShot and returns its resolved text', async () => {
+    mockRunOmpOneShot.mockResolvedValueOnce('chat summary')
 
     const result = await summarizeWithModel('summarize', 'gpt-4o-mini', { cwd: '/tmp' })
     expect(result).toBe('chat summary')
     expect(claudeQueryMock).not.toHaveBeenCalled()
-    expect(piDisposeMock).toHaveBeenCalledOnce()
-    expect(mockResolvePIModel).toHaveBeenCalledWith('gpt-4o-mini')
-    expect(piCreateSessionMock).toHaveBeenCalledWith(expect.objectContaining({
-      model: { provider: 'openai', id: 'gpt-4o-mini' },
-    }))
+    expect(mockRunOmpOneShot).toHaveBeenCalledWith('summarize', { cwd: '/tmp', model: 'gpt-4o-mini' })
   })
 
-  it('disposes the PI session even if prompt throws', async () => {
-    piSubscribeMock.mockReturnValue(() => {})
-    piSessionPromptMock.mockRejectedValueOnce(new Error('network'))
-    piCreateSessionMock.mockResolvedValueOnce({
-      session: {
-        subscribe: piSubscribeMock,
-        prompt: piSessionPromptMock,
-        dispose: piDisposeMock,
-      },
-    })
+  it('propagates a rejection from runOmpOneShot', async () => {
+    mockRunOmpOneShot.mockRejectedValueOnce(new Error('network'))
 
     await expect(summarizeWithModel('x', 'gpt-4o-mini', { cwd: '/tmp' })).rejects.toThrow('network')
-    expect(piDisposeMock).toHaveBeenCalledOnce()
   })
 })

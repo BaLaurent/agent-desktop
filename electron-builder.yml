@@ -29,7 +29,6 @@ files:
       - magic-bytes.js/**
       - tslib/**
       - undici/**
-      - "@mariozechner/**"
       # Native STT addon (sherpa-onnx-node) + its per-platform prebuilt binaries.
       # esbuild can't inline a native .node, so these must ship unbundled. Only the
       # prebuild matching the target arch/os is present in node_modules at build time

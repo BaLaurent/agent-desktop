@@ -16,9 +16,9 @@ vi.mock('../../core/services/anthropic', () => ({
   }),
 }))
 
-const mockStreamMessagePI = vi.fn()
-vi.mock('../../core/services/streamingPI', () => ({
-  streamMessagePI: (...args: unknown[]) => mockStreamMessagePI(...args),
+const mockStreamMessageOmp = vi.fn()
+vi.mock('../../core/services/streamingOmp', () => ({
+  streamMessageOmp: (...args: unknown[]) => mockStreamMessageOmp(...args),
 }))
 
 // Mock scheduler bridge for PI backend
@@ -1158,16 +1158,16 @@ describe('notifyConversationUpdated', () => {
   })
 })
 
-describe('streamMessage — PI backend delegation', () => {
+describe('streamMessage — Omp backend delegation', () => {
   beforeEach(() => {
     mockSendFn.mockClear()
     mockQueryFn.mockClear()
-    mockStreamMessagePI.mockClear()
+    mockStreamMessageOmp.mockClear()
   })
 
-  it('delegates to streamMessagePI when sdkBackend is pi', async () => {
+  it('delegates to streamMessageOmp when sdkBackend is pi', async () => {
     const piResult = { content: 'PI response', toolCalls: [], aborted: false, sessionId: null }
-    mockStreamMessagePI.mockResolvedValue(piResult)
+    mockStreamMessageOmp.mockResolvedValue(piResult)
 
     const result = await streamMessage(
       [{ role: 'user', content: 'test' }],
@@ -1178,8 +1178,8 @@ describe('streamMessage — PI backend delegation', () => {
       false
     )
 
-    expect(mockStreamMessagePI).toHaveBeenCalledTimes(1)
-    expect(mockStreamMessagePI).toHaveBeenCalledWith(
+    expect(mockStreamMessageOmp).toHaveBeenCalledTimes(1)
+    expect(mockStreamMessageOmp).toHaveBeenCalledWith(
       [{ role: 'user', content: 'test' }],
       'system',
       { sdkBackend: 'pi', cwd: '/tmp/test' },
@@ -1206,7 +1206,7 @@ describe('streamMessage — PI backend delegation', () => {
       false
     )
 
-    expect(mockStreamMessagePI).not.toHaveBeenCalled()
+    expect(mockStreamMessageOmp).not.toHaveBeenCalled()
     expect(mockQueryFn).toHaveBeenCalled()
   })
 
@@ -1226,7 +1226,7 @@ describe('streamMessage — PI backend delegation', () => {
       false
     )
 
-    expect(mockStreamMessagePI).not.toHaveBeenCalled()
+    expect(mockStreamMessageOmp).not.toHaveBeenCalled()
     expect(mockQueryFn).toHaveBeenCalled()
   })
 })
