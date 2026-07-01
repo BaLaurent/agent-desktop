@@ -12,6 +12,7 @@ import {
   scanMacrosDir,
   loadMacro,
 } from '../../core/handlers/commands'
+import { discoverOmpCommandsCached } from '../../core/services/pi/ompCommands'
 import { getSetting } from '../utils/db'
 
 export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
@@ -20,6 +21,26 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
 
     for (const cmd of BUILTIN_COMMANDS) {
       results.set(cmd.name, cmd as SlashCommand)
+    }
+
+    // Oh My Pi backend: expose omp's native command enumeration (superset of the
+    // manual claude scan below) plus app-level builtins + macros. See the core
+    // handler for the same branch.
+    if (getSetting(db, 'ai_sdkBackend') === 'pi') {
+      let safeCwd: string | null = null
+      if (typeof cwd === 'string') {
+        try { safeCwd = validatePathSafe(cwd) } catch { safeCwd = null }
+      }
+      const model = getSetting(db, 'ai_model') || undefined
+      const ompCmds = await discoverOmpCommandsCached({ cwd: safeCwd ?? process.cwd(), model })
+      for (const cmd of ompCmds) {
+        results.set(cmd.name, { name: cmd.name, description: cmd.description, source: cmd.source })
+      }
+      const piMacros = await scanMacrosDir()
+      for (const macro of piMacros) {
+        results.set(macro.name, macro as SlashCommand)
+      }
+      return Array.from(results.values())
     }
 
     const claudeDir = expandTilde('~/.claude')

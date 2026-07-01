@@ -32,6 +32,9 @@ import { buildOmpHostTools } from './pi/buildOmpHostTools'
 import { createOmpSchedulerTool } from './pi/ompSchedulerTool'
 import { subscribeOmpEvents, type EventAccumulator } from './pi/subscribeOmpEvents'
 import { attachOmpApprovalBridge } from './pi/ompApprovalBridge'
+import { cancelPendingPIUI } from './pi/piUIChannel'
+import { parseSessionStats, parseContextUsage } from './pi/ompSessionStats'
+import type { OmpSessionStats, OmpContextUsage } from './pi/ompSessionStats'
 import { createLogger, errToCtx } from '../utils/logger'
 
 const log = createLogger('streamingOmp')
@@ -80,6 +83,10 @@ function extractSessionFile(data: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null
+}
+
 function tryGetDatabase(): SqlJsAdapter | null {
   try {
     return getDatabase()
@@ -87,6 +94,41 @@ function tryGetDatabase(): SqlJsAdapter | null {
     // DB not yet initialised (headless startup races, tests) — degrade to no persistence.
     return null
   }
+}
+
+/**
+ * Persist omp's session stats + context usage into the SAME conversation columns
+ * the Claude backend writes on turn-end. `contextUsage.tokens` is the content-only
+ * total the status-line bar reads (via `last_content_tokens`), so the bar and the
+ * /context bubble render for the pi backend without any renderer change.
+ */
+function saveOmpUsage(
+  db: SqlJsAdapter,
+  conversationId: number,
+  stats: OmpSessionStats | null,
+  usage: OmpContextUsage | null,
+): void {
+  const now = new Date().toISOString()
+  db.prepare(
+    `UPDATE conversations SET
+       last_input_tokens = ?,
+       last_output_tokens = ?,
+       last_cache_read_tokens = ?,
+       last_cache_creation_tokens = ?,
+       last_context_window = ?,
+       last_content_tokens = ?,
+       last_usage_updated_at = ?
+     WHERE id = ?`,
+  ).run(
+    stats?.tokens.input ?? null,
+    stats?.tokens.output ?? null,
+    stats?.tokens.cacheRead ?? null,
+    stats?.tokens.cacheWrite ?? null,
+    usage?.contextWindow ?? null,
+    usage?.tokens ?? null,
+    now,
+    conversationId,
+  )
 }
 
 /**
@@ -195,9 +237,35 @@ export async function streamMessageOmp(
       ? messages[messages.length - 1]?.content ?? ''
       : buildPromptWithHistory(messages)
 
-    const agentEnd = client.waitForAgentEnd()
-    await client.prompt(promptText)
-    await agentEnd
+    // Subscribe to turn-end BEFORE sending so we never miss an early agent_end.
+    // Two completion routes:
+    //   • agent turn ran        → `agent_end` (or async local-only `prompt_result`) via waitForTurnEnd
+    //   • local-only slash cmd  → the `prompt` response's `data.agentInvoked:false` (synchronous)
+    // Without this, selecting a local omp command (/tools, /model, /usage, /context,
+    // /skill:*, …) emits `command_output` then completes with agentInvoked:false and
+    // NO agent_end — the old `await waitForAgentEnd()` hung forever.
+    const turnEnd = client.waitForTurnEnd()
+    const promptResp = client.prompt(promptText)
+    turnEnd.catch(() => {}) // never unhandled if the local-only branch skips the await
+    const resp = await promptResp
+    const respData = resp.data
+    const localOnly =
+      isRecord(respData) && 'agentInvoked' in respData && respData.agentInvoked === false
+    if (!localOnly) await turnEnd
+
+    // Capture omp's own session stats + context usage into the SAME conversation
+    // columns the Claude backend writes on turn-end, so the status-line bar and
+    // /context bubble render for the pi backend with zero renderer changes.
+    if (db && conversationId != null) {
+      try {
+        const [statsResp, stateResp] = await Promise.all([client.getSessionStats(), client.getState()])
+        const stats = statsResp.success ? parseSessionStats(statsResp.data) : null
+        const usage = stateResp.success ? parseContextUsage(stateResp.data) : null
+        if (stats || usage) saveOmpUsage(db, conversationId, stats, usage)
+      } catch (err) {
+        log.warn('failed to capture omp session stats', errToCtx(err))
+      }
+    }
   } catch (err: unknown) {
     if (aborted || (err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort')))) {
       aborted = true
@@ -216,6 +284,7 @@ export async function streamMessageOmp(
     if (abortControllers.get(convKey) === abortController) {
       abortControllers.delete(convKey)
     }
+    cancelPendingPIUI()
     denyPendingForConversation(convKey)
   }
 

@@ -1600,4 +1600,30 @@ describe('chatStore', () => {
       expect(_streamBuffersMap.has(1)).toBe(true) // recreated buffer not wiped
     })
   })
+
+  describe('showContextInfo (pi session stats)', () => {
+    it('attaches piStats to contextDisplay when sessionStats returns stats', async () => {
+      mockAgent.pi.sessionStats.mockResolvedValueOnce({
+        stats: { sessionId: 's', userMessages: 2, assistantMessages: 3, toolCalls: 5, toolResults: 5, totalMessages: 5, tokens: { input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 2 }, cost: 0.1234, premiumRequests: 0 },
+        contextUsage: { tokens: 100, contextWindow: 200000, percent: 0.05 },
+      })
+      await useChatStore.getState().showContextInfo(1)
+      const display = useChatStore.getState().contextDisplay
+      expect(display?.piStats).toEqual({ cost: 0.1234, totalMessages: 5, toolCalls: 5 })
+    })
+
+    it('leaves piStats null when sessionStats returns no stats (Claude backend)', async () => {
+      mockAgent.pi.sessionStats.mockResolvedValueOnce({ stats: null, contextUsage: null })
+      await useChatStore.getState().showContextInfo(1)
+      expect(useChatStore.getState().contextDisplay?.piStats).toBeNull()
+    })
+
+    it('still shows the context bubble when sessionStats rejects (best-effort)', async () => {
+      mockAgent.pi.sessionStats.mockRejectedValueOnce(new Error('omp unavailable'))
+      await useChatStore.getState().showContextInfo(1)
+      const display = useChatStore.getState().contextDisplay
+      expect(display).not.toBeNull()
+      expect(display?.piStats).toBeNull()
+    })
+  })
 })

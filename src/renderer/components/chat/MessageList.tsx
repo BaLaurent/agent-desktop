@@ -28,7 +28,7 @@ function ContextClearedDivider({ clearedCount }: { clearedCount: number }) {
 }
 
 function ContextInfoBubble({ display, onDismiss }: { display: ContextDisplay; onDismiss: () => void }) {
-  const { breakdown } = display
+  const { breakdown, piStats } = display
   const { total, window: ctxWindow, autocompactBuffer, free, percentUsed, categories, preFirstTurn } = breakdown
   const freePct = ctxWindow > 0 ? Math.max(0, 100 - percentUsed) : 0
   return (
@@ -59,6 +59,13 @@ function ContextInfoBubble({ display, onDismiss }: { display: ContextDisplay; on
           {' tokens'}
           <span style={{ color: 'var(--color-text-muted)' }}>{' — '}{percentUsed}%</span>
         </div>
+        {piStats && (
+          <div className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>
+            <span style={{ color: 'var(--color-text)' }}>${piStats.cost.toFixed(4)}</span>
+            {' session cost'}
+            <span>{' — '}{piStats.totalMessages} msgs, {piStats.toolCalls} tool calls</span>
+          </div>
+        )}
         {!preFirstTurn && (
           <div className="flex flex-col gap-0.5 mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
             <div className="uppercase tracking-wide text-[0.6rem] opacity-70 mb-0.5">Estimated usage by category</div>

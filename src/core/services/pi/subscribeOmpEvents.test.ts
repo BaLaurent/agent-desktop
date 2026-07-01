@@ -50,6 +50,28 @@ describe('subscribeOmpEvents', () => {
     expect(sendChunk).toHaveBeenCalledWith('text', 'hello', {})
   })
 
+  it('command_output (local slash command) emits a text chunk and accumulates into fullContent', () => {
+    const { client, emit } = makeClient()
+    const accumulator: EventAccumulator = { fullContent: '', toolCallsMap: new Map() }
+    subscribeOmpEvents({ client, accumulator, convExtra: {} })
+
+    emit({ type: 'command_output', text: '* read\n* bash\n* edit' })
+
+    expect(sendChunk).toHaveBeenCalledWith('text', '* read\n* bash\n* edit', {})
+    expect(accumulator.fullContent).toBe('* read\n* bash\n* edit')
+  })
+
+  it('command_output with no text is a no-op', () => {
+    const { client, emit } = makeClient()
+    const accumulator: EventAccumulator = { fullContent: '', toolCallsMap: new Map() }
+    subscribeOmpEvents({ client, accumulator, convExtra: {} })
+
+    emit({ type: 'command_output' })
+
+    expect(sendChunk).not.toHaveBeenCalled()
+    expect(accumulator.fullContent).toBe('')
+  })
+
   it('wraps a thinking_start/delta/end sequence in <thinking> tags and emits exactly one thinking chunk', () => {
     const { client, emit } = makeClient()
     const accumulator: EventAccumulator = { fullContent: '', toolCallsMap: new Map() }

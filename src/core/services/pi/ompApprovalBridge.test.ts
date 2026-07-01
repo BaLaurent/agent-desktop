@@ -23,6 +23,19 @@ const { sendChunk, pendingRequests, respondToApproval } = vi.hoisted(() => {
 
 vi.mock('../streaming', () => ({ sendChunk, pendingRequests }))
 
+const { emitPIUIEvent, emitPIUIRequest, uiResponders } = vi.hoisted(() => {
+  const uiResponders = new Map<string, (r: unknown) => void>()
+  return {
+    uiResponders,
+    emitPIUIEvent: vi.fn(),
+    emitPIUIRequest: vi.fn((request: { id: string }, responder: (r: unknown) => void) => {
+      uiResponders.set(request.id, responder)
+    }),
+  }
+})
+
+vi.mock('./piUIChannel', () => ({ emitPIUIEvent, emitPIUIRequest }))
+
 import { attachOmpApprovalBridge } from './ompApprovalBridge'
 import type { OmpRpcClient, OmpExtensionUIRequest, OmpExtensionUIResponse } from './ompRpcClient'
 
@@ -44,6 +57,9 @@ function makeClient(): { client: OmpRpcClient; emit: UIListener; respondExtensio
 beforeEach(() => {
   sendChunk.mockReset()
   pendingRequests.clear()
+  emitPIUIEvent.mockClear()
+  emitPIUIRequest.mockClear()
+  uiResponders.clear()
 })
 
 describe('attachOmpApprovalBridge', () => {
@@ -123,19 +139,71 @@ describe('attachOmpApprovalBridge', () => {
     expect(pendingRequests.size).toBe(0)
   })
 
-  it.each(['notify', 'setWidget', 'setStatus', 'setTitle', 'set_editor_text', 'cancel'])(
-    'does not answer a cosmetic "%s" request',
+  it('forwards notify to a piUIChannel toast event (never answers omp)', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {} })
+
+    emit({ type: 'extension_ui_request', id: 'u4', method: 'notify', message: 'hi', level: 'warning' })
+    await Promise.resolve()
+
+    expect(emitPIUIEvent).toHaveBeenCalledWith({ method: 'notify', message: 'hi', level: 'warning' })
+    expect(respondExtensionUI).not.toHaveBeenCalled()
+  })
+
+  it('forwards setWidget/setStatus/setTitle to piUIChannel events (never answers omp)', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {} })
+
+    emit({ type: 'extension_ui_request', id: 'w1', method: 'setWidget', key: 'logs', content: ['a', 'b'], placement: 'aboveEditor' })
+    emit({ type: 'extension_ui_request', id: 's1', method: 'setStatus', key: 'k', text: 'busy' })
+    emit({ type: 'extension_ui_request', id: 't1', method: 'setTitle', title: 'Title' })
+    await Promise.resolve()
+
+    expect(emitPIUIEvent).toHaveBeenCalledWith({ method: 'setWidget', key: 'logs', content: ['a', 'b'], placement: 'aboveEditor' })
+    expect(emitPIUIEvent).toHaveBeenCalledWith({ method: 'setStatus', key: 'k', text: 'busy' })
+    expect(emitPIUIEvent).toHaveBeenCalledWith({ method: 'setTitle', title: 'Title' })
+    expect(respondExtensionUI).not.toHaveBeenCalled()
+  })
+
+  it.each(['set_editor_text', 'cancel'])(
+    'does not answer or forward a "%s" request',
     async (method) => {
       const { client, emit, respondExtensionUI } = makeClient()
       attachOmpApprovalBridge({ client, convKey: 1, convExtra: {} })
 
-      emit({ type: 'extension_ui_request', id: 'u4', method, message: 'hi' } as OmpExtensionUIRequest)
-      // flush microtasks — handleRequest is async but has no await on these paths
+      emit({ type: 'extension_ui_request', id: 'u4', method } as OmpExtensionUIRequest)
       await Promise.resolve()
 
       expect(respondExtensionUI).not.toHaveBeenCalled()
+      expect(emitPIUIEvent).not.toHaveBeenCalled()
     },
   )
+
+  it('routes an editor request to a piUIChannel dialog and answers omp with the submitted value', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {} })
+
+    emit({ type: 'extension_ui_request', id: 'ed1', method: 'editor', title: 'Edit config', prefill: 'key: val' })
+    await Promise.resolve()
+
+    expect(emitPIUIRequest).toHaveBeenCalledWith(
+      { id: 'ed1', method: 'editor', title: 'Edit config', prefill: 'key: val' },
+      expect.any(Function),
+    )
+    // Simulate the renderer submitting an edited value.
+    uiResponders.get('ed1')!({ id: 'ed1', value: 'key: newval' })
+    expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'ed1', value: 'key: newval' })
+  })
+
+  it('cancels the omp editor request when the renderer dismisses the dialog', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {} })
+
+    emit({ type: 'extension_ui_request', id: 'ed2', method: 'editor', title: 'Edit' })
+    await Promise.resolve()
+    uiResponders.get('ed2')!({ id: 'ed2', cancelled: true })
+    expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'ed2', cancelled: true })
+  })
 
   it('a genuine question (select without Approve/Deny options) routes to ask_user and answers with the chosen value', async () => {
     const { client, emit, respondExtensionUI } = makeClient()

@@ -18,7 +18,7 @@
  * New shared streaming logic → `src/core/services/streaming.ts`.
  * New Electron-only primitives → this file only.
  */
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { getMainWindow } from '../mainContext'
 import {
   setChunkSender,
@@ -27,6 +27,8 @@ import {
   setEnsureFreshToken,
   setPISchedulerBridge,
 } from '../../core/services/streaming'
+import { setPIUISender, respondPIUI } from '../../core/services/pi/piUIChannel'
+import type { PiUIResponse } from '../../core/types/piUITypes'
 import { sendTurn, respondToSessionApproval, abortSession, hasActiveSession } from './sessionManager'
 import { streamMessageOmp } from '../../core/services/streamingOmp'
 import { ensureFreshMacOSToken } from '../utils/env'
@@ -53,6 +55,26 @@ setChunkSender((channel: string, payload: Record<string, unknown>) => {
       win.webContents.send(channel, channel === 'messages:conversationUpdated' ? payload.conversationId : payload)
     }
   }
+})
+
+// Wire the Electron PI extension-UI sender: omp's rich extension_ui_request
+// frames (notify/setWidget/setStatus/editor) reach the renderer's dormant
+// extension-UI surface over `pi:uiEvent` / `pi:uiRequest`, and the renderer's
+// answer returns over `pi:uiResponse` → respondPIUI → the omp client.
+setPIUISender((channel: string, payload: unknown) => {
+  for (const win of streamWindows) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload)
+  }
+  if (streamWindows.size === 0) {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+  }
+})
+
+// Guard: in unit tests `electron` resolves to a path string, so `ipcMain` is
+// undefined. The real app always has it; the guard keeps module import safe.
+ipcMain?.on('pi:uiResponse', (_e, response: PiUIResponse) => {
+  respondPIUI(response)
 })
 
 // Wire session manager into core streaming

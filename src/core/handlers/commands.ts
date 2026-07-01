@@ -4,6 +4,7 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import { expandTilde } from '../utils/paths'
 import { validatePathSafe } from '../utils/validate'
+import { discoverOmpCommandsCached } from '../services/pi/ompCommands'
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -292,6 +293,30 @@ export function registerCommandsHandlers(registrar: HandleRegistrar, db: SqlJsAd
 
     for (const cmd of BUILTIN_COMMANDS) {
       results.set(cmd.name, cmd)
+    }
+
+    // Oh My Pi backend: omp natively discovers + dedups commands from ALL
+    // sources (native ~/.omp + cwd/.omp, ~/.claude/commands + project, codex,
+    // opencode, plugins, agents, /skill:*). That is a superset of the manual
+    // claude scan below, so for the pi backend we expose omp's own enumeration
+    // (plus app-level builtins already added + macros) instead of re-scanning.
+    const backendRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('ai_sdkBackend') as { value: string | null } | undefined
+    if (backendRow?.value === 'pi') {
+      let safeCwd: string | null = null
+      if (typeof cwd === 'string') {
+        try { safeCwd = validatePathSafe(cwd) } catch { safeCwd = null }
+      }
+      const modelRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('ai_model') as { value: string | null } | undefined
+      const model = modelRow?.value ?? undefined
+      const ompCmds = await discoverOmpCommandsCached({ cwd: safeCwd ?? process.cwd(), model })
+      for (const cmd of ompCmds) {
+        results.set(cmd.name, { name: cmd.name, description: cmd.description, source: cmd.source })
+      }
+      const piMacros = await scanMacrosDir()
+      for (const macro of piMacros) {
+        results.set(macro.name, macro)
+      }
+      return Array.from(results.values())
     }
 
     const claudeDir = expandTilde('~/.claude')

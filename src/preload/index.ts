@@ -126,6 +126,7 @@ const api: AgentAPI = {
   },
   pi: {
     listExtensions: () => withTimeout(ipcRenderer.invoke('pi:listExtensions')),
+    sessionStats: (conversationId: number) => withTimeout(ipcRenderer.invoke('pi:sessionStats', conversationId)),
     onUIEvent: (callback) => {
       const handler = (_e: Electron.IpcRendererEvent, event: unknown) => callback(event as never)
       ipcRenderer.on('pi:uiEvent', handler)

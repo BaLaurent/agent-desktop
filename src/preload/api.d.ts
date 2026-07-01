@@ -30,6 +30,7 @@ import type {
 import type { PIExtensionInfo } from '../shared/constants'
 import type { PiUIEvent, PiUIRequest, PiUIResponse } from '../shared/piUITypes'
 import type { GitStatus, GitCommit, GitCommitFile, GitBranch, GitStashEntry } from '../shared/git-types'
+import type { OmpStatsResult } from '../core/services/pi/ompSessionStats'
 
 export type HotwordTrainEvent =
   | { kind: 'log'; message: string }
@@ -134,6 +135,7 @@ export interface AgentAPI {
   }
   pi: {
     listExtensions(): Promise<PIExtensionInfo[]>
+    sessionStats(conversationId: number): Promise<OmpStatsResult>
     onUIEvent(callback: (event: PiUIEvent) => void): () => void
     onUIRequest(callback: (request: PiUIRequest) => void): () => void
     respondUI(id: string, response: PiUIResponse): void

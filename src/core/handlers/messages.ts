@@ -33,6 +33,8 @@ import {
 } from './messages/streamPhases'
 import type { MessageStreamContext } from './messages/types'
 import { createLogger, errToCtx } from '../utils/logger'
+import { fetchOmpSessionStats } from '../services/pi/ompSessionStats'
+import type { OmpStatsResult } from '../services/pi/ompSessionStats'
 import { stripThinkingBlocks } from '../utils/thinking'
 
 const log = createLogger('messages')
@@ -650,6 +652,19 @@ export function registerMessagesHandlers(
       skillsMode: aiSettings.skillsEnabled === false ? 'off' : (aiSettings.skills ?? 'off'),
       cwd,
     })
+  })
+
+  registrar.handle('pi:sessionStats', async (_event, conversationId: unknown): Promise<OmpStatsResult> => {
+    const validConvId = validatePositiveInt(conversationId, 'conversationId')
+    const sessionFile = getConversationPiSessionFile(db, validConvId)
+    if (!sessionFile) return { stats: null, contextUsage: null }
+    const aiSettings = getAISettings(db, validConvId, {
+      sessionsBase: options.sessionsBase,
+      knowledgesDir: options.knowledgesDir,
+      getSchedulerMcpConfig: options.getSchedulerMcpConfig,
+    })
+    const cwd = aiSettings.cwd ?? getConversationCwd(db, validConvId, options.sessionsBase)
+    return fetchOmpSessionStats({ cwd, sessionFile, model: aiSettings.model })
   })
 
   registrar.handle('messages:stop', async (_event, conversationId?: unknown) => {

@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
 import { DispatchRegistry } from '../dispatch'
 import { registerCommandsHandlers } from './commands'
 import { createTestDb } from '../../main/__tests__/db-helper'
+import type { SqlJsAdapter } from '../db/sqljs-adapter'
+
+const { discoverOmpCommandsCached } = vi.hoisted(() => ({ discoverOmpCommandsCached: vi.fn() }))
+vi.mock('../services/pi/ompCommands', () => ({ discoverOmpCommandsCached }))
 
 // Each test runs with a dedicated HOME → ~/.agent-desktop/macros resolves to a temp dir.
 // getMacrosDir() in commands.ts calls expandTilde() which reads process.env.HOME at call time,
@@ -15,6 +19,7 @@ describe('commands handlers (macros)', () => {
   let tmpHome: string
   let origHome: string | undefined
   let macrosDir: string
+  let db: SqlJsAdapter
 
   beforeEach(async () => {
     origHome = process.env.HOME
@@ -23,8 +28,10 @@ describe('commands handlers (macros)', () => {
     macrosDir = path.join(tmpHome, '.agent-desktop', 'macros')
 
     dispatch = new DispatchRegistry()
-    const db = await createTestDb()
+    db = await createTestDb()
     registerCommandsHandlers(dispatch, db as never)
+    discoverOmpCommandsCached.mockReset()
+    discoverOmpCommandsCached.mockResolvedValue([])
   })
 
   afterEach(async () => {
@@ -160,5 +167,32 @@ describe('commands handlers (macros)', () => {
     const ctx = cmds.find((c) => c.name === 'context')
     expect(ctx).toBeDefined()
     expect(ctx!.source).toBe('builtin')
+  })
+
+  it('commands:list (pi backend) exposes omp-discovered commands + builtins + macros, not the claude scan', async () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_sdkBackend', 'pi')").run()
+    discoverOmpCommandsCached.mockResolvedValue([
+      { name: 'skill:foo', description: 'A skill', source: 'skill' },
+      { name: 'triage', description: 'Triage issues', source: 'user' },
+    ])
+    const save = dispatch.get('macros:save')!
+    await save('mymacro', 'A macro', ['hi'])
+
+    const commandsList = dispatch.get('commands:list')!
+    const cmds = (await commandsList('/tmp/proj', 'user')) as Array<{ name: string; source: string }>
+    expect(discoverOmpCommandsCached).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/tmp/proj' }))
+    // omp-discovered commands surface
+    expect(cmds.find((c) => c.name === 'skill:foo')?.source).toBe('skill')
+    expect(cmds.find((c) => c.name === 'triage')?.source).toBe('user')
+    // app-level builtins + macros still present
+    expect(cmds.find((c) => c.name === 'context')?.source).toBe('builtin')
+    expect(cmds.find((c) => c.name === 'mymacro')?.source).toBe('macro')
+  })
+
+  it('commands:list (claude backend) never calls omp discovery', async () => {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_sdkBackend', 'claude-agent-sdk')").run()
+    const commandsList = dispatch.get('commands:list')!
+    await commandsList()
+    expect(discoverOmpCommandsCached).not.toHaveBeenCalled()
   })
 })

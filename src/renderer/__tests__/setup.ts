@@ -106,6 +106,7 @@ export const mockAgent = {
   },
   pi: {
     listExtensions: vi.fn().mockResolvedValue([]),
+    sessionStats: vi.fn().mockResolvedValue({ stats: null, contextUsage: null }),
     onUIEvent: vi.fn().mockReturnValue(() => {}),
     onUIRequest: vi.fn().mockReturnValue(() => {}),
     respondUI: vi.fn().mockResolvedValue(undefined),

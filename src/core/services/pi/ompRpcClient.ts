@@ -21,6 +21,8 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
+import { statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('ompRpcClient')
@@ -124,6 +126,31 @@ function normalizeToolResult(result: OmpToolResult | string): OmpToolResult {
 }
 
 /**
+ * Resolve a spawnable cwd. `child_process.spawn` throws a MISLEADING `ENOENT`
+ * that names the BINARY when the `cwd` option points to a missing directory —
+ * so a deleted/moved conversation cwd looks like "omp not found". Fall back to
+ * $HOME (then the process cwd) when the requested dir is absent or not a
+ * directory. Returns undefined only if nothing valid exists (spawn then uses
+ * the process cwd). Undefined input → undefined (spawn uses process cwd).
+ */
+function resolveSpawnCwd(cwd: string | undefined): string | undefined {
+  if (cwd === undefined) return undefined
+  try {
+    if (statSync(cwd).isDirectory()) return cwd
+  } catch {
+    // missing / not accessible — fall through
+  }
+  log.warn('spawn cwd is not a valid directory; falling back', { cwd })
+  const home = homedir()
+  try {
+    if (statSync(home).isDirectory()) return home
+  } catch {
+    // no home — last resort below
+  }
+  return undefined
+}
+
+/**
  * Drives an `omp --mode rpc` child process from Node.
  *
  * Lifecycle: `start()` → (`setHostTools`, `onEvent`/`onExtensionUI`, `prompt`,
@@ -159,7 +186,7 @@ export class OmpRpcClient {
     if (this.options.args) args.push(...this.options.args)
 
     const proc = spawn(this.options.ompPath, args, {
-      cwd: this.options.cwd,
+      cwd: resolveSpawnCwd(this.options.cwd),
       env: { ...process.env, ...this.options.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -307,6 +334,16 @@ export class OmpRpcClient {
     return this.#send({ type: 'get_available_models' })
   }
 
+  /** List all slash commands omp discovers (builtin + skills + extensions + files + custom). */
+  async getAvailableCommands(): Promise<OmpResponseFrame> {
+    return this.#send({ type: 'get_available_commands' })
+  }
+
+  /** Fetch session stats (message counts, token usage, cost). */
+  async getSessionStats(): Promise<OmpResponseFrame> {
+    return this.#send({ type: 'get_session_stats' })
+  }
+
   /**
    * Register the host-owned tools omp may call back into. Replaces any prior set.
    * The server responds with the accepted tool names.
@@ -344,6 +381,37 @@ export class OmpRpcClient {
         settled = true
         unsubscribe()
         reject(new Error(`Timeout waiting for agent_end. stderr: ${this.#stderr.slice(-800)}`))
+      }, timeoutMs)
+      timer.unref()
+    }
+    return promise
+  }
+
+  /**
+   * Resolve when the turn ends by EITHER route: an `agent_end` frame (an agent
+   * turn ran) OR a `prompt_result` frame (a prompt accepted async that later
+   * resolved local-only, e.g. a slash command). Local-only prompts that resolve
+   * SYNCHRONOUSLY signal via the `prompt` response's `data.agentInvoked:false` —
+   * the caller must handle that case; this waiter covers the two streamed routes.
+   */
+  waitForTurnEnd(timeoutMs = 0): Promise<Frame> {
+    const { promise, resolve, reject } = Promise.withResolvers<Frame>()
+    let settled = false
+    const unsubscribe = this.onEvent((frame) => {
+      if (frame.type === 'agent_end' || frame.type === 'prompt_result') {
+        settled = true
+        unsubscribe()
+        clearTimeout(timer)
+        resolve(frame)
+      }
+    })
+    let timer: NodeJS.Timeout | undefined
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        unsubscribe()
+        reject(new Error(`Timeout waiting for turn end. stderr: ${this.#stderr.slice(-800)}`))
       }, timeoutMs)
       timer.unref()
     }

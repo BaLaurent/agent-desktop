@@ -102,6 +102,15 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
       }
     }
 
+    // Warm the slash-command cache on mount + whenever cwd/skills change. Under the
+    // omp backend, discovery spawns a ~1.75s subprocess; warming here means the
+    // dropdown is already populated by the time the user types `/` (instead of
+    // sitting empty for ~2s). loadCommands self-guards via refs, so this is cheap.
+    useEffect(() => {
+      loadCommands()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cwd, skillsMode, disabledSkills])
+
     const handleSend = useCallback(() => {
       const trimmed = content.trim()
       if (!trimmed || disabled) return

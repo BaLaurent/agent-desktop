@@ -19,6 +19,8 @@ export interface QueuedMessage {
 export interface ContextDisplay {
   breakdown: ContextBreakdown
   shownAt: number
+  /** omp-backend-only: session cost + message counts (null for the Claude backend). */
+  piStats?: { cost: number; totalMessages: number; toolCalls: number } | null
 }
 
 export interface TaskNotification {
@@ -452,7 +454,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const breakdown = await window.agent.context.getBreakdown(conversationId) as ContextBreakdown
       const shownAt = Date.now()
-      set({ contextDisplay: { breakdown, shownAt } })
+      // omp-backed conversations carry a pi_session_file → sessionStats returns
+      // cost + message counts; Claude conversations return {stats:null} with no
+      // spawn (the handler early-returns when no session file exists).
+      let piStats: ContextDisplay['piStats'] = null
+      try {
+        const res = await window.agent.pi.sessionStats(conversationId)
+        if (res.stats) {
+          piStats = { cost: res.stats.cost, totalMessages: res.stats.totalMessages, toolCalls: res.stats.toolCalls }
+        }
+      } catch {
+        // stats are best-effort — never block the /context bubble
+      }
+      set({ contextDisplay: { breakdown, shownAt, piStats } })
       // Auto-dismiss after 20s only if the same bubble is still visible
       setTimeout(() => {
         if (useChatStore.getState().contextDisplay?.shownAt === shownAt) {

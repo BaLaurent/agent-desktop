@@ -92,6 +92,18 @@ export function subscribeOmpEvents(opts: SubscribeOmpEventsOptions): () => void 
       return
     }
 
+    if (type === 'command_output') {
+      // Local-only slash commands (/tools, /model, /usage, /context, /skill:*, …)
+      // emit their output here instead of an assistant message. Render + accumulate
+      // as text so it shows inline AND persists as the turn's assistant content.
+      const text = str(frame, 'text')
+      if (text) {
+        accumulator.fullContent += text
+        sendChunk('text', text, convExtra)
+      }
+      return
+    }
+
     if (type === 'message_end' || type === 'turn_end') {
       // omp signals provider errors via message.stopReason === 'error' +
       // errorMessage, NOT via a thrown exception. Without this the failure

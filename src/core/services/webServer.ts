@@ -268,6 +268,7 @@ export function generateShim(token: string): string {
     },
     pi: {
       listExtensions: function() { return invoke('pi:listExtensions', []); },
+      sessionStats: function(cid) { return invoke('pi:sessionStats', [cid]); },
       onUIEvent: function(cb) { return subscribe('pi:uiEvent', cb); },
       onUIRequest: function(cb) { return subscribe('pi:uiRequest', cb); },
       respondUI: noop,

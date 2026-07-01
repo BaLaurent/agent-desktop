@@ -16,9 +16,11 @@
 
 import { randomUUID } from 'node:crypto'
 import { sendChunk, pendingRequests } from '../streaming'
+import { emitPIUIEvent, emitPIUIRequest } from './piUIChannel'
 import { createLogger } from '../../utils/logger'
 import type { OmpRpcClient, OmpExtensionUIRequest } from './ompRpcClient'
 import type { ToolApprovalResponse, AskUserResponse } from '../../types/types'
+import type { PiUIEvent, PiUIResponse } from '../../types/piUITypes'
 
 const log = createLogger('pi.ompApprovalBridge')
 
@@ -29,6 +31,13 @@ const DENY = 'Deny'
 function str(frame: Record<string, unknown>, key: string): string | undefined {
   const v = frame[key]
   return typeof v === 'string' ? v : undefined
+}
+
+/** Extract a string[] field (e.g. widget content lines) from an untyped frame. */
+function strArray(frame: Record<string, unknown>, key: string): string[] | undefined {
+  const v = frame[key]
+  if (!Array.isArray(v)) return undefined
+  return v.filter((x): x is string => typeof x === 'string')
 }
 
 function isApprovalSelect(req: OmpExtensionUIRequest): boolean {
@@ -80,18 +89,41 @@ export function attachOmpApprovalBridge(opts: OmpApprovalBridgeOptions): () => v
           return
         case 'notify': {
           const message = str(req, 'message')
-          if (message) sendChunk('system_message', message, { hookName: 'omp', hookEvent: 'notify', ...convExtra })
+          if (message) {
+            const level = str(req, 'level')
+            const evt: PiUIEvent = { method: 'notify', message, level: level === 'warning' || level === 'error' ? level : 'info' }
+            emitPIUIEvent(evt)
+          }
           return // fire-and-forget, no response
         }
-        case 'setWidget':
-        case 'setStatus':
-        case 'setTitle':
+        case 'setStatus': {
+          const key = str(req, 'key')
+          if (key) emitPIUIEvent({ method: 'setStatus', key, text: str(req, 'text') })
+          return
+        }
+        case 'setWidget': {
+          const key = str(req, 'key')
+          if (key) {
+            const placement = str(req, 'placement')
+            emitPIUIEvent({
+              method: 'setWidget',
+              key,
+              content: strArray(req, 'content'),
+              placement: placement === 'aboveEditor' ? 'aboveEditor' : 'belowEditor',
+            })
+          }
+          return
+        }
+        case 'setTitle': {
+          const title = str(req, 'title')
+          if (title) emitPIUIEvent({ method: 'setTitle', title })
+          return
+        }
         case 'set_editor_text':
         case 'cancel':
-          return // cosmetic / fire-and-forget — no response expected
+          return // no renderer surface / fire-and-forget — no response expected
         case 'editor':
-          // Editor UI unsupported over this bridge — cancel so omp proceeds.
-          client.respondExtensionUI({ type: 'extension_ui_response', id: req.id, cancelled: true })
+          handleEditor(req)
           return
         default:
           // open_url and any future method: acknowledge as cancelled to avoid a hang.
@@ -162,5 +194,23 @@ export function attachOmpApprovalBridge(opts: OmpApprovalBridgeOptions): () => v
     } else {
       client.respondExtensionUI({ type: 'extension_ui_response', id: req.id, value: answer })
     }
+  }
+
+  /** Route an omp `editor` request to the renderer's ExtensionDialog (editor mode). */
+  function handleEditor(req: OmpExtensionUIRequest): void {
+    const title = str(req, 'title') ?? 'Edit'
+    const prefill = str(req, 'prefill')
+    // Use omp's own request id as the dialog id — a clean 1:1 so the renderer's
+    // response routes straight back to this responder.
+    emitPIUIRequest(
+      { id: req.id, method: 'editor', title, ...(prefill !== undefined ? { prefill } : {}) },
+      (response: PiUIResponse) => {
+        if (response.cancelled || typeof response.value !== 'string') {
+          client.respondExtensionUI({ type: 'extension_ui_response', id: req.id, cancelled: true })
+        } else {
+          client.respondExtensionUI({ type: 'extension_ui_response', id: req.id, value: response.value })
+        }
+      },
+    )
   }
 }
