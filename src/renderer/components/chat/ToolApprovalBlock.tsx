@@ -16,6 +16,7 @@ function truncate(value: unknown, maxLen = 200): string {
 export function ToolApprovalBlock({ approval }: ToolApprovalBlockProps) {
   const [responded, setResponded] = useState<'allow' | 'deny' | null>(null)
   const [denyReason, setDenyReason] = useState('')
+  const [dontAskAgain, setDontAskAgain] = useState(false)
 
   const isExitPlanMode = approval.toolName === 'ExitPlanMode'
 
@@ -24,6 +25,10 @@ export function ToolApprovalBlock({ approval }: ToolApprovalBlockProps) {
     if (behavior === 'deny' && isExitPlanMode) {
       const message = denyReason.trim() || 'User rejected the plan — please revise it.'
       window.agent.messages.respondToApproval(approval.requestId, { behavior, message })
+      return
+    }
+    if (behavior === 'allow' && !isExitPlanMode && dontAskAgain) {
+      window.agent.messages.respondToApproval(approval.requestId, { behavior, dontAskAgain: true })
       return
     }
     window.agent.messages.respondToApproval(approval.requestId, { behavior })
@@ -95,6 +100,17 @@ export function ToolApprovalBlock({ approval }: ToolApprovalBlockProps) {
                 }}
               />
             </div>
+          )}
+          {!isExitPlanMode && (
+            <label className="mt-2 flex items-center gap-2 text-[0.6875rem] font-sans cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
+              <input
+                type="checkbox"
+                checked={dontAskAgain}
+                onChange={(e) => setDontAskAgain(e.target.checked)}
+                aria-label={`Don't ask again for the ${approval.toolName} tool`}
+              />
+              Don't ask again for this tool
+            </label>
           )}
           <div className="mt-2 flex gap-2">
             <button

@@ -35,6 +35,7 @@ import { loadFromDisk, attachPersistence } from './services/errorBufferPersist'
 import { sendBugReport } from './services/bugReport'
 import { scrub as scrubLog } from './services/logScrubber'
 import { setMainContext } from './mainContext'
+import { ensureOmpBinary } from './services/ompSidecar'
 
 // Custom protocols — must be registered before app.ready
 registerPreviewScheme()
@@ -420,6 +421,10 @@ if (!gotLock) {
 
     startBridge(db)
     startScheduler(db).catch(err => log.error('scheduler start failed', err))
+    // omp sidecar: download-if-absent + in-range update check. Fire-and-forget so
+    // it never blocks window creation; streamMessageOmp errors gracefully if omp
+    // is still absent when the first turn runs.
+    ensureOmpBinary().catch(err => log.error('omp sidecar init failed', err))
     createTray(getMainWindow, createWindow)
 
     // Auto-start web server if configured

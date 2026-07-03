@@ -7,10 +7,14 @@
 // (see ompCommands.ts) rather than touching an in-process SDK.
 //
 // `discoverPIExtensions` surfaces omp's `extension`-sourced commands to the
-// settings panel for visibility. NOTE: the per-extension disable toggle
-// (`pi_disabledExtensions`) is not yet enforced against the omp subprocess —
-// omp manages its own extension enable/disable in ~/.omp. Surfacing here is
-// informational; enforcement is tracked in the project backlog.
+// settings panel for visibility. Enforcement of the per-extension disable
+// toggle (`pi_disabledExtensions`) IS now wired for agent turns: streamingOmp
+// builds a per-run `omp --config` overlay whose `disabledExtensions` is the
+// UNION of omp's effective list + the app's ids (see ompConfigOverlay.ts).
+// Residual: bundled/command-named extensions whose omp `extension-module:<derivedName>`
+// id (path-derived) differs from the command name are NOT reliably disable-able —
+// omp does not expose that derived id over RPC. `skill:`/`mcp:`/`slash-command:`
+// ids disable cleanly.
 
 import type { IpcMain } from 'electron'
 import type Database from 'better-sqlite3'

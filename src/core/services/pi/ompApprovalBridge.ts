@@ -15,11 +15,14 @@
 // `ask_user`. Everything else is acknowledged/ignored so omp never blocks.
 
 import { randomUUID } from 'node:crypto'
+import { resolve as resolvePath } from 'node:path'
 import { sendChunk, pendingRequests } from '../streaming'
 import { emitPIUIEvent, emitPIUIRequest } from './piUIChannel'
+import { shouldRequireApproval, type PermissionMode } from '../guards/permissionPolicy'
+import { isPathOutsideWriteAllowed } from '../guards/cwdGuard'
 import { createLogger } from '../../utils/logger'
 import type { OmpRpcClient, OmpExtensionUIRequest } from './ompRpcClient'
-import type { ToolApprovalResponse, AskUserResponse } from '../../types/types'
+import type { ToolApprovalResponse, AskUserResponse, CwdWhitelistEntry } from '../../types/types'
 import type { PiUIEvent, PiUIResponse } from '../../types/piUITypes'
 
 const log = createLogger('pi.ompApprovalBridge')
@@ -55,11 +58,47 @@ function parseToolName(title: string): string {
   return m ? m[1].trim() : 'tool'
 }
 
+/** Parse the `Path: <p>` line omp adds to write/edit approval titles. */
+function parsePathFromTitle(title: string): string | undefined {
+  const m = title.match(/^Path:\s*(.+)$/m)
+  return m ? m[1].trim() : undefined
+}
+
+const VALID_PERMISSION_MODES: Record<PermissionMode, true> = {
+  bypassPermissions: true, acceptEdits: true, default: true, dontAsk: true, plan: true,
+}
+
+/** Narrow a free-form permissionMode string to the policy union (default fallback). */
+function coercePermissionMode(mode: string | undefined): PermissionMode {
+  return mode !== undefined && mode in VALID_PERMISSION_MODES
+    ? (mode as PermissionMode)
+    : 'default'
+}
+
+// Per-conversation "don't ask again for this tool" cache. Module-level,
+// process-lifetime, keyed by convKey → set of (lowercased) tool names. Matches
+// Claude Code's "always allow this tool" affordance; not persisted across
+// restarts (session semantics).
+const dontAskCache = new Map<string | number, Set<string>>()
+
+/** Clear the dontAsk approval cache (tests). */
+export function clearOmpDontAskCache(): void {
+  dontAskCache.clear()
+}
+
 export interface OmpApprovalBridgeOptions {
   client: OmpRpcClient
   /** Conversation id for scoping pending requests + chunk payloads. */
   convKey: string | number
   convExtra: Record<string, string | number>
+  /** Current permission mode (drives plan-deny + mode auto-decisions). */
+  permissionMode?: string
+  /** Working directory — the cwd-boundary check anchor for write/edit. */
+  cwd?: string
+  /** When true, enforce the cwd write/edit boundary (best-effort, path-parsed). */
+  cwdRestrictionEnabled?: boolean
+  /** Additional read/readwrite dirs beyond cwd. */
+  cwdWhitelist?: CwdWhitelistEntry[]
 }
 
 /**
@@ -69,7 +108,7 @@ export interface OmpApprovalBridgeOptions {
  * cosmetic/unsupported UI methods are acknowledged so omp never hangs.
  */
 export function attachOmpApprovalBridge(opts: OmpApprovalBridgeOptions): () => void {
-  const { client, convKey, convExtra } = opts
+  const { client, convKey, convExtra, permissionMode, cwd, cwdRestrictionEnabled, cwdWhitelist } = opts
 
   return client.onExtensionUI((req) => {
     void handleRequest(req)
@@ -136,12 +175,69 @@ export function attachOmpApprovalBridge(opts: OmpApprovalBridgeOptions): () => v
     }
   }
 
-  /** Route an omp approval-select to the renderer's tool_approval flow. */
+  /**
+   * Route an omp approval-select to the renderer's tool_approval flow — after a
+   * host-side policy pass that mirrors the Claude backend (plan-mode deny,
+   * cwd write/edit boundary, dontAsk cache, mode auto-decision). Only a genuine
+   * `ask` decision surfaces to the user.
+   */
   async function handleApproval(req: OmpExtensionUIRequest): Promise<void> {
     const title = str(req, 'title') ?? ''
     const toolName = parseToolName(title)
-    const requestId = randomUUID()
+    const tool = toolName.toLowerCase()
 
+    const respond = (allow: boolean) =>
+      client.respondExtensionUI({ type: 'extension_ui_response', id: req.id, value: allow ? APPROVE : DENY })
+
+    // 1. exit_plan_mode escape hatch — the tool itself drives the plan UI.
+    if (tool === 'exit_plan_mode') {
+      respond(true)
+      return
+    }
+
+    const mode = coercePermissionMode(permissionMode)
+
+    // 2. Plan-mode deny for mutating tools — steer the model to exit_plan_mode.
+    if (mode === 'plan' && shouldRequireApproval(tool, 'plan') === 'deny') {
+      respond(false)
+      sendChunk('system_message',
+        'Blocked in plan mode: present your plan via exit_plan_mode instead of modifying anything.',
+        { hookName: 'plan', hookEvent: 'blocked', ...convExtra })
+      return
+    }
+
+    // 3. cwd write/edit boundary (best-effort — parsed from the approval title).
+    if (cwdRestrictionEnabled && cwd && (tool === 'write' || tool === 'edit')) {
+      const p = parsePathFromTitle(title)
+      if (p !== undefined && isPathOutsideWriteAllowed(resolvePath(cwd, p), cwd, cwdWhitelist ?? []) !== null) {
+        respond(false)
+        sendChunk('system_message', 'Blocked: path outside the allowed working directory.',
+          { hookName: 'cwd', hookEvent: 'blocked', ...convExtra })
+        return
+      }
+      // p undefined (parse failure) → fall through to the mode decision (fail-safe).
+    }
+
+    // 4. dontAsk cache hit — user previously chose "don't ask again" for this tool.
+    if (dontAskCache.get(convKey)?.has(tool)) {
+      respond(true)
+      return
+    }
+
+    // 5. Mode auto-decision (preserves bypass/yolo/acceptEdits UX even though the
+    //    overlay forced omp to prompt for write/edit).
+    const decision = shouldRequireApproval(tool, mode)
+    if (decision === 'allow') {
+      respond(true)
+      return
+    }
+    if (decision === 'deny') {
+      respond(false)
+      return
+    }
+
+    // 6. Surface to the user (decision === 'ask').
+    const requestId = randomUUID()
     // Register the pending resolver BEFORE emitting the chunk so a synchronous
     // responder (tests, or a fast in-process transport) can never race ahead of
     // the map insertion and drop the answer.
@@ -159,7 +255,12 @@ export function attachOmpApprovalBridge(opts: OmpApprovalBridgeOptions): () => v
 
     const approval = response as ToolApprovalResponse
     const allow = approval?.behavior === 'allow'
-    client.respondExtensionUI({ type: 'extension_ui_response', id: req.id, value: allow ? APPROVE : DENY })
+    if (allow && approval?.dontAskAgain) {
+      const set = dontAskCache.get(convKey) ?? new Set<string>()
+      set.add(tool)
+      dontAskCache.set(convKey, set)
+    }
+    respond(allow)
   }
 
   /** Route a genuine question (ask tool) to the renderer's ask_user flow. */

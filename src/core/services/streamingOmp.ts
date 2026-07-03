@@ -32,6 +32,8 @@ import { buildOmpHostTools } from './pi/buildOmpHostTools'
 import { createOmpSchedulerTool } from './pi/ompSchedulerTool'
 import { subscribeOmpEvents, type EventAccumulator } from './pi/subscribeOmpEvents'
 import { attachOmpApprovalBridge } from './pi/ompApprovalBridge'
+import { buildOmpConfigOverlay, type ApprovalPolicy, type OmpConfigOverlay } from './pi/ompConfigOverlay'
+import { createExitPlanModeTool } from './pi/exitPlanModeTool'
 import { cancelPendingPIUI } from './pi/piUIChannel'
 import { parseSessionStats, parseContextUsage } from './pi/ompSessionStats'
 import type { OmpSessionStats, OmpContextUsage } from './pi/ompSessionStats'
@@ -171,6 +173,9 @@ export async function streamMessageOmp(
     db && conversationId != null ? getConversationPiSessionFile(db, conversationId) : null
   const resumeFile = existingSessionFile && existsSync(existingSessionFile) ? existingSessionFile : null
 
+  const planMode = aiSettings?.permissionMode === 'plan'
+  const cwdRestrictionEnabled = aiSettings?.cwdRestrictionEnabled === true
+
   // Assemble host tools (scheduler + MCP) before spawning so they register on start.
   const schedulerBridge = getPISchedulerBridge()
   const isUnattended = aiSettings?.requirePlanApproval === false
@@ -183,12 +188,42 @@ export async function streamMessageOmp(
     mcpServers: aiSettings?.mcpServers ?? {},
     convExtra,
   })
+  // Plan mode (item 4): omp has no native exit_plan_mode — supply it as a host
+  // tool that revives the renderer's PlanApprovalBlock via a plan_approval_request.
+  if (planMode) hostTools.push(createExitPlanModeTool(convExtra))
+
+  // Per-tool approval overrides written into the omp --config overlay. These force
+  // omp to route the named tools through the approval bridge in EVERY mode:
+  //   • cwd restriction (item 2): write/edit must prompt so the bridge can enforce
+  //     the path boundary (bridge auto-allows in-cwd writes, so no extra UX).
+  //   • plan mode (item 4): exit_plan_mode auto-allowed so omp never prompts for it
+  //     (belt-and-suspenders — the bridge also unconditionally approves it).
+  const approvalOverrides: Record<string, ApprovalPolicy> = {}
+  if (cwdRestrictionEnabled && aiSettings?.cwd) {
+    approvalOverrides.write = 'prompt'
+    approvalOverrides.edit = 'prompt'
+  }
+  if (planMode) approvalOverrides.exit_plan_mode = 'allow'
+
+  // Config overlay (items 2/4/5): disabled extensions + per-tool approval policy.
+  const overlay: OmpConfigOverlay | null = await buildOmpConfigOverlay({
+    ompPath,
+    disabledExtensionIds: aiSettings?.piDisabledExtensions ?? [],
+    approval: approvalOverrides,
+  })
+
+  // Plan-mode system-prompt directive: research only, then present via exit_plan_mode.
+  const effectiveSystemPrompt = planMode
+    ? (systemPrompt ?? '') +
+      '\n\nYou are in PLAN MODE. Research and think, but DO NOT modify anything (no write/edit/bash side effects). When your plan is ready, call the exit_plan_mode tool with the full plan; the user will approve or reject it.'
+    : systemPrompt
 
   const args: string[] = ['--approval-mode', mapApprovalMode(aiSettings?.permissionMode)]
   const thinking = mapThinkingLevel(aiSettings?.maxThinkingTokens)
   if (thinking !== 'off') args.push('--thinking', thinking)
   else args.push('--thinking', 'off')
-  if (systemPrompt) args.push('--append-system-prompt', systemPrompt)
+  if (effectiveSystemPrompt) args.push('--append-system-prompt', effectiveSystemPrompt)
+  if (overlay) args.push('--config', overlay.configPath)
   if (resumeFile) args.push('-r', resumeFile)
   else if (conversationId == null) args.push('--no-session')
 
@@ -214,7 +249,15 @@ export async function streamMessageOmp(
     await client.start()
 
     unsubscribeEvents = subscribeOmpEvents({ client, accumulator, convExtra })
-    unsubscribeApproval = attachOmpApprovalBridge({ client, convKey, convExtra })
+    unsubscribeApproval = attachOmpApprovalBridge({
+      client,
+      convKey,
+      convExtra,
+      permissionMode: aiSettings?.permissionMode,
+      cwd: aiSettings?.cwd,
+      cwdRestrictionEnabled,
+      cwdWhitelist: aiSettings?.cwdWhitelist,
+    })
 
     if (hostTools.length > 0) {
       await client.setHostTools(hostTools)
@@ -278,6 +321,7 @@ export async function streamMessageOmp(
   } finally {
     unsubscribeEvents?.()
     unsubscribeApproval?.()
+    overlay?.cleanup()
     abortController.signal.removeEventListener('abort', onAbort)
     client.stop()
     await Promise.allSettled(mcpHandles.map((h) => h.close()))

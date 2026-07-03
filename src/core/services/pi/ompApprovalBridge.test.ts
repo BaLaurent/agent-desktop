@@ -36,7 +36,7 @@ const { emitPIUIEvent, emitPIUIRequest, uiResponders } = vi.hoisted(() => {
 
 vi.mock('./piUIChannel', () => ({ emitPIUIEvent, emitPIUIRequest }))
 
-import { attachOmpApprovalBridge } from './ompApprovalBridge'
+import { attachOmpApprovalBridge, clearOmpDontAskCache } from './ompApprovalBridge'
 import type { OmpRpcClient, OmpExtensionUIRequest, OmpExtensionUIResponse } from './ompRpcClient'
 
 type UIListener = (req: OmpExtensionUIRequest) => void
@@ -60,6 +60,7 @@ beforeEach(() => {
   emitPIUIEvent.mockClear()
   emitPIUIRequest.mockClear()
   uiResponders.clear()
+  clearOmpDontAskCache()
 })
 
 describe('attachOmpApprovalBridge', () => {
@@ -265,5 +266,97 @@ describe('attachOmpApprovalBridge', () => {
 
     const response: OmpExtensionUIResponse = { type: 'extension_ui_response', id: 'u8', cancelled: true }
     expect(respondExtensionUI).toHaveBeenCalledWith(response)
+  })
+
+  // ── host-side approval policy (plan mode, cwd boundary, dontAsk cache) ──
+  // These decisions run BEFORE surfacing: the critical assertion is which frames
+  // auto-resolve (respondExtensionUI Approve/Deny) WITHOUT a tool_approval chunk
+  // vs which still surface a tool_approval chunk to the user.
+
+  it('a: plan-mode write auto-denies with a system_message and no tool_approval chunk', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {}, permissionMode: 'plan' })
+
+    emit({ type: 'extension_ui_request', id: 'p1', method: 'select', title: 'Allow tool: write\nPath: x', options: ['Approve', 'Deny'] })
+
+    await vi.waitFor(() => {
+      expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'p1', value: 'Deny' })
+    })
+    expect(sendChunk).toHaveBeenCalledWith('system_message', expect.any(String), expect.objectContaining({ hookName: 'plan' }))
+    expect(sendChunk).not.toHaveBeenCalledWith('tool_approval', expect.anything(), expect.anything())
+  })
+
+  it('b: exit_plan_mode auto-approves with no tool_approval chunk', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {}, permissionMode: 'plan' })
+
+    emit({ type: 'extension_ui_request', id: 'p2', method: 'select', title: 'Allow tool: exit_plan_mode', options: ['Approve', 'Deny'] })
+
+    await vi.waitFor(() => {
+      expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'p2', value: 'Approve' })
+    })
+    expect(sendChunk).not.toHaveBeenCalledWith('tool_approval', expect.anything(), expect.anything())
+  })
+
+  it('c: a cwd-out-of-bounds write auto-denies with a system_message and no tool_approval chunk', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {}, cwd: '/tmp/proj', cwdRestrictionEnabled: true })
+
+    emit({ type: 'extension_ui_request', id: 'c1', method: 'select', title: 'Allow tool: write\nPath: /etc/x', options: ['Approve', 'Deny'] })
+
+    await vi.waitFor(() => {
+      expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'c1', value: 'Deny' })
+    })
+    expect(sendChunk).toHaveBeenCalledWith('system_message', expect.any(String), expect.objectContaining({ hookName: 'cwd' }))
+    expect(sendChunk).not.toHaveBeenCalledWith('tool_approval', expect.anything(), expect.anything())
+  })
+
+  it('d: an in-bounds write in bypassPermissions auto-approves with no tool_approval chunk', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({
+      client, convKey: 1, convExtra: {},
+      cwd: '/tmp/proj', cwdRestrictionEnabled: true, permissionMode: 'bypassPermissions',
+    })
+
+    emit({ type: 'extension_ui_request', id: 'd1', method: 'select', title: 'Allow tool: write\nPath: sub/f.txt', options: ['Approve', 'Deny'] })
+
+    await vi.waitFor(() => {
+      expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'd1', value: 'Approve' })
+    })
+    expect(sendChunk).not.toHaveBeenCalledWith('tool_approval', expect.anything(), expect.anything())
+  })
+
+  it('e: a write whose title has no Path line surfaces tool_approval (fail-safe, not silent)', async () => {
+    const { client, emit } = makeClient()
+    attachOmpApprovalBridge({
+      client, convKey: 1, convExtra: {},
+      cwd: '/tmp/proj', cwdRestrictionEnabled: true, permissionMode: 'default',
+    })
+
+    emit({ type: 'extension_ui_request', id: 'e1', method: 'select', title: 'Allow tool: write', options: ['Approve', 'Deny'] })
+
+    expect(sendChunk).toHaveBeenCalledWith('tool_approval', undefined, expect.objectContaining({ toolName: 'write' }))
+    expect(sendChunk).not.toHaveBeenCalledWith('system_message', expect.anything(), expect.anything())
+  })
+
+  it('f: dontAsk caches an allowed tool — a first write surfaces, a second same-tool write auto-approves', async () => {
+    const { client, emit, respondExtensionUI } = makeClient()
+    attachOmpApprovalBridge({ client, convKey: 1, convExtra: {}, permissionMode: 'default' })
+
+    // First write surfaces to the user; approve with "don't ask again".
+    emit({ type: 'extension_ui_request', id: 'f1', method: 'select', title: 'Allow tool: write\nPath: a', options: ['Approve', 'Deny'] })
+    const requestId = sendChunk.mock.calls.find((c) => c[0] === 'tool_approval')![2].requestId as string
+    respondToApproval(requestId, { behavior: 'allow', dontAskAgain: true })
+    await vi.waitFor(() => {
+      expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'f1', value: 'Approve' })
+    })
+    const approvalChunksAfterFirst = sendChunk.mock.calls.filter((c) => c[0] === 'tool_approval').length
+
+    // Second write for the same tool → auto-approved from cache, NO new tool_approval chunk.
+    emit({ type: 'extension_ui_request', id: 'f2', method: 'select', title: 'Allow tool: write\nPath: b', options: ['Approve', 'Deny'] })
+    await vi.waitFor(() => {
+      expect(respondExtensionUI).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'f2', value: 'Approve' })
+    })
+    expect(sendChunk.mock.calls.filter((c) => c[0] === 'tool_approval').length).toBe(approvalChunksAfterFirst)
   })
 })

@@ -254,6 +254,8 @@ export interface AskUserQuestion {
 export interface ToolApprovalResponse {
   behavior: 'allow' | 'deny'
   message?: string
+  /** Renderer opt-in: cache "always allow this tool" for the conversation (omp backend). */
+  dontAskAgain?: boolean
 }
 
 export interface AskUserResponse {

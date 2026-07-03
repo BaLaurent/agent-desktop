@@ -134,4 +134,37 @@ describe('ToolApprovalBlock', () => {
     expect(dataEl).toBeInTheDocument()
     expect(dataEl.textContent).toContain('...')
   })
+
+  it('renders the "Don\'t ask again" checkbox for a normal tool and passes dontAskAgain:true when checked before Allow', () => {
+    render(<ToolApprovalBlock approval={baseApproval} />)
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Don't ask again for the Bash tool/i,
+    })
+    expect(checkbox).toBeInTheDocument()
+    fireEvent.click(checkbox)
+    fireEvent.click(screen.getByText('Allow'))
+    expect(window.agent.messages.respondToApproval).toHaveBeenCalledWith('req_123', {
+      behavior: 'allow',
+      dontAskAgain: true,
+    })
+  })
+
+  it('omits dontAskAgain when Allow is clicked without checking the checkbox', () => {
+    render(<ToolApprovalBlock approval={baseApproval} />)
+    fireEvent.click(screen.getByText('Allow'))
+    expect(window.agent.messages.respondToApproval).toHaveBeenCalledWith('req_123', {
+      behavior: 'allow',
+    })
+  })
+
+  it('does not render the "Don\'t ask again" checkbox for ExitPlanMode approvals', () => {
+    const approval: ToolApprovalPart = {
+      type: 'tool_approval',
+      requestId: 'req_plan',
+      toolName: 'ExitPlanMode',
+      toolInput: { plan: 'Do X then Y' },
+    }
+    render(<ToolApprovalBlock approval={approval} />)
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
 })
