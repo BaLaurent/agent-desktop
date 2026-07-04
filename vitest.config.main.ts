@@ -6,12 +6,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: [
-      'src/main/**/*.test.ts',
       'src/shared/**/*.test.ts',
       'src/core/**/*.test.ts',
       'src/extensions/**/*.test.ts',
       'src/headless/**/*.test.ts',
-      'src/preload/**/*.test.ts',
     ],
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),

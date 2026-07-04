@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import type Database from 'better-sqlite3'
 import { SettingsService } from './settings'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 
 describe('SettingsService — lockedKeys', () => {
   let db: Database.Database

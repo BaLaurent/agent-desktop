@@ -3,6 +3,7 @@ out/
 dist/
 dist-electron/
 dist-headless/
+dist-deno/
 release/
 *.AppImage
 *.deb

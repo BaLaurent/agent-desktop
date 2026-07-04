@@ -4,9 +4,9 @@ import { join } from 'path'
 import { AgentEngine, noopPlatformIO, noopSystemUI, noopHookRunner } from '../core'
 import type { Broadcaster } from '../core'
 import {
-  ELECTRON_ONLY_CHANNELS,
+  LOCAL_ONLY_CHANNELS,
   WS_BLOCKED_CHANNELS,
-  isElectronOnly,
+  isLocalOnly,
   isWsBlocked,
   OriginDeniedError,
 } from '../core/dispatch-allowlist'
@@ -79,10 +79,10 @@ describe('headless engine with dispatch', () => {
 // dispatch-allowlist is policy data: no engine required, just an invariant check.
 // Regressions here mean the security audit findings (2026-04-23) silently degrade.
 describe('dispatch-allowlist — policy invariants', () => {
-  it('sensitive electron-only channels are flagged', () => {
-    expect(isElectronOnly('mcp:addServer')).toBe(true)
-    expect(isElectronOnly('mcp:updateServer')).toBe(true)
-    expect(isElectronOnly('mcp:testConnection')).toBe(true)
+  it('sensitive local-only channels are flagged', () => {
+    expect(isLocalOnly('mcp:addServer')).toBe(true)
+    expect(isLocalOnly('mcp:updateServer')).toBe(true)
+    expect(isLocalOnly('mcp:testConnection')).toBe(true)
   })
 
   it('ws-blocked channels are flagged', () => {
@@ -91,7 +91,7 @@ describe('dispatch-allowlist — policy invariants', () => {
   })
 
   it('benign channels pass through both filters', () => {
-    expect(isElectronOnly('conversations:list')).toBe(false)
+    expect(isLocalOnly('conversations:list')).toBe(false)
     expect(isWsBlocked('conversations:list')).toBe(false)
   })
 
@@ -103,7 +103,7 @@ describe('dispatch-allowlist — policy invariants', () => {
   })
 
   it('policy sets are non-empty', () => {
-    expect(ELECTRON_ONLY_CHANNELS.size).toBeGreaterThan(0)
+    expect(LOCAL_ONLY_CHANNELS.size).toBeGreaterThan(0)
     expect(WS_BLOCKED_CHANNELS.size).toBeGreaterThan(0)
   })
 })

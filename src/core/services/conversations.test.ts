@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ConversationService } from './conversations'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 
 describe('ConversationService.findLastUserConversationId', () => {
   let db: any

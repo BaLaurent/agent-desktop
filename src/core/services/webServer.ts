@@ -71,7 +71,7 @@ let rendererDir: string = ''
 
 // ─── Shim generator ─────────────────────────────────
 
-export function generateShim(token: string): string {
+export function generateShim(token: string, wsPath = '/ws'): string {
   // This JS replaces window.agent (the Electron preload) with WebSocket-based calls
   return `(function() {
   'use strict';
@@ -103,7 +103,7 @@ export function generateShim(token: string): string {
   function connect() {
     if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(proto + '//' + location.host + '/ws');
+    ws = new WebSocket(proto + '//' + location.host + ${JSON.stringify(wsPath)});
     ws.onopen = function() {
       ws.send(JSON.stringify({ type: 'auth', token: token }));
     };
@@ -190,9 +190,6 @@ export function generateShim(token: string): string {
     };
   }
 
-  function noop() {}
-  function noopAsync() { return Promise.resolve(null); }
-
   window.agent = {
     auth: {
       getStatus: function() { return invoke('auth:getStatus', []); },
@@ -202,6 +199,7 @@ export function generateShim(token: string): string {
     conversations: {
       list: function() { return invoke('conversations:list', []); },
       get: function(id) { return invoke('conversations:get', [id]); },
+      markOpened: function(id) { return invoke('conversations:markOpened', [id]); },
       create: function(title, folderId) { return invoke('conversations:create', [title, folderId]); },
       update: function(id, data) { return invoke('conversations:update', [id, data]); },
       delete: function(id) { return invoke('conversations:delete', [id]); },
@@ -229,9 +227,9 @@ export function generateShim(token: string): string {
       readFile: function(fp) { return invoke('files:readFile', [fp]); },
       writeFile: function(fp, c) { return invoke('files:writeFile', [fp, c]); },
       savePastedFile: function(data, mime) { return invoke('files:savePastedFile', [data, mime]); },
-      revealInFileManager: function() { return Promise.resolve(); },
-      openTerminalHere: function() { return Promise.resolve(); },
-      openWithDefault: function() { return Promise.resolve(); },
+      revealInFileManager: function(fp) { return invoke('files:revealInFileManager', [fp]); },
+      openTerminalHere: function(fp) { return invoke('files:openTerminalHere', [fp]); },
+      openWithDefault: function(fp) { return invoke('files:openWithDefault', [fp]); },
       trash: function(fp) { return invoke('files:trash', [fp]); },
       rename: function(fp, nn) { return invoke('files:rename', [fp, nn]); },
       duplicate: function(fp) { return invoke('files:duplicate', [fp]); },
@@ -264,17 +262,14 @@ export function generateShim(token: string): string {
     kb: {
       listCollections: function() { return invoke('kb:listCollections', []); },
       getCollectionFiles: function(cn) { return invoke('kb:getCollectionFiles', [cn]); },
-      openKnowledgesFolder: function() { return Promise.resolve(); },
+      openKnowledgesFolder: function() { return invoke('kb:openKnowledgesFolder', []); },
     },
     pi: {
       listExtensions: function() { return invoke('pi:listExtensions', []); },
       sessionStats: function(cid) { return invoke('pi:sessionStats', [cid]); },
       onUIEvent: function(cb) { return subscribe('pi:uiEvent', cb); },
       onUIRequest: function(cb) { return subscribe('pi:uiRequest', cb); },
-      respondUI: noop,
-      sendTuiInput: noop,
-      onTuiRender: function() { return noop; },
-      onTuiDone: function() { return noop; },
+      respondUI: function(id, response) { return invoke('pi:uiResponse', [Object.assign({}, response, { id: id })]); },
     },
     settings: {
       get: function() { return invoke('settings:get', []); },
@@ -309,8 +304,8 @@ export function generateShim(token: string): string {
     quickChat: {
       getConversationId: function(m) { return invoke('quickChat:getConversationId', [m]); },
       purge: function() { return invoke('quickChat:purge', []); },
-      hide: noopAsync,
-      setBubbleMode: noopAsync,
+      hide: function() { return invoke('quickChat:hide', []); },
+      setBubbleMode: function() { return invoke('quickChat:setBubbleMode', []); },
       reregisterShortcuts: function() { return invoke('quickChat:reregisterShortcuts', []); },
     },
     shortcuts: {
@@ -325,11 +320,12 @@ export function generateShim(token: string): string {
       transcribe: function(buf) { return invoke('sherpa:transcribe', [buf]); },
       validateConfig: function() { return invoke('sherpa:validateConfig', []); },
       downloadModel: function(id) { return invoke('sherpa:downloadModel', [id]); },
-      onDownloadProgress: function() { return function() {}; },
+      listInstalledModels: function() { return invoke('sherpa:listInstalledModels', []); },
+      onDownloadProgress: function(cb) { return subscribe('sherpa:downloadProgress', cb); },
     },
     voice: {
-      duck: noopAsync,
-      restore: noopAsync,
+      duck: function() { return invoke('voice:duck', []); },
+      restore: function() { return invoke('voice:restore', []); },
     },
     voiceIntent: {
       classify: function(cid, text) { return invoke('voice:classifyIntent', [cid, text]); },
@@ -367,6 +363,8 @@ export function generateShim(token: string): string {
       runNow: function(id) { return invoke('scheduler:runNow', [id]); },
       conversationTasks: function(cid) { return invoke('scheduler:conversationTasks', [cid]); },
       listVariables: function() { return invoke('scheduler:listVariables', []); },
+      toggleBackground: function(enabled) { return invoke('scheduler:toggleBackground', [enabled]); },
+      backgroundStatus: function() { return invoke('scheduler:backgroundStatus', []); },
       onTaskUpdate: function(cb) { return subscribe('scheduler:taskUpdate', cb); },
     },
     updates: {
@@ -388,12 +386,16 @@ export function generateShim(token: string): string {
     },
     system: {
       getPathForFile: function() { return ''; },
+      importDroppedFile: function(name, bytes) { return invoke('system:importDroppedFile', [name, bytes]); },
       getInfo: function() { return invoke('system:getInfo', []); },
       getLogs: function(limit) { return invoke('system:getLogs', [limit]); },
       clearCache: function() { return invoke('system:clearCache', []); },
-      openExternal: function(url) { window.open(url, '_blank'); return Promise.resolve(); },
-      selectFolder: noopAsync,
-      selectFile: noopAsync,
+      // Desktop bridge (wsPath '/ui-ws', origin 'local') routes to the host so the OS
+      // browser opens; the remote web client keeps a synchronous window.open so the
+      // user gesture isn't lost to an async round-trip (mobile popup-blockers).
+      openExternal: function(url) { if (${JSON.stringify(wsPath === '/ui-ws')}) { return invoke('system:openExternal', [url]); } window.open(url, '_blank', 'noopener'); return Promise.resolve(); },
+      selectFolder: function() { return invoke('system:selectFolder', []); },
+      selectFile: function() { return invoke('system:selectFile', []); },
       showNotification: function(title, body) {
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification(title, { body: body });
@@ -407,26 +409,26 @@ export function generateShim(token: string): string {
       onTrayNewConversation: function(cb) { return subscribe('tray:newConversation', cb); },
       onDeeplinkNavigate: function(cb) { return subscribe('deeplink:navigate', cb); },
       onConversationTitleUpdated: function(cb) { return subscribe('conversations:titleUpdated', cb); },
-      onOverlayStopRecording: function() { return noop; },
+      onOverlayStopRecording: function(cb) { return subscribe('overlay:stopRecording', cb); },
       onConversationsRefresh: function(cb) { return subscribe('conversations:refresh', cb); },
       onConversationUpdated: function(cb) { return subscribe('messages:conversationUpdated', cb); },
       onAutoThemeSwitch: function(cb) { return subscribe('theme:autoSwitch', cb); },
       onReconnect: function(cb) { return subscribe('connection:reconnected', cb); },
     },
     bugReport: {
-      getMainErrors: function() { return Promise.resolve([]); },
-      scrub: function(text) { return Promise.resolve(text); },
-      send: noopAsync,
-      onOpenRequest: function() { return noop; },
+      getMainErrors: function() { return invoke('bug:getMainErrors', []); },
+      scrub: function(text) { return invoke('bug:scrub', [text]); },
+      send: function(payload) { return invoke('bug:send', [payload]); },
+      onOpenRequest: function(cb) { return subscribe('bugReport:open', cb); },
     },
     models: {
       list: function() { return invoke('models:list', []); },
       refresh: function() { return invoke('models:refresh', []); },
     },
     server: {
-      start: noopAsync,
-      stop: noopAsync,
-      getStatus: function() { return Promise.resolve({ running: false, port: null, url: null, urlHostname: null, lanIp: null, hostname: null, token: null, shortCode: null, accessMode: null, clients: 0, firewallWarning: null }); },
+      start: function(port, options) { return invoke('server:start', [port, options]); },
+      stop: function() { return invoke('server:stop', []); },
+      getStatus: function() { return invoke('server:getStatus', []); },
       setPassword: function(p) { return invoke('server:setPassword', [p]); },
       clearPassword: function() { return invoke('server:clearPassword', []); },
       isPasswordSet: function() { return invoke('server:isPasswordSet', []); },
@@ -447,18 +449,13 @@ export function generateShim(token: string): string {
       commitDetail: function(cwd, sha) { return invoke('git:commitDetail', [cwd, sha]); },
       branches: function(cwd) { return invoke('git:branches', [cwd]); },
       stashList: function(cwd) { return invoke('git:stashList', [cwd]); },
-      // git:checkout and git:fetch are ELECTRON_ONLY_CHANNELS; the call will
+      // git:checkout and git:fetch are LOCAL_ONLY_CHANNELS; the call will
       // reject with OriginDeniedError on the server side. Surfaced as-is so
       // the UI gets a clear error instead of a silent no-op.
       checkout: function(cwd, name) { return invoke('git:checkout', [cwd, name]); },
       stashSave: function(cwd, message) { return invoke('git:stashSave', [cwd, message]); },
       stashPop: function(cwd, index) { return invoke('git:stashPop', [cwd, index]); },
       fetch: function(cwd, remote) { return invoke('git:fetch', [cwd, remote]); },
-    },
-    window: {
-      minimize: noop,
-      maximize: noop,
-      close: noop,
     },
   };
 
@@ -594,7 +591,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
   }
 
   if (msg.type === 'invoke' && msg.id && msg.channel) {
-    // Enforce the dispatch allowlist — WS_BLOCKED_CHANNELS and ELECTRON_ONLY_CHANNELS
+    // Enforce the dispatch allowlist — WS_BLOCKED_CHANNELS and LOCAL_ONLY_CHANNELS
     // are the canonical source of truth (src/core/dispatch-allowlist.ts).
     if (isWsBlocked(msg.channel)) {
       safeSend(ws, JSON.stringify({ type: 'result', id: msg.id, error: `Channel not available via WebSocket: ${msg.channel}` }))

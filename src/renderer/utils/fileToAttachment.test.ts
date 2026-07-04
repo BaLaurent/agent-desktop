@@ -17,9 +17,9 @@ afterEach(() => {
 })
 
 describe('fileToAttachment', () => {
-  describe('desktop mode (Electron)', () => {
-    it('returns attachment with path from getPathForFile', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/home/user/test.txt')
+  describe('desktop mode', () => {
+    it('returns attachment with path from importDroppedFile', async () => {
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/home/user/test.txt')
       const file = new File(['hello world'], 'test.txt', { type: 'text/plain' })
 
       const result = await fileToAttachment(file)
@@ -30,12 +30,33 @@ describe('fileToAttachment', () => {
         type: 'text/plain',
         size: file.size,
       })
-      expect(window.agent.system.getPathForFile).toHaveBeenCalledWith(file)
+      expect(window.agent.system.importDroppedFile).toHaveBeenCalledWith('test.txt', expect.any(Uint8Array))
       expect(window.agent.files.savePastedFile).not.toHaveBeenCalled()
     })
 
+    it('uses native file.path when CEF exposes it, without uploading bytes', async () => {
+      const file = new File(['hello'], 'native.txt', { type: 'text/plain' })
+      Object.defineProperty(file, 'path', { value: '/native/native.txt' })
+
+      const result = await fileToAttachment(file)
+
+      expect(result?.path).toBe('/native/native.txt')
+      expect(window.agent.system.importDroppedFile).not.toHaveBeenCalled()
+    })
+
+    it('falls through to importDroppedFile when file.path is an empty string', async () => {
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/fallback.txt')
+      const file = new File(['hello'], 'empty.txt', { type: 'text/plain' })
+      Object.defineProperty(file, 'path', { value: '' })
+
+      const result = await fileToAttachment(file)
+
+      expect(result?.path).toBe('/tmp/fallback.txt')
+      expect(window.agent.system.importDroppedFile).toHaveBeenCalledWith('empty.txt', expect.any(Uint8Array))
+    })
+
     it('uses file.type when available', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/image.png')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/image.png')
       const file = new File(['content'], 'image.png', { type: 'image/png' })
 
       const result = await fileToAttachment(file)
@@ -44,7 +65,7 @@ describe('fileToAttachment', () => {
     })
 
     it('falls back to extension-based detection when file.type is empty', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/document.pdf')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/document.pdf')
       // jsdom sets type to '' when omitted; .pdf is not in jsdom's sniff list
       const file = new File(['content'], 'document.pdf')
       expect(file.type).toBe('')
@@ -55,7 +76,7 @@ describe('fileToAttachment', () => {
     })
 
     it('returns octet-stream for unknown extensions', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/unknown.xyz')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/unknown.xyz')
       const file = new File(['data'], 'unknown.xyz')
 
       const result = await fileToAttachment(file)
@@ -64,7 +85,7 @@ describe('fileToAttachment', () => {
     })
 
     it('preserves file size in attachment', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/large.bin')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/large.bin')
       const content = new Uint8Array(1024)
       const file = new File([content], 'large.bin')
 
@@ -74,7 +95,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .json file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/data.json')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/data.json')
       const file = new File(['{}'], 'data.json')
 
       const result = await fileToAttachment(file)
@@ -83,7 +104,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .md file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/README.md')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/README.md')
       const file = new File(['# Title'], 'README.md')
 
       const result = await fileToAttachment(file)
@@ -92,7 +113,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .py file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/script.py')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/script.py')
       const file = new File(['print("hi")'], 'script.py')
 
       const result = await fileToAttachment(file)
@@ -101,7 +122,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .csv file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/data.csv')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/data.csv')
       const file = new File(['a,b,c'], 'data.csv')
 
       const result = await fileToAttachment(file)
@@ -110,7 +131,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .yaml file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/config.yaml')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/config.yaml')
       const file = new File(['key: value'], 'config.yaml')
 
       const result = await fileToAttachment(file)
@@ -119,7 +140,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .yml file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/config.yml')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/config.yml')
       const file = new File(['key: value'], 'config.yml')
 
       const result = await fileToAttachment(file)
@@ -128,7 +149,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .svg file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/icon.svg')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/icon.svg')
       const file = new File(['<svg></svg>'], 'icon.svg')
 
       const result = await fileToAttachment(file)
@@ -137,7 +158,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .webp file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/image.webp')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/image.webp')
       const file = new File(['fake webp'], 'image.webp')
 
       const result = await fileToAttachment(file)
@@ -146,7 +167,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .jpeg file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/photo.jpeg')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/photo.jpeg')
       const file = new File(['fake jpeg'], 'photo.jpeg')
 
       const result = await fileToAttachment(file)
@@ -155,7 +176,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .jpg file (alias for jpeg)', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/photo.jpg')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/photo.jpg')
       const file = new File(['fake jpg'], 'photo.jpg')
 
       const result = await fileToAttachment(file)
@@ -164,7 +185,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .gif file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/animation.gif')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/animation.gif')
       const file = new File(['fake gif'], 'animation.gif')
 
       const result = await fileToAttachment(file)
@@ -173,7 +194,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .js file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/script.js')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/script.js')
       const file = new File(['console.log()'], 'script.js')
 
       const result = await fileToAttachment(file)
@@ -182,7 +203,7 @@ describe('fileToAttachment', () => {
     })
 
     it('detects mimetype for .ts file', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/app.ts')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/app.ts')
       const file = new File(['const x: number = 1'], 'app.ts')
 
       const result = await fileToAttachment(file)
@@ -216,7 +237,7 @@ describe('fileToAttachment', () => {
         type: 'text/plain',
         size: file.size,
       })
-      expect(window.agent.system.getPathForFile).not.toHaveBeenCalled()
+      expect(window.agent.system.importDroppedFile).not.toHaveBeenCalled()
       const callArgs = vi.mocked(window.agent.files.savePastedFile).mock.calls[0]
       expect(callArgs[0]).toBeInstanceOf(Uint8Array)
       expect(callArgs[1]).toBe('text/plain')
@@ -296,7 +317,7 @@ describe('fileToAttachment', () => {
 
   describe('extension detection edge cases', () => {
     it('handles filename with no extension — uses provided file.type', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/README')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/README')
       const file = new File(['content'], 'README', { type: 'text/plain' })
 
       const result = await fileToAttachment(file)
@@ -305,7 +326,7 @@ describe('fileToAttachment', () => {
     })
 
     it('handles filename with uppercase extension', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/PHOTO.JPG')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/PHOTO.JPG')
       const file = new File(['fake'], 'PHOTO.JPG')
 
       const result = await fileToAttachment(file)
@@ -314,7 +335,7 @@ describe('fileToAttachment', () => {
     })
 
     it('handles filename with multiple dots — uses final extension', async () => {
-      vi.mocked(window.agent.system.getPathForFile).mockReturnValue('/tmp/archive.tar.gz')
+      vi.mocked(window.agent.system.importDroppedFile).mockResolvedValue('/tmp/archive.tar.gz')
       const file = new File(['fake'], 'archive.tar.gz')
 
       const result = await fileToAttachment(file)

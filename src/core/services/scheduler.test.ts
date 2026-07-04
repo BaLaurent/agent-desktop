@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type Database from 'better-sqlite3'
 import { computeNextRun, getExpectedThemeFilename, SchedulerService } from './scheduler'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 import type { ScheduledTask } from '../types'
 
 const BASE = new Date('2025-01-15T10:00:00.000Z')

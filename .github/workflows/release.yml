@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `artifact` = the packaged deliverable only. deno desktop also leaves the unpacked
+          # pre-pack dir (e.g. dist-deno/agent-desktop/, ~3GB) next to the artifact — a bare
+          # dist-deno/* would recurse into it and bloat the upload with duplicate bytes.
+          - os: ubuntu-latest
+            dist: dist:linux
+            artifact: dist-deno/*.AppImage
+          - os: macos-latest
+            dist: dist:mac
+            artifact: dist-deno/*.app
+          - os: windows-latest
+            dist: dist:win
+            artifact: |
+              dist-deno/*.msi
+              dist-deno/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.1
+      - name: Install dependencies
+        run: npm ci
+      # deno desktop compiles the renderer (vite) + headless (esbuild) + embeds CEF (~1.5GB
+      # download) per target; fetch-sherpa-prebuilds runs inside the dist:* script chain.
+      - name: Build distributable
+        run: npm run ${{ matrix.dist }}
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-desktop-${{ matrix.os }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}
+          fail_on_unmatched_files: false

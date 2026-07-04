@@ -30,7 +30,8 @@ const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'])
 /**
  * Converts a browser File object to an Attachment.
  *
- * Desktop (Electron): uses getPathForFile to get the local filesystem path.
+ * Desktop: prefers a native File.path (CEF may expose it); otherwise reads the bytes and
+ * calls system.importDroppedFile, which writes a temp file and returns its absolute path.
  * Web mode (remote access): reads the file into memory and uploads it via
  * savePastedFile, which returns a server-side temp path.
  */
@@ -59,8 +60,10 @@ export async function fileToAttachment(file: File): Promise<Attachment | null> {
     }
   }
 
-  // Desktop: direct filesystem path
-  const path = window.agent.system.getPathForFile(file)
+  // Desktop: CEF may expose a native path on the File; otherwise ship the bytes to the main
+  // process, which writes them to a temp file and returns the absolute path.
+  const nativePath = (file as File & { path?: string }).path
+  const path = nativePath ? nativePath : (await window.agent.system.importDroppedFile(file.name, new Uint8Array(await file.arrayBuffer())))
   return { name: file.name, path, type: mime, size: file.size }
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { homedir } from 'os'
-import { createTestDb } from '../../../main/__tests__/db-helper'
+import { createTestDb } from '../../__tests__/db-helper'
 import type { SqlJsAdapter } from '../../db/sqljs-adapter'
 import {
   loadMcpServersFromDb,

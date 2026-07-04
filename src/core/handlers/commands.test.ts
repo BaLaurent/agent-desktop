@@ -4,7 +4,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { DispatchRegistry } from '../dispatch'
 import { registerCommandsHandlers } from './commands'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 import type { SqlJsAdapter } from '../db/sqljs-adapter'
 
 const { discoverOmpCommandsCached } = vi.hoisted(() => ({ discoverOmpCommandsCached: vi.fn() }))

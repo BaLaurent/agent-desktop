@@ -8,18 +8,18 @@
  * optional Silero VAD) INCLUDING the audio scaling. We just feed it 16 kHz mono Float32 frames (the
  * continuous-voice engine forces a 16 kHz AudioContext) and act on the returned per-model scores.
  *
- * Models + the onnxruntime-web WASM runtime are served over the `agent-model://` protocol (file://
- * can't fetch() in the packaged app), pinned to ORT 1.24.1.
+ * Models + the onnxruntime-web WASM runtime are served over same-origin `/model/` HTTP paths
+ * (served by the desktop uiServer; file:// can't fetch() in the packaged app), pinned to ORT 1.24.1.
  */
 
 import { Model } from 'openwakeword-js'
 import type { HotwordConfig, Hotword } from './types'
 
-const ORT_WASM_PATHS = 'agent-model://ort/'
+const ORT_WASM_PATHS = '/model/ort/'
 /** Universal models (melspec + embedding) and bundled wake words. */
-const BUNDLED_BASE = 'agent-model://hotword/'
+const BUNDLED_BASE = '/model/hotword/'
 /** Custom/trained wake word folder (manual mode). */
-const MANUAL_BASE = 'agent-model://hotword-model/'
+const MANUAL_BASE = '/model/hotword-model/'
 
 /**
  * Create a wake-word detector. `onWake` is invoked (no args, by contract — the caller stamps the

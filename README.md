@@ -25,7 +25,7 @@ I build this project primarily for my own use — the features I add are the one
 - **Themes** — full CSS custom property editor, day/night auto-switch, folder color tinting
 - **Git panel** — status, branches, stash, DAG graph, log
 - **Headless mode** — runs as a web server and/or Discord bot without Electron
-- **Auto-update** — built-in, via electron-updater + GitHub Releases
+- **Auto-update** — built-in, via GitHub Releases
 
 See the [wiki](https://agent-desktop.wiki) for the full feature list and configuration guides.
 
@@ -62,15 +62,15 @@ Download from [Releases](https://github.com/BaLaurent/agent-desktop/releases) �
 ```bash
 git clone https://github.com/BaLaurent/agent-desktop.git
 cd agent-desktop
-npm install
-npm run dev
+npm install          # also requires Deno >= 2.9 on PATH (the `deno desktop` shell)
+npm run dev          # deno desktop --hmr + Vite renderer watcher
 ```
 
 ```bash
-npm run build        # compile TypeScript (output: out/)
-npm run dist:linux   # AppImage + deb
-npm run dist:mac     # .dmg (arm64)
-npm run dist:win     # NSIS + portable
+npm run build        # build the renderer (output: out/renderer)
+npm run dist:linux   # AppImage
+npm run dist:mac     # .app bundle (x86_64 + arm64)
+npm run dist:win     # .msi
 npm test             # main + renderer
 ```
 

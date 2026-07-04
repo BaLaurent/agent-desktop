@@ -4,7 +4,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { DispatchRegistry } from '../dispatch'
 import { registerAttachmentsHandlers } from './attachments'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 
 describe('attachments handlers', () => {
   let dispatch: DispatchRegistry

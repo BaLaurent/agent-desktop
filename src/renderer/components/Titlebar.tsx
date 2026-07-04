@@ -1,6 +1,4 @@
-import { useState } from 'react'
 import { UserProfile } from './auth/UserProfile'
-import { useMobileMode } from '../hooks/useMobileMode'
 import { useUiStore } from '../stores/uiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
@@ -9,18 +7,13 @@ interface TitlebarProps {
 }
 
 export function Titlebar({ onOpenSettings }: TitlebarProps) {
-  const [isMaximized, setIsMaximized] = useState(false)
-  const mobile = useMobileMode()
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const windowTitle = useSettingsStore((s) => s.settings.windowTitle) || 'Agent Desktop'
 
   return (
     <div
       className="flex items-center h-10 select-none"
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        ...(!mobile ? { WebkitAppRegion: 'drag' as never } : {}),
-      }}
+      style={{ backgroundColor: 'var(--color-surface)' }}
     >
       {/* Hamburger menu (mobile only) */}
       <button
@@ -52,7 +45,6 @@ export function Titlebar({ onOpenSettings }: TitlebarProps) {
       <button
         onClick={onOpenSettings}
         className="px-3u py-1u mobile:w-11 mobile:h-11 mobile:flex mobile:items-center mobile:justify-center hover:bg-[var(--color-bg)] rounded-sm transition-colors"
-        style={!mobile ? { WebkitAppRegion: 'no-drag' as never } : undefined}
         title="Settings (Ctrl+,)"
         aria-label="Open settings"
       >
@@ -62,52 +54,6 @@ export function Titlebar({ onOpenSettings }: TitlebarProps) {
         </svg>
       </button>
 
-      {/* Window controls (hidden in mobile/web mode) */}
-      <div
-        className="flex items-center h-full mobile:hidden"
-        style={{ WebkitAppRegion: 'no-drag' as never }}
-      >
-        <button
-          onClick={() => window.agent.window.minimize()}
-          className="h-full px-3u hover:bg-[var(--color-bg)] transition-colors flex items-center"
-          title="Minimize"
-          aria-label="Minimize window"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" style={{ color: 'var(--color-text-muted)' }}>
-            <rect y="5" width="12" height="1.5" rx="0.5" />
-          </svg>
-        </button>
-        <button
-          onClick={() => {
-            window.agent.window.maximize()
-            setIsMaximized((prev) => !prev)
-          }}
-          className="h-full px-3u hover:bg-[var(--color-bg)] transition-colors flex items-center"
-          title={isMaximized ? 'Restore' : 'Maximize'}
-          aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" style={{ color: 'var(--color-text-muted)' }}>
-            {isMaximized ? (
-              <>
-                <rect x="2" y="0" width="9.5" height="9.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
-                <rect x="0" y="2.5" width="9.5" height="9.5" rx="1" fill="var(--color-surface)" stroke="currentColor" strokeWidth="1.2" />
-              </>
-            ) : (
-              <rect x="0.5" y="0.5" width="11" height="11" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
-            )}
-          </svg>
-        </button>
-        <button
-          onClick={() => window.agent.window.close()}
-          className="h-full px-3u hover:bg-[var(--color-error)] transition-colors flex items-center"
-          title="Close"
-          aria-label="Close window"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" style={{ color: 'var(--color-text-muted)' }}>
-            <path d="M1.05 1.05a.5.5 0 01.707 0L6 5.293l4.243-4.243a.5.5 0 11.707.707L6.707 6l4.243 4.243a.5.5 0 11-.707.707L6 6.707l-4.243 4.243a.5.5 0 01-.707-.707L5.293 6 1.05 1.757a.5.5 0 010-.707z" />
-          </svg>
-        </button>
-      </div>
     </div>
   )
 }

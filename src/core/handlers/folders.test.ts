@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { DispatchRegistry } from '../dispatch'
 import { registerFoldersHandlers } from './folders'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 
 describe('folders handlers', () => {
   let dispatch: DispatchRegistry

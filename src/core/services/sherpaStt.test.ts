@@ -88,7 +88,7 @@ describe('detectArchitecture', () => {
 })
 
 async function makeDb(modelPath: string) {
-  const { createTestDb } = await import('../../main/__tests__/db-helper')
+  const { createTestDb } = await import('../__tests__/db-helper')
   const db = await createTestDb()
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('sherpa_modelPath', modelPath)
   return db
@@ -189,7 +189,7 @@ describe('resolveHotwords', () => {
   }
 
   async function dbWith(settings: Record<string, string>) {
-    const { createTestDb } = await import('../../main/__tests__/db-helper')
+    const { createTestDb } = await import('../__tests__/db-helper')
     const db = await createTestDb()
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
     for (const [k, v] of Object.entries(settings)) stmt.run(k, v)

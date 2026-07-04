@@ -9,7 +9,7 @@ import { WS_DISCONNECTED_MESSAGE } from '../types/constants'
 // also adding it to the WS shim becomes a test failure — preventing drifts
 // like the missing `git` namespace that crashed the web app's RightSidebarPanel.
 function extractNamespacesFromApiDts(): string[] {
-  const dtsPath = resolve(__dirname, '../../preload/api.d.ts')
+  const dtsPath = resolve(__dirname, '../../shared/agent-api.d.ts')
   const src = readFileSync(dtsPath, 'utf8')
   const match = src.match(/export\s+interface\s+AgentAPI\s*\{([\s\S]*?)\n\}/)
   if (!match) throw new Error('AgentAPI interface not found in api.d.ts')

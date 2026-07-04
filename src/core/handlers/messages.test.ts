@@ -21,7 +21,7 @@ vi.mock('../services/anthropic', () => ({
 
 import { DispatchRegistry } from '../dispatch'
 import { registerMessagesHandlers, buildMessageHistory, getAISettings, getSystemPrompt, saveMessage } from './messages'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 import { noopHookRunner } from '../ports/hookRunner'
 import type { MessagesHandlerOptions } from './messages'
 import type { Broadcaster } from '../ports/broadcaster'

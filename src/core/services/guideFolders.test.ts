@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 import { seedGuideFolders, seedGuideFoldersOnce } from './guideFolders'
 
 describe('seedGuideFolders', () => {

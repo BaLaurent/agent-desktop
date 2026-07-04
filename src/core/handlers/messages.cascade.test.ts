@@ -30,7 +30,7 @@ vi.mock('fs', async () => {
   return { ...actual, mkdirSync: vi.fn() }
 })
 
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 
 import {
   buildMessageHistory,

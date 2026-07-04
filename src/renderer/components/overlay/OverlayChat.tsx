@@ -146,7 +146,7 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
     return (
       <div
         className="w-screen h-screen rounded-xl flex items-center justify-center"
-        style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+        style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <div
           className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
@@ -160,9 +160,9 @@ export function OverlayChat({ voiceMode }: OverlayChatProps) {
     <div
       className="w-screen h-screen rounded-xl flex flex-col overflow-hidden"
       style={{
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        // Opaque themed fill: the Deno.BrowserWindow overlay can't be transparent, so we drop the
+        // glass blur and fill with --color-bg (matches the document body → seamless rounded corners).
+        backgroundColor: 'var(--color-bg)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
       }}
     >

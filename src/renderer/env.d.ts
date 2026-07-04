@@ -1,4 +1,4 @@
-/// <reference types="../preload/api" />
+/// <reference types="../shared/agent-api" />
 
 // Electron's `-webkit-app-region` drag handle is not in the standard CSS
 // typings. Declared here so titlebar/overlay drag styles type-check without

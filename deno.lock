@@ -1,0 +1,90 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/assert@*": "1.0.19",
+    "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/data-structures@^1.1.0": "1.1.1",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@std/testing@*": "1.0.19"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/data-structures@1.1.1": {
+      "integrity": "7e1fcf19771fb9c6dbcd7f65039d6d42ef8dc023cfbc0c4cdc74b24e09229380"
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@std/testing@1.0.19": {
+      "integrity": "f4236172365b216728dc3cc8b5e80a9f4c33083d1e4ede7613d5b25b4014898e",
+      "dependencies": [
+        "jsr:@std/assert@^1.0.19",
+        "jsr:@std/data-structures"
+      ]
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@anthropic-ai/claude-agent-sdk@~0.2.118",
+        "npm:@fallow-cli/fallow-cov@~0.1.9",
+        "npm:@fontsource/jetbrains-mono@^5.2.8",
+        "npm:@modelcontextprotocol/sdk@^1.29.0",
+        "npm:@monaco-editor/react@^4.7.0",
+        "npm:@react-three/drei@^9.122.0",
+        "npm:@react-three/fiber@^8.18.0",
+        "npm:@sinclair/typebox@0.34",
+        "npm:@storybook/addon-essentials@^8.6.14",
+        "npm:@storybook/react-vite@^8.6.18",
+        "npm:@storybook/react@^8.6.18",
+        "npm:@storybook/test@^8.6.18",
+        "npm:@testing-library/jest-dom@^6.9.1",
+        "npm:@testing-library/react@^15.0.7",
+        "npm:@testing-library/user-event@^14.6.1",
+        "npm:@types/better-sqlite3@^7.6.12",
+        "npm:@types/diff@^7.0.2",
+        "npm:@types/dompurify@^3.0.5",
+        "npm:@types/qrcode@^1.5.6",
+        "npm:@types/react-dom@^18.3.5",
+        "npm:@types/react@^18.3.18",
+        "npm:@types/three@0.183",
+        "npm:@types/ws@^8.18.1",
+        "npm:@vitejs/plugin-react@^4.3.4",
+        "npm:@vitest/coverage-v8@^4.1.5",
+        "npm:autoprefixer@^10.4.20",
+        "npm:dbus-next@~0.10.2",
+        "npm:diff@^8.0.3",
+        "npm:discord.js@^14.25.1",
+        "npm:dompurify@^3.3.1",
+        "npm:gpt-tokenizer@^3.4.0",
+        "npm:highlight.js@^11.11.1",
+        "npm:jsdom@28",
+        "npm:mermaid@^11.4.1",
+        "npm:openwakeword-js@~0.1.27",
+        "npm:postcss@^8.4.49",
+        "npm:qrcode@^1.5.4",
+        "npm:react-dom@^18.3.1",
+        "npm:react-markdown@^9.0.3",
+        "npm:react@^18.3.1",
+        "npm:remark-gfm@4",
+        "npm:sherpa-onnx-node@^1.13.2",
+        "npm:sql.js@^1.14.0",
+        "npm:storybook@^8.6.18",
+        "npm:tailwindcss@^3.4.17",
+        "npm:three@0.183",
+        "npm:trash@9",
+        "npm:tsx@^4.21.0",
+        "npm:typescript@^5.7.3",
+        "npm:vite@^5.4.11",
+        "npm:vitest@^4.0.18",
+        "npm:ws@^8.19.0",
+        "npm:zustand@^5.0.3"
+      ]
+    }
+  }
+}

@@ -24,22 +24,22 @@ export type HotwordBackendPref = 'auto' | 'webgpu' | 'wasm'
 
 export interface HotwordConfig {
   /**
-   * 'bundled' — model files are served from agent-model://hotword/<file>.
-   * 'manual'  — the wakeword .onnx is served from agent-model://hotword-model/<file>;
-   *             melspec + embedding always come from agent-model://hotword/.
+   * 'bundled' — model files are served from /model/hotword/<file>.
+   * 'manual'  — the wakeword .onnx is served from /model/hotword-model/<file>;
+   *             melspec + embedding always come from /model/hotword/.
    */
   modelSource: 'bundled' | 'manual'
 
   /**
    * Wakeword identifier.
-   * Bundled example: 'hey_jarvis'  → expects agent-model://hotword/hey_jarvis.onnx
-   * Manual example:  'my_keyword'  → expects agent-model://hotword-model/my_keyword.onnx
+   * Bundled example: 'hey_jarvis'  → expects /model/hotword/hey_jarvis.onnx
+   * Manual example:  'my_keyword'  → expects /model/hotword-model/my_keyword.onnx
    */
   model: string
 
   /**
    * Only meaningful in 'manual' mode. Provided for forwards compatibility —
-   * the protocol handler uses agent-model://hotword-model/ unconditionally in
+   * the uiServer serves /model/hotword-model/ unconditionally in
    * manual mode, so this field is informational only for now.
    */
   modelPath?: string

@@ -1,0 +1,209 @@
+// Ported from src/main/services/openscad.ts. Registers `openscad:*` on the dispatch registry
+// (origin 'local'). Electron swaps: dialog.showSaveDialog + BrowserWindow.fromWebContents →
+// nativeDialogs.saveFile (process-modal CLI helper). The OpenSCAD binary is still driven via
+// node child_process spawn (node-compat). new Promise executors → Promise.withResolvers().
+import type Database from "better-sqlite3";
+import { spawn } from "node:child_process";
+import * as fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { HandleRegistrar } from "../../core/dispatch";
+import { getSetting } from "../../core/utils/db";
+import { validateString } from "../../core/utils/validate";
+import { saveFile } from "./nativeDialogs";
+
+const MAX_OUTPUT_SIZE = 50 * 1024 * 1024; // 50MB
+const TIMEOUT_MS = 60_000;
+
+interface CompileResult {
+  data: string; // base64-encoded .3mf
+  warnings: string;
+}
+
+interface ValidateResult {
+  binaryFound: boolean;
+  binaryPath: string;
+  version: string;
+}
+
+async function findBinary(binaryPath: string): Promise<boolean> {
+  if (path.isAbsolute(binaryPath)) {
+    try {
+      await fs.access(binaryPath, fsConstants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  // Search PATH via `which`
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const proc = spawn("which", [binaryPath], { stdio: ["ignore", "pipe", "ignore"], env: process.env });
+  let out = "";
+  proc.stdout.on("data", (d: Buffer) => {
+    out += d.toString();
+  });
+  proc.on("close", (code) => resolve(code === 0 && out.trim().length > 0));
+  proc.on("error", () => resolve(false));
+  return promise;
+}
+
+async function compile(db: Database.Database, scadFilePath: string): Promise<CompileResult> {
+  const binaryPath = getSetting(db, "openscad_binaryPath") || "openscad";
+  const tmpOutput = path.join(os.tmpdir(), `agent-openscad-${Date.now()}.3mf`);
+
+  try {
+    const { promise, resolve, reject } = Promise.withResolvers<CompileResult>();
+    const args = ["-o", tmpOutput, scadFilePath];
+    const proc = spawn(binaryPath, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+      timeout: TIMEOUT_MS,
+      env: process.env,
+    });
+
+    let stderr = "";
+
+    proc.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
+
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        const hint = process.env.APPIMAGE
+          ? " When running as AppImage, use an absolute path (e.g. /usr/bin/openscad) in Settings > OpenSCAD."
+          : "";
+        reject(new Error(`OpenSCAD binary not found: "${binaryPath}". Install OpenSCAD and configure the path in Settings > OpenSCAD.${hint}`));
+      } else {
+        reject(new Error(`Failed to start OpenSCAD: ${err.message}`));
+      }
+    });
+
+    proc.on("close", async (code, signal) => {
+      if (signal === "SIGTERM") {
+        reject(new Error("OpenSCAD compilation timed out (60s). Try simplifying the model."));
+        return;
+      }
+      if (code !== 0) {
+        const detail = stderr.trim().slice(0, 500);
+        reject(new Error(`OpenSCAD exited with code ${code}${detail ? ": " + detail : ""}`));
+        return;
+      }
+
+      try {
+        const buffer = await fs.readFile(tmpOutput);
+        if (buffer.length > MAX_OUTPUT_SIZE) {
+          reject(new Error(`Output file too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB, max ${MAX_OUTPUT_SIZE / 1024 / 1024}MB)`));
+          return;
+        }
+        resolve({ data: buffer.toString("base64"), warnings: stderr.trim() });
+      } catch (readErr) {
+        reject(new Error(`Failed to read OpenSCAD output: ${(readErr as Error).message}`));
+      }
+    });
+
+    return await promise;
+  } finally {
+    await fs.unlink(tmpOutput).catch(() => {});
+  }
+}
+
+async function validateConfig(db: Database.Database): Promise<ValidateResult> {
+  const binaryPath = getSetting(db, "openscad_binaryPath") || "openscad";
+  const binaryFound = await findBinary(binaryPath);
+
+  let version = "";
+  if (binaryFound) {
+    try {
+      const { promise, resolve, reject } = Promise.withResolvers<string>();
+      const proc = spawn(binaryPath, ["--version"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 5000,
+        env: process.env,
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      proc.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+
+      proc.on("close", () => {
+        // OpenSCAD may output version to stdout or stderr
+        resolve((stdout.trim() || stderr.trim()).split("\n")[0]);
+      });
+      proc.on("error", () => reject(new Error("Failed to get version")));
+      version = await promise;
+    } catch {
+      version = "";
+    }
+  }
+
+  return { binaryFound, binaryPath, version };
+}
+
+async function exportStl(db: Database.Database, scadFilePath: string, outputPath: string): Promise<void> {
+  const binaryPath = getSetting(db, "openscad_binaryPath") || "openscad";
+
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  const args = ["-o", outputPath, scadFilePath];
+  const proc = spawn(binaryPath, args, {
+    stdio: ["ignore", "ignore", "pipe"],
+    timeout: TIMEOUT_MS,
+    env: process.env,
+  });
+
+  let stderr = "";
+  proc.stderr.on("data", (d: Buffer) => {
+    stderr += d.toString();
+  });
+
+  proc.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "ENOENT") {
+      reject(new Error(`OpenSCAD binary not found: "${binaryPath}". Configure in Settings > OpenSCAD.`));
+    } else {
+      reject(new Error(`Failed to start OpenSCAD: ${err.message}`));
+    }
+  });
+
+  proc.on("close", (code, signal) => {
+    if (signal === "SIGTERM") {
+      reject(new Error("OpenSCAD export timed out (60s)."));
+    } else if (code !== 0) {
+      const detail = stderr.trim().slice(0, 500);
+      reject(new Error(`OpenSCAD exited with code ${code}${detail ? ": " + detail : ""}`));
+    } else {
+      resolve();
+    }
+  });
+
+  await promise;
+}
+
+export function registerHandlers(dispatch: HandleRegistrar, db: Database.Database): void {
+  dispatch.handle("openscad:compile", async (_event, scadFilePath: unknown) => {
+    const scad = validateString(scadFilePath, "scadFilePath");
+    return compile(db, scad);
+  });
+
+  dispatch.handle("openscad:validateConfig", async () => {
+    return validateConfig(db);
+  });
+
+  dispatch.handle("openscad:exportStl", async (_event, scadFilePath: unknown) => {
+    const scad = validateString(scadFilePath, "scadFilePath");
+    // Native save dialog replaces Electron's dialog.showSaveDialog(parentWindow, …); dialogs are
+    // process-modal CLI helpers now (no parent BrowserWindow).
+    const defaultName = path.basename(scad.replace(/\.scad$/i, ".stl"));
+    const outputPath = await saveFile(defaultName);
+    if (!outputPath) return null;
+    await exportStl(db, scad, outputPath);
+    return outputPath;
+  });
+}
+
+// Exported for testing
+export { compile, validateConfig, findBinary, exportStl };

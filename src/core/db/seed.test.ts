@@ -1,4 +1,4 @@
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 import { seedDefaults } from './seed'
 import type Database from 'better-sqlite3'
 

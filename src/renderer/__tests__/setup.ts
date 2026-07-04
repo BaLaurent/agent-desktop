@@ -1,6 +1,19 @@
-import { vi } from 'vitest'
+import { vi, beforeEach } from 'vitest'
 import '@testing-library/jest-dom'
-import type { AgentAPI } from '../../preload/api'
+import type { AgentAPI } from '../../shared/agent-api'
+
+// jsdom does not implement Blob/File.arrayBuffer(); polyfill via FileReader so source paths that
+// read dropped/pasted file bytes (e.g. fileToAttachment → importDroppedFile) work under jsdom.
+if (typeof Blob !== 'undefined' && typeof Blob.prototype.arrayBuffer !== 'function') {
+  Blob.prototype.arrayBuffer = function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+    return new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as ArrayBuffer)
+      reader.onerror = () => reject(reader.error)
+      reader.readAsArrayBuffer(this)
+    })
+  }
+}
 
 // Captured stream listener callback — set when chatStore module registers its onStream handler
 export let capturedStreamListener: ((chunk: unknown) => void) | null = null
@@ -110,9 +123,6 @@ export const mockAgent = {
     onUIEvent: vi.fn().mockReturnValue(() => {}),
     onUIRequest: vi.fn().mockReturnValue(() => {}),
     respondUI: vi.fn().mockResolvedValue(undefined),
-    sendTuiInput: vi.fn(),
-    onTuiRender: vi.fn().mockReturnValue(() => {}),
-    onTuiDone: vi.fn().mockReturnValue(() => {}),
   },
   settings: {
     get: vi.fn().mockResolvedValue({}),
@@ -156,7 +166,29 @@ export const mockAgent = {
     duck: vi.fn().mockResolvedValue(undefined),
     restore: vi.fn().mockResolvedValue(undefined),
   },
+  guides: {
+    reseed: vi.fn().mockResolvedValue({ created: 0 }),
+  },
+  sherpa: {
+    transcribe: vi.fn().mockResolvedValue({ text: '' }),
+    validateConfig: vi.fn().mockResolvedValue({ modelPath: '', files: [], detected: null, ok: false }),
+    downloadModel: vi.fn().mockResolvedValue({ modelPath: '' }),
+    listInstalledModels: vi.fn().mockResolvedValue([]),
+    onDownloadProgress: vi.fn().mockReturnValue(() => {}),
+  },
+  voiceIntent: {
+    classify: vi.fn().mockResolvedValue({ addressed: false }),
+  },
+  hotwordTrain: {
+    listModels: vi.fn().mockResolvedValue([]),
+    start: vi.fn().mockResolvedValue({ started: true }),
+    setup: vi.fn().mockResolvedValue({ started: true }),
+    cancel: vi.fn().mockResolvedValue({ cancelled: true }),
+    status: vi.fn().mockResolvedValue({ running: false, phrase: null }),
+    onEvent: vi.fn().mockReturnValue(() => {}),
+  },
   system: {
+    importDroppedFile: vi.fn().mockResolvedValue('/tmp/dropped-file'),
     getPathForFile: vi.fn().mockReturnValue('/tmp/file'),
     getInfo: vi.fn().mockResolvedValue({ version: '0.1.0', electron: '33', node: '20', platform: 'linux', dbPath: '', configPath: '' }),
     getLogs: vi.fn().mockResolvedValue([]),
@@ -185,12 +217,9 @@ export const mockAgent = {
       return () => {}
     }),
   },
-  window: {
-    minimize: vi.fn(),
-    maximize: vi.fn(),
-    close: vi.fn(),
-  },
   scheduler: {
+    toggleBackground: vi.fn().mockResolvedValue(undefined),
+    backgroundStatus: vi.fn().mockResolvedValue({ enabled: false, installed: false }),
     list: vi.fn().mockResolvedValue([]),
     get: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(undefined),

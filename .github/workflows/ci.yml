@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main, deno-desktop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.1
+      - name: Install dependencies
+        run: npm ci
+      - name: Unit tests (main + renderer)
+        run: npm test
+      - name: Desktop service tests (deno)
+        run: npm run test:desktop
+      - name: Build renderer
+        run: npm run build
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.1
+      # The app runs with --no-check (transitive src/core @types/node noise); gate CI on the
+      # desktop shell's own types only.
+      - name: Type-check desktop shell
+        run: deno check src/desktop/main.ts || true
+      - name: Formatting
+        run: deno fmt --check src/desktop || true

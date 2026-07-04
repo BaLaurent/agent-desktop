@@ -24,7 +24,7 @@
  * Cat B — WS_BLOCKED_CHANNELS: credentialed control-plane; refused over WS
  *   regardless of authenticated state.
  *
- * Cat C — ELECTRON_ONLY_CHANNELS: local-only Electron features; refused over
+ * Cat C — LOCAL_ONLY_CHANNELS: local-only desktop features; refused over
  *   WS and discord/scheduler origins even when the handler is present in
  *   engine.dispatch (mirrored there via withSanitizedErrors in main/ipc.ts).
  *
@@ -33,10 +33,10 @@
  * never enter engine.dispatch at all — no entry needed here.
  */
 
-export type DispatchOrigin = 'electron' | 'ws' | 'discord' | 'scheduler'
+export type DispatchOrigin = 'local' | 'ws' | 'discord' | 'scheduler'
 
 /**
- * Channels that MUST only be invoked from the Electron main process (i.e.
+ * Channels that MUST only be invoked from the local desktop process (i.e.
  * from a trusted renderer via ipcMain). Remote WS/Discord/scheduler
  * invocations are refused.
  *
@@ -53,7 +53,7 @@ export type DispatchOrigin = 'electron' | 'ws' | 'discord' | 'scheduler'
  */
 // consumed by headless/index.test.ts (excluded). (suppressed below)
 // fallow-ignore-next-line unused-export
-export const ELECTRON_ONLY_CHANNELS: ReadonlySet<string> = new Set([
+export const LOCAL_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   // MCP server management — arbitrary command+args, turn-key RCE via testConnection
   'mcp:addServer',
   'mcp:updateServer',
@@ -147,8 +147,8 @@ export class OriginDeniedError extends Error {
 
 // consumed by headless/index.test.ts (excluded). (suppressed below)
 // fallow-ignore-next-line unused-export
-export function isElectronOnly(channel: string): boolean {
-  return ELECTRON_ONLY_CHANNELS.has(channel)
+export function isLocalOnly(channel: string): boolean {
+  return LOCAL_ONLY_CHANNELS.has(channel)
 }
 
 export function isWsBlocked(channel: string): boolean {
@@ -163,7 +163,7 @@ export function assertOriginAllowed(channel: string, origin: DispatchOrigin): vo
   if (origin === 'ws' && WS_BLOCKED_CHANNELS.has(channel)) {
     throw new OriginDeniedError(channel, origin)
   }
-  if (origin !== 'electron' && ELECTRON_ONLY_CHANNELS.has(channel)) {
+  if (origin !== 'local' && LOCAL_ONLY_CHANNELS.has(channel)) {
     throw new OriginDeniedError(channel, origin)
   }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Internal
+- **Desktop runtime migrated from Electron to `deno desktop`** — the shell is now a Deno 2.9+ process (CEF backend). The renderer is served over a local HTTP+WS bridge and the former Electron IPC preload is replaced by a generated WS shim; native integrations (tray, global shortcuts, quick-chat overlay, native file dialogs, deep links, updater) are reimplemented on Deno/OS APIs. The pi/omp chat backend is unchanged (out-of-process omp RPC sidecar, auto-downloaded on first launch). Local STT runs via a Node sidecar (sherpa-onnx N-API cannot load in-process under the Deno runtime). Requires Deno ≥ 2.9 on `PATH`.
+- **Build & dev commands changed** — `npm run dev` runs `deno desktop --hmr` alongside a Vite renderer watcher; `npm run dist[:linux|:mac|:win]` compiles a self-contained artifact (AppImage / `.app` / `.msi`) via `deno desktop`. Electron (`electron-vite`, `electron-builder`) is removed.
+- **Database durability hardened** — settings and message writes now flush to disk immediately when isolated (bursts still coalesce on a 500ms debounce), and every flush writes to a temp file renamed atomically over `agent.db`, so a crash or kill mid-flush can no longer truncate the database. The desktop app also (re)creates the Chromium-format `SingletonLock` next to the database, so background scheduler ticks correctly stand down while the app is running (single-writer guarantee restored after the Electron removal).
+
 ## [0.18.0] - 2026-06-15
 
 ### New Features

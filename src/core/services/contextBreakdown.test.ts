@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { buildContextBreakdown } from './contextBreakdown'
-import { createTestDb } from '../../main/__tests__/db-helper'
+import { createTestDb } from '../__tests__/db-helper'
 import { createTables } from '../db/schema'
 import { mkdtemp, writeFile, mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'

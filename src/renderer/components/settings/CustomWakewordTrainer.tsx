@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import type { HotwordTrainEvent } from '../../../preload/api'
+import type { HotwordTrainEvent } from '../../../shared/agent-api'
 
 const inputStyle = {
   backgroundColor: 'var(--color-bg)',

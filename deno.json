@@ -1,0 +1,31 @@
+{
+  "name": "agent-desktop",
+  "version": "0.18.0",
+  "exports": "./src/desktop/main.ts",
+  "nodeModulesDir": "manual",
+  "unstable": ["sloppy-imports"],
+  "imports": {
+    "@shared/": "./src/shared/"
+  },
+  "compilerOptions": {
+    "types": ["./src/desktop/deno-desktop.d.ts"]
+  },
+  "desktop": {
+    "app": {
+      "name": "Agent Desktop",
+      "identifier": "com.agent.desktop",
+      "icons": {
+        "macos": "./build/icon.icns",
+        "windows": "./build/icon.ico",
+        "linux": "./build/icon.png"
+      },
+      "deepLinks": ["agent"]
+    },
+    "backend": "cef",
+    "output": {
+      "macos": "./dist-deno/Agent Desktop.app",
+      "windows": "./dist-deno/AgentDesktop",
+      "linux": "./dist-deno/agent-desktop.AppImage"
+    }
+  }
+}
