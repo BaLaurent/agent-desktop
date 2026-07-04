@@ -62,6 +62,7 @@ export class SqlJsAdapter {
   private dirty = false
   private flushTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
+  private lastFlushMs = 0
 
   constructor(db: SqlJsDatabase, dbPath: string | null) {
     this.db = db
@@ -125,15 +126,24 @@ export class SqlJsAdapter {
     this.closed = true
   }
 
-  /** Mark DB as having pending changes — debounces flush to disk */
+  /** Mark DB as having pending changes. An isolated write (no flush in the last second) is
+   *  flushed IMMEDIATELY — so a "user action, then instant SIGTERM/logout" is already durable
+   *  before any signal fires (the desktop runtime gives signal handlers no reliable slice).
+   *  Writes inside a burst coalesce on the 500ms trailing debounce as before. */
   markDirty(): void {
     if (!this.dbPath) return // :memory: — no persistence
     this.dirty = true
-    if (this.flushTimer) clearTimeout(this.flushTimer)
+    if (Date.now() - this.lastFlushMs > 1000) {
+      this.flush()
+      return
+    }
+    clearTimeout(this.flushTimer ?? undefined)
     this.flushTimer = setTimeout(() => this.flush(), 500)
   }
 
-  /** Synchronous flush — writes DB to disk immediately */
+  /** Synchronous flush — writes DB to disk immediately. The write lands in a temp sibling and
+   *  is renameSync'd over the target: a process death mid-flush (observed under the desktop
+   *  runtime's SIGTERM teardown) leaves the previous intact DB, never a truncated one. */
   flush(): void {
     if (!this.dirty || !this.dbPath) return
     if (this.flushTimer) {
@@ -143,8 +153,11 @@ export class SqlJsAdapter {
     const data = this.db.export()
     const dir = path.dirname(this.dbPath)
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(this.dbPath, Buffer.from(data))
+    const tmpPath = this.dbPath + '.tmp'
+    fs.writeFileSync(tmpPath, Buffer.from(data))
+    fs.renameSync(tmpPath, this.dbPath)
     this.dirty = false
+    this.lastFlushMs = Date.now()
   }
 }
 
