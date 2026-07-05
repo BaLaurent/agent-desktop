@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+- **Database durability hardened** — settings and message writes now flush to disk immediately when isolated (bursts still coalesce on a 500ms debounce), and every flush writes to a temp file renamed atomically over `agent.db`, so a crash or kill mid-flush can no longer truncate the database.
+
 ## [0.18.0] - 2026-06-15
 
 ### New Features
