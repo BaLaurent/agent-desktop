@@ -3,19 +3,13 @@ import { EventEmitter } from 'events'
 
 // ─── Mocks (before imports) ──────────────────────────────────
 
-vi.mock('electron', () => ({
-  app: { isPackaged: false, getAppPath: () => '/mock/app' },
-}))
-
-vi.mock('../index', () => ({ getMainWindow: vi.fn(() => null) }))
-vi.mock('../mainContext', () => ({
-  getMainWindow: vi.fn(() => null),
+vi.mock('../utils/broadcast', () => ({
+  broadcast: vi.fn(),
 }))
 
 vi.mock('../utils/env', () => ({
   findBinaryInPath: vi.fn(),
 }))
-
 // Mock readline.createInterface — capture line callbacks
 let readlineInstances: Array<{ lineCallbacks: Array<(line: string) => void> }> = []
 
@@ -51,16 +45,19 @@ vi.mock('child_process', () => ({
 
 // ─── Imports (after mocks) ───────────────────────────────────
 
-import { registerHandlers, shutdownAllKernels } from './jupyter'
+import { registerJupyterHandlers } from '../handlers/jupyter'
+import { shutdownAllKernels } from './jupyter'
 import { findBinaryInPath } from '../utils/env'
-import { getMainWindow } from '../mainContext'
+import { broadcast } from '../utils/broadcast'
 
 const mockFindBinary = vi.mocked(findBinaryInPath)
-const mockGetMainWindow = vi.mocked(getMainWindow)
+const mockBroadcast = vi.mocked(broadcast)
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function createMockIpcMain() {
+const BRIDGE_SCRIPT = '/mock/app/resources/jupyter/bridge.py'
+
+function createMockRegistrar() {
   const handlers = new Map<string, (...args: any[]) => any>()
   return {
     handle: (channel: string, handler: (...args: any[]) => any) => {
@@ -84,16 +81,25 @@ function emitLine(rlIndex: number, line: string) {
   }
 }
 
+/** Find the jupyter:output broadcast call matching `matcher`. */
+function findOutputCall(matcher: (data: unknown) => boolean): { data: unknown } {
+  for (const call of mockBroadcast.mock.calls) {
+    if (call[0] === 'jupyter:output' && matcher(call[1])) {
+      return { data: call[1] }
+    }
+  }
+  throw new Error('No matching jupyter:output broadcast call found')
+}
+
 // ─── Tests ───────────────────────────────────────────────────
 
 describe('jupyter service', () => {
-  let ipc: ReturnType<typeof createMockIpcMain>
+  let ipc: ReturnType<typeof createMockRegistrar>
 
   beforeEach(() => {
     vi.clearAllMocks()
     readlineInstances = []
     mockFindBinary.mockReturnValue(null)
-    mockGetMainWindow.mockReturnValue(null)
     mockSpawn.mockImplementation(() => createMockProc())
 
     // Re-register handlers each test for a fresh ipc; module-level kernels Map
@@ -102,13 +108,13 @@ describe('jupyter service', () => {
     vi.clearAllMocks()
     readlineInstances = []
 
-    ipc = createMockIpcMain()
-    registerHandlers(ipc as any)
+    ipc = createMockRegistrar()
+    registerJupyterHandlers(ipc as any, { bridgeScriptPath: BRIDGE_SCRIPT })
   })
 
   // ── registerHandlers ──────────────────────────────────────
 
-  describe('registerHandlers', () => {
+  describe('registerJupyterHandlers', () => {
     it('registers all expected IPC channels', () => {
       const expectedChannels = [
         'jupyter:startKernel',
@@ -150,7 +156,7 @@ describe('jupyter service', () => {
       expect(result).toEqual({ status: 'starting' })
       expect(mockSpawn).toHaveBeenCalledWith(
         '/usr/bin/python3',
-        ['/mock/app/resources/jupyter/bridge.py'],
+        [BRIDGE_SCRIPT],
         expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }),
       )
     })
@@ -210,17 +216,16 @@ describe('jupyter service', () => {
         .rejects.toThrow('kernelName must be a string')
     })
 
-    it('sends ready event to renderer when kernel reports ready', async () => {
+    it('broadcasts ready event when kernel reports ready', async () => {
       mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
 
       await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
 
       // readline instance 0 is stdout
       emitLine(0, JSON.stringify({ type: 'ready', language: 'python' }))
 
-      expect(mockWin.webContents.send).toHaveBeenCalledWith('jupyter:output', {
+      const { data } = findOutputCall((d: any) => d?.type === 'ready')
+      expect(data).toEqual({
         filePath: '/test/notebook.ipynb',
         id: null,
         type: 'ready',
@@ -253,15 +258,14 @@ describe('jupyter service', () => {
 
     it('forwards non-ready messages to renderer with filePath', async () => {
       mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
 
       await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
 
       const execResult = { type: 'execute_result', id: 'req_1', data: { 'text/plain': '42' } }
       emitLine(0, JSON.stringify(execResult))
 
-      expect(mockWin.webContents.send).toHaveBeenCalledWith('jupyter:output', {
+      const { data } = findOutputCall((d: any) => d?.type === 'execute_result')
+      expect(data).toEqual({
         ...execResult,
         filePath: '/test/notebook.ipynb',
       })
@@ -269,21 +273,19 @@ describe('jupyter service', () => {
 
     it('ignores non-JSON lines on stdout', async () => {
       mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
 
       await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
 
       // Should not throw
       emitLine(0, 'not valid json {')
 
-      expect(mockWin.webContents.send).not.toHaveBeenCalled()
+      // No broadcast for the malformed line — ready still not seen either
+      const readyCalls = mockBroadcast.mock.calls.filter(c => c[0] === 'jupyter:output' && (c[1] as any)?.type === 'ready')
+      expect(readyCalls).toHaveLength(0)
     })
 
-    it('removes kernel and sends dead status on process exit', async () => {
+    it('removes kernel and broadcasts dead status on process exit', async () => {
       mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
 
       await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
 
@@ -291,7 +293,8 @@ describe('jupyter service', () => {
       const proc = mockSpawn.mock.results[0].value
       proc.emit('exit', 0)
 
-      expect(mockWin.webContents.send).toHaveBeenCalledWith('jupyter:output', {
+      const { data } = findOutputCall((d: any) => d?.state === 'dead')
+      expect(data).toEqual({
         filePath: '/test/notebook.ipynb',
         id: null,
         type: 'status',
@@ -303,17 +306,16 @@ describe('jupyter service', () => {
       expect(status).toBeNull()
     })
 
-    it('removes kernel and sends error on spawn error', async () => {
+    it('removes kernel and broadcasts error on spawn error', async () => {
       mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
 
       await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
 
       const proc = mockSpawn.mock.results[0].value
       proc.emit('error', new Error('spawn failed'))
 
-      expect(mockWin.webContents.send).toHaveBeenCalledWith('jupyter:output', expect.objectContaining({
+      const { data } = findOutputCall((d: any) => d?.type === 'error')
+      expect(data).toEqual(expect.objectContaining({
         filePath: '/test/notebook.ipynb',
         id: null,
         type: 'error',
@@ -325,38 +327,15 @@ describe('jupyter service', () => {
       expect(status).toBeNull()
     })
 
-    it('does not send to renderer when window is destroyed', async () => {
-      mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => true, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
-
-      await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
-
-      emitLine(0, JSON.stringify({ type: 'ready', language: 'python' }))
-
-      expect(mockWin.webContents.send).not.toHaveBeenCalled()
-    })
-
-    it('does not send to renderer when window is null', async () => {
-      mockFindBinary.mockReturnValue('/usr/bin/python3')
-      mockGetMainWindow.mockReturnValue(null)
-
-      await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
-
-      // Should not throw
-      emitLine(0, JSON.stringify({ type: 'ready', language: 'python' }))
-    })
-
     it('defaults language to python when ready message has no language', async () => {
       mockFindBinary.mockReturnValue('/usr/bin/python3')
-      const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-      mockGetMainWindow.mockReturnValue(mockWin as any)
 
       await ipc.invoke('jupyter:startKernel', '/test/notebook.ipynb')
 
       emitLine(0, JSON.stringify({ type: 'ready' }))
 
-      expect(mockWin.webContents.send).toHaveBeenCalledWith('jupyter:output', expect.objectContaining({
+      const { data } = findOutputCall((d: any) => d?.type === 'ready')
+      expect(data).toEqual(expect.objectContaining({
         language: 'python',
       }))
     })

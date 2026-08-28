@@ -49,6 +49,7 @@ interface EngineOptions {
   dbPath: string
   wasmPath?: string
   themesDir: string
+  jupyterBridgePath?: string
   broadcaster: Broadcaster
   platformIO?: PlatformIO
   systemUI?: SystemUI
@@ -74,6 +75,7 @@ export class AgentEngine extends TypedEventEmitter<EngineEvents> {
   private readonly dbPath: string
   private readonly wasmPath?: string
   private readonly themesDir: string
+  private readonly jupyterBridgePath?: string
   private readonly bugReportOpts?: BugReportHandlerOptions
 
   constructor(options: EngineOptions) {
@@ -81,6 +83,7 @@ export class AgentEngine extends TypedEventEmitter<EngineEvents> {
     this.dbPath = options.dbPath
     this.wasmPath = options.wasmPath
     this.themesDir = options.themesDir
+    this.jupyterBridgePath = options.jupyterBridgePath
     this.broadcaster = options.broadcaster
     this.platformIO = options.platformIO ?? noopPlatformIO
     this.systemUI = options.systemUI ?? noopSystemUI
@@ -122,6 +125,7 @@ export class AgentEngine extends TypedEventEmitter<EngineEvents> {
       bugReport: this.bugReportOpts,
       webPassword: this._webPassword,
       settingsService: this._settings,
+      jupyterBridgePath: this.jupyterBridgePath,
     })
   }
 

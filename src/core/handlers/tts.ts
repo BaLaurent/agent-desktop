@@ -12,6 +12,7 @@ import { HAIKU_MODEL } from '../types/constants'
 import { loadAgentSDK } from '../services/anthropic'
 import { mapModelToBackend, parseLastModelByBackend } from '../services/modelBackendMap'
 import { injectApiKeyEnv } from '../services/streaming'
+import { broadcast } from '../utils/broadcast'
 import { getAgentDirectives, formatAgentDirectives } from './messages'
 import { duckOtherStreams, restoreOtherStreams } from '../utils/volume'
 import { createLogger, errToCtx } from '../utils/logger'
@@ -30,17 +31,26 @@ const intentionallyStopped = new WeakSet<ChildProcess>()
 let cachedPlayer: string | null = null
 let currentMessageId: number | null = null
 
-// ─── Speaking state listener (set by Electron main) ────────
+// ─── Speaking state listeners ───────────────────────────────
+//
+// A SET, not a single slot. It was one slot, and both `registerTtsHandlers`
+// (which broadcasts to WebSocket clients) and `src/main/services/tts.ts` (which
+// pushes to the focused Electron window) need to hear about state changes — with
+// one slot, whichever module loaded last silently replaced the other, and the
+// answer depended on import order. On the headless path `src/main` is never
+// imported at all, which is how `tts:stateChange` came to be emitted to nobody.
 
 type SpeakingStateListener = (speaking: boolean, messageId: number | null) => void
-let speakingStateListener: SpeakingStateListener | null = null
+const speakingStateListeners = new Set<SpeakingStateListener>()
 
-export function setSpeakingStateListener(listener: SpeakingStateListener | null): void {
-  speakingStateListener = listener
+/** Register a listener. Returns an unsubscribe function. */
+export function addSpeakingStateListener(listener: SpeakingStateListener): () => void {
+  speakingStateListeners.add(listener)
+  return () => { speakingStateListeners.delete(listener) }
 }
 
 function notifySpeakingState(speaking: boolean): void {
-  speakingStateListener?.(speaking, currentMessageId)
+  for (const listener of speakingStateListeners) listener(speaking, currentMessageId)
 }
 
 // ─── Web audio sink (set by Electron main) ──────────────────
@@ -515,6 +525,24 @@ export function listSayVoices(): { name: string; locale: string }[] {
 // ─── Handler registration ───────────────────────────────────
 
 export function registerTtsHandlers(registrar: HandleRegistrar, db: SqlJsAdapter): void {
+  // Broadcast speaking state from here, not from `src/main`.
+  //
+  // `setSpeakingStateListener` used to be called only by
+  // `src/main/services/tts.ts`, which the headless server never imports — so on
+  // the headless path nothing ever registered a listener and `tts:stateChange`
+  // was never emitted. Every non-Electron front (the QML plugin and the web
+  // client) therefore had a permanently dark speaking indicator, even though
+  // `tts:speak` worked and audio played. Verified live: speak/stop succeeded
+  // while zero `tts:stateChange` frames arrived over WebSocket.
+  //
+  // `broadcast` reaches every WebSocket client (and the Discord bridge). The
+  // Electron renderer is served separately by `src/main/services/tts.ts`, which
+  // adds its own listener for the focused window, so both fronts are covered
+  // without either double-sending.
+  addSpeakingStateListener((speaking, messageId) => {
+    broadcast('tts:stateChange', { speaking, messageId })
+  })
+
   registrar.handle('tts:speak', async (_event, text: unknown) => {
     const validated = validateString(text, 'text', 100_000)
     await speak(validated, db as any)

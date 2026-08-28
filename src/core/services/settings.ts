@@ -131,6 +131,12 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   // Sort preferences (global only, not cascadable)
   'sort_criterion',
   'sort_direction',
+  // UI state the shell persists so the layout survives a restart (global only)
+  'sidebar_collapsed',
+  // The conversation the window reopens on. Without it every open started
+  // with no selection, and ChatStore.send() drops a message — typed OR
+  // dictated — when no conversation is active.
+  'active_conversation_id',
   // Background scheduler (global only)
   'scheduler_background_enabled',
 ])

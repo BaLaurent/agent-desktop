@@ -27,6 +27,8 @@
     "test:watch": "vitest --config vitest.config.main.ts",
     "test:coverage": "vitest run --config vitest.config.main.ts --coverage && vitest run --config vitest.config.renderer.ts --coverage",
     "build:headless": "esbuild src/headless/index.ts --bundle --platform=node --target=node18 --outfile=out/headless/index.js --alias:@shared=./src/shared --external:@anthropic-ai/claude-agent-sdk --external:better-sqlite3 --external:sherpa-onnx-node --external:sherpa-onnx-linux-x64 --external:sherpa-onnx-linux-arm64 --external:sherpa-onnx-win-x64 --external:sherpa-onnx-darwin-arm64 --external:sherpa-onnx-darwin-x64 && cp node_modules/sql.js/dist/sql-wasm.wasm out/headless/sql-wasm.wasm",
+    "build:omarchy-bridge": "esbuild omarchy/plugins/agent-desktop/bridge/bridge.mjs --bundle --platform=node --format=esm --target=node22 --banner:js=\"import{createRequire as __ompCreateRequire}from'node:module';const require=__ompCreateRequire(import.meta.url);\" --outfile=omarchy/plugins/agent-desktop/bridge/bridge.built.mjs",
+    "build:omarchy-consts": "esbuild scripts/emit-setting-defs.ts --bundle --platform=node --format=esm --outfile=out/emit-setting-defs.mjs && node out/emit-setting-defs.mjs > omarchy/plugins/agent-desktop/generated/settingDefs.js",
     "start:server": "node out/headless/index.js --server",
     "start:discord": "node out/headless/index.js --discord",
     "start:headless": "node out/headless/index.js --server --discord",

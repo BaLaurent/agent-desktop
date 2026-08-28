@@ -41,3 +41,7 @@ presentation-video-en/
 #Icons
 robot_icon_512.png
 icon.drawkov
+
+# Agent Desktop Omarchy plugin: generated artifacts (npm run build:omarchy-*)
+omarchy/plugins/agent-desktop/bridge/bridge.built.mjs
+omarchy/plugins/agent-desktop/generated/

@@ -33,7 +33,7 @@
  * never enter engine.dispatch at all — no entry needed here.
  */
 
-export type DispatchOrigin = 'electron' | 'ws' | 'discord' | 'scheduler'
+export type DispatchOrigin = 'electron' | 'ws' | 'ws-local' | 'discord' | 'scheduler'
 
 /**
  * Channels that MUST only be invoked from the Electron main process (i.e.
@@ -80,17 +80,6 @@ export const ELECTRON_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   'files:trash',
   // Knowledge folder reveal — opens host file manager
   'kb:openKnowledgesFolder',
-  // Jupyter — spawns/terminates local kernel processes; local-only
-  'jupyter:startKernel',
-  'jupyter:executeCell',
-  'jupyter:interruptKernel',
-  'jupyter:restartKernel',
-  'jupyter:shutdownKernel',
-  'jupyter:getStatus',
-  'jupyter:detectJupyter',
-  // OpenSCAD — compiles .scad files using local toolchain
-  'openscad:compile',
-  'openscad:validateConfig',
   // Quick Chat — Electron overlay window control
   'quickChat:getConversationId',
   'quickChat:purge',
@@ -102,8 +91,6 @@ export const ELECTRON_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   'updates:download',
   'updates:install',
   'updates:getStatus',
-  // PI extensions — local extension registry, host filesystem
-  'pi:listExtensions',
 ])
 
 /**
@@ -115,8 +102,6 @@ export const ELECTRON_ONLY_CHANNELS: ReadonlySet<string> = new Set([
  *    server they are connected through.
  *  - server:{setPassword,clearPassword} — LAN attacker must not rotate the
  *    session secret and lock out the legitimate user.
- *  - openscad:exportStl — uses `event.sender` (null over WS → crash).
- *
  * NOTE — `settings:set` was previously blocked here. It is now reachable
  * over WS so the web UI has parity with the Electron app. Per-key locking
  * (e.g. CLI `--port` override pinning `server_port`) is enforced in
@@ -126,12 +111,41 @@ export const ELECTRON_ONLY_CHANNELS: ReadonlySet<string> = new Set([
 // consumed by headless/index.test.ts (excluded). (suppressed below)
 // fallow-ignore-next-line unused-export
 export const WS_BLOCKED_CHANNELS: ReadonlySet<string> = new Set([
-  'openscad:exportStl',
   'server:clearPassword',  // credential control-plane: remote must not clear the password
   'server:getStatus',
   'server:setPassword',    // credential control-plane: remote must not rotate the session secret
   'server:start',
   'server:stop',
+])
+
+/**
+ * Subset of `ELECTRON_ONLY_CHANNELS` that a *same-host* WS client (origin
+ * `'ws-local'`) is allowed to invoke. The 2026-04-23 audit blocks these
+ * channels for LAN WS clients because `mcp:testConnection` is turn-key RCE
+ * via attacker-controlled `command`/`args`, `git:fetch`/`git:checkout`
+ * allow positional-argument injection (`--upload-pack=…`), and the
+ * `system:purge*` channels wipe the DB without confirmation. A native
+ * front running on the same machine as the server is trusted to perform
+ * these on the user's behalf; a LAN client is not. Channels NOT listed
+ * here remain blocked for `'ws-local'` just like for `'ws'`.
+ */
+// consumed by headless/index.test.ts (excluded). (suppressed below)
+// fallow-ignore-next-line unused-export
+export const LOCAL_WS_ALLOWED_CHANNELS: ReadonlySet<string> = new Set([
+  // MCP server management — required by a native front to add/edit/test servers.
+  'mcp:addServer',
+  'mcp:updateServer',
+  'mcp:testConnection',
+  // Destructive DB wipes — exposed because a native front can show its own
+  // confirmation dialog and call these only after the user confirms.
+  'system:purgeAll',
+  'system:purgeConversations',
+  // Terminal + session prep — only meaningful on the same host as the server.
+  'files:openTerminalHere',
+  'files:prepareSession',
+  // Git positional-argument injection — same-host trust model.
+  'git:fetch',
+  'git:checkout',
 ])
 
 export class OriginDeniedError extends Error {
@@ -160,10 +174,14 @@ export function isWsBlocked(channel: string): boolean {
  * Safe to call on every dispatch invocation — O(1) set lookups.
  */
 export function assertOriginAllowed(channel: string, origin: DispatchOrigin): void {
-  if (origin === 'ws' && WS_BLOCKED_CHANNELS.has(channel)) {
+  if ((origin === 'ws' || origin === 'ws-local') && WS_BLOCKED_CHANNELS.has(channel)) {
     throw new OriginDeniedError(channel, origin)
   }
-  if (origin !== 'electron' && ELECTRON_ONLY_CHANNELS.has(channel)) {
+  if (
+    origin !== 'electron' &&
+    ELECTRON_ONLY_CHANNELS.has(channel) &&
+    !(origin === 'ws-local' && LOCAL_WS_ALLOWED_CHANNELS.has(channel))
+  ) {
     throw new OriginDeniedError(channel, origin)
   }
 }

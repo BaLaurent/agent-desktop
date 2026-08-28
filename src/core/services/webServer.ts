@@ -12,6 +12,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createRateLimiter, type RateLimiter, type WebPasswordService } from '../auth'
 import { addBroadcastHandler } from '../utils/broadcast'
 import { assertOriginAllowed, isWsBlocked, OriginDeniedError } from '../dispatch-allowlist'
+import { respondPIUI } from './pi/piUIChannel'
 import { cookieIsValid, type RouteContext } from './web/middleware'
 import { handleLoginPost, handleLogout, handleLoginGet } from './web/routes/login'
 import { handleShimJs, handleShortCode, handleStatic } from './web/routes/static'
@@ -40,6 +41,8 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 const missedPongs = new WeakMap<WebSocket, number>()
 /** Stores the cookie value captured at WS upgrade, used to re-validate on heartbeat after secret rotation. */
 const clientCookies = new WeakMap<WebSocket, string>()
+/** True when this socket connected from a loopback address (same-host front). Drives the `'ws-local'` dispatch origin. */
+const clientLoopback = new WeakMap<WebSocket, boolean>()
 const HEARTBEAT_INTERVAL = 30_000
 /**
  * Terminate only after this many consecutive missed pongs (≈ MAX × interval =
@@ -507,6 +510,20 @@ function stripMappedIpv6(addr: string): string {
   return addr.startsWith('::ffff:') ? addr.slice(7) : addr
 }
 
+/**
+ * True when `addr` resolves to a loopback interface. Strips the IPv4-mapped
+ * IPv6 prefix (`::ffff:`) so dual-stack listeners (Node default) report a
+ * pure IPv4 address to consumers. Used by the WS handler to tag a connection
+ * with the `'ws-local'` dispatch origin — same-host clients get access to a
+ * narrow set of channels documented in LOCAL_WS_ALLOWED_CHANNELS; LAN
+ * clients stay tagged `'ws'` so the 2026-04-23 audit restrictions hold.
+ */
+export function isLoopbackAddress(addr: string | undefined): boolean {
+  if (!addr) return false
+  const stripped = stripMappedIpv6(addr)
+  return stripped === '127.0.0.1' || stripped === '::1'
+}
+
 function isAllowedRemote(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false
   const addr = stripMappedIpv6(remoteAddress)
@@ -566,8 +583,18 @@ function safeSend(ws: WebSocket, payload: string): void {
 
 // ─── WebSocket message handling ─────────────────────
 
+/**
+ * Compute the dispatch origin tag for a WS client. A loopback socket
+ * (same host as the server) is tagged `'ws-local'` so the dispatch
+ * allowlist can grant it the narrow LOCAL_WS_ALLOWED_CHANNELS exception
+ * list; everything else stays `'ws'` and the audit restrictions hold.
+ */
+function originForWsClient(ws: WebSocket): 'ws' | 'ws-local' {
+  return clientLoopback.get(ws) ? 'ws-local' : 'ws'
+}
+
 function handleWsMessage(ws: WebSocket, raw: string): void {
-  let msg: { type: string; token?: string; id?: string; channel?: string; args?: unknown[] }
+  let msg: { type: string; token?: string; id?: string; channel?: string; args?: unknown[]; value?: string; confirmed?: boolean; cancelled?: boolean }
   try {
     msg = JSON.parse(raw)
   } catch {
@@ -593,6 +620,22 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
     return
   }
 
+  // Reply to a `pi:uiRequest` broadcast. Carries the same shape as the
+  // Electron renderer's `pi:uiResponse` IPC (`PiUIResponse`): { id, value?,
+  // confirmed?, cancelled? }. respondPIUI is idempotent for unknown ids.
+  if (msg.type === 'respond') {
+    if (!msg.id || typeof msg.id !== 'string') return
+    respondPIUI({
+      id: msg.id,
+      value: typeof msg.value === 'string' ? msg.value : undefined,
+      confirmed: typeof msg.confirmed === 'boolean' ? msg.confirmed : undefined,
+      cancelled: typeof msg.cancelled === 'boolean' ? msg.cancelled : undefined,
+    })
+    return
+  }
+
+  const origin = originForWsClient(ws)
+
   if (msg.type === 'invoke' && msg.id && msg.channel) {
     // Enforce the dispatch allowlist — WS_BLOCKED_CHANNELS and ELECTRON_ONLY_CHANNELS
     // are the canonical source of truth (src/core/dispatch-allowlist.ts).
@@ -601,7 +644,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
       return
     }
     try {
-      assertOriginAllowed(msg.channel, 'ws')
+      assertOriginAllowed(msg.channel, origin)
     } catch (err) {
       if (err instanceof OriginDeniedError) {
         safeSend(ws, JSON.stringify({ type: 'result', id: msg.id, error: `Channel not available via WebSocket: ${msg.channel}` }))
@@ -784,7 +827,14 @@ export async function startServer(port: number, options?: ServerStartOptions): P
     wss = new WebSocketServer({ noServer: true, maxPayload: 10 * 1024 * 1024 })
     httpServer.on('upgrade', upgradeHandler)
 
-    wss.on('connection', (wsClient) => {
+    wss.on('connection', (wsClient, req) => {
+      // Tag the dispatch origin at upgrade time. `req.socket.remoteAddress`
+      // is the same value `isAllowedRemote` already gates on; a loopback
+      // address tags this socket as a same-host front (`'ws-local'`),
+      // everything else stays `'ws'`. The `req` arg comes from `ws`'s
+      // `handleUpgrade(req, …, ws => wss.emit('connection', ws, req))`
+      // call in wsUpgrade.ts.
+      clientLoopback.set(wsClient, isLoopbackAddress(req?.socket?.remoteAddress))
       missedPongs.set(wsClient, 0)
       wsClient.on('pong', () => {
         missedPongs.set(wsClient, 0)
@@ -795,10 +845,12 @@ export async function startServer(port: number, options?: ServerStartOptions): P
       wsClient.on('close', () => {
         authenticatedClients.delete(wsClient)
         clientCookies.delete(wsClient)
+        clientLoopback.delete(wsClient)
       })
       wsClient.on('error', () => {
         authenticatedClients.delete(wsClient)
         clientCookies.delete(wsClient)
+        clientLoopback.delete(wsClient)
       })
     })
 

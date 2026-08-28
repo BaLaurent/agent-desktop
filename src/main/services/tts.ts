@@ -11,18 +11,23 @@ import {
   validateConfig,
   detectPlayers,
   listSayVoices,
-  setSpeakingStateListener,
+  addSpeakingStateListener,
   setWebAudioSink,
 } from '../../core/handlers/tts'
 
 // ─── Electron state notification ────────────────────────────
+//
+// The focused window only. `broadcast('tts:stateChange', …)` is NOT called here:
+// `registerTtsHandlers` in src/core owns it, so WebSocket clients get the event
+// whichever front is running — including the headless server, where this module
+// is never imported. Broadcasting from both places would send every web client
+// two frames per state change.
 
-setSpeakingStateListener((speaking, messageId) => {
+addSpeakingStateListener((speaking, messageId) => {
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('tts:stateChange', { speaking, messageId })
   }
-  broadcast('tts:stateChange', { speaking, messageId })
 })
 
 // ─── Web audio routing ──────────────────────────────────────

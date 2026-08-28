@@ -15,9 +15,6 @@ vi.mock('../utils/paths', () => ({
   expandTilde: (p: string) => p.replace('~', '/home/testuser'),
 }))
 
-vi.mock('./piExtensions', () => ({
-  discoverPIExtensionCommands: vi.fn().mockResolvedValue([]),
-}))
 
 import { registerHandlers } from './commands'
 

@@ -249,7 +249,7 @@ const api: AgentAPI = {
   openscad: {
     compile: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:compile', scadFilePath), 75000),
     validateConfig: () => withTimeout(ipcRenderer.invoke('openscad:validateConfig')),
-    exportStl: (scadFilePath: string) => withTimeout(ipcRenderer.invoke('openscad:exportStl', scadFilePath), 75000),
+    exportStl: (scadFilePath: string, outputPath: string) => withTimeout(ipcRenderer.invoke('openscad:exportStl', scadFilePath, outputPath), 75000),
   },
   scheduler: {
     list: () => withTimeout(ipcRenderer.invoke('scheduler:list')),
@@ -319,6 +319,8 @@ const api: AgentAPI = {
     openExternal: (url) => withTimeout(ipcRenderer.invoke('system:openExternal', url)),
     selectFolder: () => withTimeout(ipcRenderer.invoke('system:selectFolder')),
     selectFile: () => withTimeout(ipcRenderer.invoke('system:selectFile')),
+    saveFileDialog: (defaultPath?: string, filters?: Array<{ name: string; extensions: string[] }>) =>
+      withTimeout(ipcRenderer.invoke('system:saveFileDialog', defaultPath, filters)),
     showNotification: (title: string, body: string) => withTimeout(ipcRenderer.invoke('system:showNotification', title, body)),
     purgeConversations: () => withTimeout(ipcRenderer.invoke('system:purgeConversations')),
     purgeAll: () => withTimeout(ipcRenderer.invoke('system:purgeAll')),

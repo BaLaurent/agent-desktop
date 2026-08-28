@@ -1,0 +1,152 @@
+#!/usr/bin/env node
+// Generates tests/qml/imports/qs/{Ui,Commons}/*.qml from the real Omarchy shell.
+//
+// Hand-written stubs drift, and both drift directions cost real time:
+//   - a stub that GRANTS what the shell withholds lets code compile in the test
+//     suite and be refused by the live shell (`Cannot assign to non-existent
+//     property`);
+//   - a stub that WITHHOLDS what the shell has makes the compile gate fail on
+//     correct code, and the honest reaction is to change the code — which is
+//     exactly the wrong fix.
+// Both happened. So the stubs are derived, not written.
+//
+// Only the root object's declarations are mirrored: a nested delegate's
+// `required property var modelData` is not part of the component's interface.
+// Types are carried over so a binding gets a plausibly-typed target; bodies are
+// deliberately empty, because a stub only has to make the type resolve and the
+// names exist.
+//
+//   node tests/gen-stubs.js            # write
+//   node tests/gen-stubs.js --check    # exit 1 if anything would change
+const fs = require('fs')
+const path = require('path')
+
+const SHELL = process.env.OMARCHY_SHELL_DIR || '/usr/share/omarchy/shell'
+const OUT = path.join(__dirname, 'qml', 'imports', 'qs')
+const CHECK = process.argv.includes('--check')
+
+// The types the plugin actually instantiates, plus the four Commons singletons.
+// Deliberately a list rather than "everything the shell ships": a stub for an
+// unused type can only rot.
+const UI_TYPES = [
+  'BarWidget', 'BorderSurface', 'Button', 'ConfirmDialog', 'Dropdown', 'MultiSelect',
+  'NumberField', 'OpticalGlyph', 'PanelSectionHeader', 'PanelSeparator', 'PanelSlider',
+  'PanelToolTip', 'SearchableDropdown', 'TextField', 'Toggle', 'WidgetButton',
+]
+
+// A stub's base type. Most are plain Items; a few must behave like the real
+// thing for a binding or a child to make sense.
+const BASE = {
+  TextField: { imports: ['import QtQuick', 'import QtQuick.Controls as QQC'], root: 'QQC.TextField' },
+  BorderSurface: { imports: ['import QtQuick'], root: 'Rectangle' },
+  OpticalGlyph: { imports: ['import QtQuick'], root: 'Text' },
+  PanelSectionHeader: { imports: ['import QtQuick'], root: 'Text' },
+}
+
+function rootDeclarations(src) {
+  const lines = src.split('\n')
+  let depth = 0
+  let started = false
+  const decls = []
+  for (const line of lines) {
+    const t = line.trim()
+    if (!started) {
+      if (/^[A-Z][\w.]*\s*\{\s*$/.test(t) || /^[A-Z][\w.]*\s*\{/.test(t)) { started = true; depth = 1 }
+      continue
+    }
+    if (depth === 1) {
+      let m = t.match(/^(?:(readonly|required|default)\s+)*property\s+(alias\s+|[\w.<>]+\s+)([A-Za-z_]\w*)/)
+      if (m && !m[3].startsWith('_')) {
+        decls.push({ kind: 'property', type: m[2].trim(), name: m[3], readonly: /^readonly\s/.test(t) })
+      }
+      m = t.match(/^signal\s+([A-Za-z_]\w*)\s*(\(([^)]*)\))?/)
+      if (m && !m[1].startsWith('_')) decls.push({ kind: 'signal', name: m[1], args: (m[3] || '').trim() })
+      m = t.match(/^function\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/)
+      if (m && !m[1].startsWith('_')) decls.push({ kind: 'function', name: m[1], args: (m[2] || '').trim() })
+    }
+    for (const ch of line) { if (ch === '{') depth++; else if (ch === '}') depth-- }
+    if (depth <= 0) break
+  }
+  return decls
+}
+
+// A stub must not re-declare what its own base type already provides.
+const BASE_OWNED = {
+  'QQC.TextField': new Set(['text', 'font', 'color', 'placeholderText', 'readOnly', 'echoMode',
+    'horizontalAlignment', 'topPadding', 'bottomPadding', 'leftPadding', 'rightPadding', 'padding', 'hovered']),
+  Rectangle: new Set(['color', 'radius', 'border']),
+  Text: new Set(['text', 'font', 'color', 'wrapMode', 'elide', 'horizontalAlignment', 'verticalAlignment']),
+  Item: new Set([]),
+}
+
+const DEFAULTS = {
+  string: '""', bool: 'false', int: '0', real: '0', color: '"transparent"',
+  var: 'undefined', QtObject: 'null', Item: 'null', alias: null,
+}
+
+function stubFor(mod, name, decls) {
+  const base = BASE[name] || { imports: ['import QtQuick'], root: 'Item' }
+  const owned = BASE_OWNED[base.root] || new Set()
+  const body = []
+  for (const d of decls) {
+    if (d.kind === 'property') {
+      if (owned.has(d.name)) continue
+      if (d.type === 'alias') continue          // an alias needs a real target; skip it
+      const def = DEFAULTS[d.type] !== undefined ? DEFAULTS[d.type] : 'undefined'
+      const type = DEFAULTS[d.type] !== undefined ? d.type : 'var'
+      // `readonly` is dropped: a test may want to drive the value.
+      body.push(`  property ${type} ${d.name}: ${def}`)
+    } else if (d.kind === 'signal') {
+      body.push(`  signal ${d.name}(${d.args})`)
+    } else {
+      body.push(`  function ${d.name}(${d.args}) { return undefined }`)
+    }
+  }
+  const sizing = base.root === 'Item' ? ['', '  implicitWidth: 120', '  implicitHeight: 28'] : []
+  return [
+    `// GENERATED by tests/gen-stubs.js from ${SHELL}/${mod}/${name}.qml — do not edit.`,
+    '//',
+    '// Offscreen stand-in so the QML suite runs with no shell. Only the root',
+    '// object\'s declaration NAMES matter; the bodies are deliberately empty.',
+    '// Regenerate with: node tests/gen-stubs.js',
+    '',
+    ...base.imports,
+    '',
+    `${base.root} {`,
+    ...body,
+    ...sizing,
+    '}',
+    '',
+  ].join('\n')
+}
+
+// The Commons singletons are hand-written: their VALUES are what tests read
+// (Style.spacing.md must be a number), so a mechanical stub of empty defaults
+// would be useless. They are still fidelity-checked for granted names.
+const files = {}
+for (const name of UI_TYPES) {
+  const real = path.join(SHELL, 'Ui', `${name}.qml`)
+  if (!fs.existsSync(real)) { console.error(`missing in shell: Ui/${name}.qml`); process.exit(1) }
+  files[path.join(OUT, 'Ui', `${name}.qml`)] = stubFor('Ui', name, rootDeclarations(fs.readFileSync(real, 'utf8')))
+}
+files[path.join(OUT, 'Ui', 'qmldir')] =
+  'module qs.Ui\n' + UI_TYPES.slice().sort().map((n) => `${n} 1.0 ${n}.qml`).join('\n') + '\n'
+
+let changed = 0
+for (const [p, content] of Object.entries(files)) {
+  const existing = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null
+  if (existing === content) continue
+  changed++
+  if (CHECK) console.error('would change: ' + path.relative(path.join(__dirname, '..'), p))
+  else fs.writeFileSync(p, content)
+}
+
+if (CHECK) {
+  if (changed > 0) {
+    console.error(`\n${changed} stub(s) out of sync with the shell. Run: node tests/gen-stubs.js`)
+    process.exit(1)
+  }
+  console.log('gen-stubs --check: ok (stubs match the shell)')
+} else {
+  console.log(`gen-stubs: wrote ${Object.keys(files).length} file(s), ${changed} changed`)
+}

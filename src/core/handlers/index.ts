@@ -19,16 +19,33 @@ import { registerCommandsHandlers } from './commands'
 import { registerGuidesHandlers } from './guides'
 import { registerKnowledgeHandlers } from './knowledge'
 import { registerSchedulerHandlers } from './scheduler'
+import { registerJupyterHandlers } from './jupyter'
 import { registerTtsHandlers, speakResponse, stop as ttsStop } from './tts'
 import { registerWhisperHandlers } from './whisper'
 import { registerSherpaHandlers } from './sherpa'
+import { registerOpenscadHandlers } from './openscad'
 import { registerVoiceIntentHandlers } from './voiceIntent'
 import { registerSystemHandlers } from './system'
 import { registerGitHandlers } from './git'
 import { registerBugReportHandlers, type BugReportHandlerOptions } from './bugReport'
 import { registerWebServerAuthHandlers } from './webServerAuth'
+import { registerPIExtensionsHandlers } from './piExtensions'
 import { createLogger } from '../utils/logger'
+import { join } from 'path'
 
+/**
+ * Filesystem path to the bundled Jupyter Python bridge script. The
+ * Electron main process resolves this against `app.getAppPath()` /
+ * `process.resourcesPath` and threads the result via
+ * `CoreHandlerOptions.jupyterBridgePath`; if the caller does not
+ * supply one (e.g. headless), we fall back to `resources/jupyter/bridge.py`
+ * relative to `process.cwd()`. The actual path is only used when a
+ * Jupyter channel is invoked, so an incorrect fallback is harmless
+ * until then.
+ */
+export function defaultJupyterBridgePath(): string {
+  return process.env.AGENT_JUPYTER_BRIDGE_PATH || join(process.cwd(), 'resources', 'jupyter', 'bridge.py')
+}
 const log = createLogger('messages')
 
 interface CoreHandlerOptions {
@@ -40,6 +57,8 @@ interface CoreHandlerOptions {
   bugReport?: BugReportHandlerOptions
   webPassword: import('../auth').WebPasswordService
   settingsService?: SettingsService
+  /** Filesystem path to the Python bridge script (`resources/jupyter/bridge.py`). */
+  jupyterBridgePath?: string
 }
 
 export function registerCoreHandlers(
@@ -84,8 +103,8 @@ export function registerCoreHandlers(
   })
   registerSystemHandlers(registrar, db)
   registerGitHandlers(registrar)
-  if (options.bugReport) {
-    registerBugReportHandlers(registrar, options.bugReport)
-  }
+  registerOpenscadHandlers(registrar, db)
   registerWebServerAuthHandlers(registrar, options.webPassword)
+  registerPIExtensionsHandlers(registrar)
+  registerJupyterHandlers(registrar, { bridgeScriptPath: options.jupyterBridgePath ?? defaultJupyterBridgePath() })
 }

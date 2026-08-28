@@ -953,7 +953,12 @@ export function PreviewTab() {
     if (!selectedFilePath) return
     setExporting(true)
     try {
-      await window.agent.openscad.exportStl(selectedFilePath)
+      const defaultPath = selectedFilePath.replace(/\.scad$/i, '.stl')
+      const outputPath = await window.agent.system.saveFileDialog(defaultPath, [
+        { name: 'STL Files', extensions: ['stl'] },
+      ])
+      if (!outputPath) return // user cancelled
+      await window.agent.openscad.exportStl(selectedFilePath, outputPath)
     } catch { /* user cancelled or error */ }
     finally { setExporting(false) }
   }, [selectedFilePath])

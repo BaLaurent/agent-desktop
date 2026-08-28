@@ -219,7 +219,7 @@ export interface AgentAPI {
   openscad: {
     compile(scadFilePath: string): Promise<{ data: string; warnings: string }>
     validateConfig(): Promise<{ binaryFound: boolean; binaryPath: string; version: string }>
-    exportStl(scadFilePath: string): Promise<string | null>
+    exportStl(scadFilePath: string, outputPath: string): Promise<string | null>
   }
   scheduler: {
     list(): Promise<ScheduledTask[]>
@@ -277,6 +277,7 @@ export interface AgentAPI {
     openExternal(url: string): Promise<void>
     selectFolder(): Promise<string | null>
     selectFile(): Promise<string | null>
+    saveFileDialog(defaultPath?: string, filters?: Array<{ name: string; extensions: string[] }>): Promise<string | null>
     showNotification(title: string, body: string): Promise<void>
     purgeConversations(): Promise<{ conversations: number; folders: number }>
     purgeAll(): Promise<{ conversations: number }>

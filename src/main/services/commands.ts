@@ -4,7 +4,6 @@ import * as path from 'path'
 import { expandTilde } from '../utils/paths'
 import { validatePathSafe } from '../utils/validate'
 import type { SlashCommand } from '../../shared/types'
-import { discoverPIExtensionCommands } from './piExtensions'
 import {
   BUILTIN_COMMANDS,
   scanCommandsDir,
@@ -83,16 +82,6 @@ export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void 
     const macros = await scanMacrosDir()
     for (const macro of macros) {
       results.set(macro.name, macro as SlashCommand)
-    }
-
-    // Pi extension commands — Electron-only path (depends on PI SDK + Electron paths)
-    try {
-      const piCommands = await discoverPIExtensionCommands(getSetting(db, 'pi_extensionsDir') || undefined)
-      for (const cmd of piCommands) {
-        results.set(cmd.name, cmd)
-      }
-    } catch {
-      // PI SDK not available or extension discovery failed — skip
     }
 
     return Array.from(results.values())

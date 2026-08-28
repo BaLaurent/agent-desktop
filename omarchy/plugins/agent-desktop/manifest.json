@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-desktop",
+  "name": "Agent Desktop",
+  "version": "0.2.0",
+  "author": "Agent Desktop Contributors",
+  "license": "AGPL-3.0-only",
+  "description": "Agent Desktop as a native Omarchy window: conversations, chat, settings, files and scheduling against the headless server.",
+  "kinds": ["service", "bar-widget", "panel"],
+  "activation": "on-demand",
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml",
+    "panel": "App.qml"
+  },
+  "barWidget": {
+    "displayName": "Agent Desktop",
+    "description": "Server status and turn activity; click to open the app window or quick chat.",
+    "category": "Communication",
+    "aliases": ["agent", "claude", "chat", "ai", "assistant"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "openOnClick": "Window",
+      "notifyWhenHidden": "On",
+      "voiceAutoSend": "On",
+      "quickChatHistoryTurns": 6
+    },
+    "schema": [
+      { "key": "openOnClick", "type": "enum", "label": "Left click opens",
+        "options": ["Window", "QuickChat"], "defaultValue": "Window" },
+      { "key": "notifyWhenHidden", "type": "enum", "label": "Notify when a turn ends with the window closed",
+        "options": ["On", "Off"], "defaultValue": "On" },
+      { "key": "voiceAutoSend", "type": "enum", "label": "Send a voice transcript automatically",
+        "options": ["On", "Off"], "defaultValue": "On" },
+      { "key": "quickChatHistoryTurns", "type": "integer", "label": "Recent messages preloaded in quick chat",
+        "min": 0, "max": 40, "step": 2, "defaultValue": 6 }
+    ]
+  }
+}

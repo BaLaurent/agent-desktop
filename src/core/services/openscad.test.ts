@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createTestDb } from '../__tests__/db-helper'
+import { createTestDb } from '../../main/__tests__/db-helper'
 import type Database from 'better-sqlite3'
 
 // Mock child_process.spawn — returns a new mock proc each time

@@ -27,7 +27,7 @@ import { registerGlobalShortcuts, unregisterAll as unregisterGlobalShortcuts } f
 import { showOverlay } from './services/quickChat'
 import { startScheduler, stopScheduler } from './services/scheduler'
 import { startBridge, stopBridge } from './services/schedulerBridge'
-import { shutdownAllKernels } from './services/jupyter'
+import { shutdownAllKernels } from '../core/handlers/jupyter'
 import { shutdownAllSessions } from './services/sessionManager'
 import { stop as stopTts } from './services/tts'
 import { startServer, stopServer } from '../core/services/webServer'
@@ -364,6 +364,9 @@ if (!gotLock) {
       dbPath,
       wasmPath,
       themesDir: join(app.getPath('home'), '.agent-desktop', 'themes'),
+      jupyterBridgePath: app.isPackaged
+        ? join(process.resourcesPath, 'jupyter', 'bridge.py')
+        : join(app.getAppPath(), 'resources', 'jupyter', 'bridge.py'),
       broadcaster: electronBroadcaster,
       hookRunner: electronHookRunner,
       bugReport: {

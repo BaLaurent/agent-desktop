@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Agent Desktop headless server launcher.
+#
+# Resolves the repo root from its own location, refuses to start if the
+# Electron app is alive (sql.js rewrites the whole agent.db on every write),
+# runs the headless server, and parses the [headless] "Access token:" line
+# out of the JSON log stream into $XDG_RUNTIME_DIR/agent-desktop/session.json
+# so the Omarchy plugin bridge can read it without scraping logs.
+set -euo pipefail
+
+repo="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+
+# Refuse if the Electron app is live: agent.db is sql.js — every process
+# loads the whole file into RAM and rewrites it wholesale, so two writers
+# silently revert each other. Read SingletonLock (Electron writes it as
+# <hostname>-<pid>) and verify the pid is alive.
+singleton="${XDG_CONFIG_HOME:-$HOME/.config}/agent-desktop/SingletonLock"
+if [[ -L "$singleton" ]]; then
+  target="$(readlink "$singleton")"
+  if [[ "$target" =~ ^([^-]+)-([0-9]+)$ ]]; then
+    pid="${BASH_REMATCH[2]}"
+    if kill -0 "$pid" 2>/dev/null; then
+      printf 'agent-desktop-headless: Electron instance alive (pid %s) — refusing to start\n' "$pid" >&2
+      exit 1
+    fi
+  fi
+fi
+
+port="${AGENT_DESKTOP_PORT:-3484}"
+session_dir="${XDG_RUNTIME_DIR:-/tmp}/agent-desktop"
+mkdir -p "$session_dir"
+chmod 700 "$session_dir"
+
+# Clean up the session file on exit so a stale token never lingers.
+trap 'rm -f "$session_dir/session.json"' EXIT
+
+# Pipe the server's stdout through a reader that mirrors the line AND, when
+# it sees the access-token line, atomically rewrites session.json. The token
+# is `crypto.randomBytes(32).toString('hex')` (webServer.ts) — exactly 64
+# hex chars — and is regenerated on every restart.
+node "$repo/out/headless/index.js" --server --port "$port" --access-mode lan 2>&1 |
+  while IFS= read -r line; do
+    printf '%s\n' "$line"
+    if [[ $line =~ Access\ token:\ ([0-9a-f]{64}) ]]; then
+      tok="${BASH_REMATCH[1]}"
+      printf '{"port":%s,"token":"%s","url":"https://localhost:%s/?token=%s"}\n' \
+        "$port" "$tok" "$port" "$tok" > "$session_dir/session.json.tmp"
+      chmod 600 "$session_dir/session.json.tmp"
+      mv "$session_dir/session.json.tmp" "$session_dir/session.json"
+    fi
+  done

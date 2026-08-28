@@ -1,0 +1,14 @@
+[Unit]
+Description=Agent Desktop headless server
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/omarchy/bin/agent-desktop-headless
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

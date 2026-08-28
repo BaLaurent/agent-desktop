@@ -98,12 +98,12 @@ export const SETTING_SOURCES_OPTIONS = [
   { value: 'local', label: 'User + Project + Local' },
 ] as const
 
-const SKILLS_TOGGLE_OPTIONS = [
+export const SKILLS_TOGGLE_OPTIONS = [
   { value: 'true', label: 'Enabled' },
   { value: 'false', label: 'Disabled' },
 ] as const
 
-const PLAN_APPROVAL_OPTIONS = [
+export const PLAN_APPROVAL_OPTIONS = [
   { value: 'true', label: 'Always ask' },
   { value: 'false', label: 'Auto-approve (bypass)' },
 ] as const

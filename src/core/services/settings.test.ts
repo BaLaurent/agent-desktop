@@ -1,54 +1,49 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
-import { SettingsService } from './settings'
 import { createTestDb } from '../../main/__tests__/db-helper'
+import { SettingsService } from './settings'
 
-describe('SettingsService — lockedKeys', () => {
-  let db: Database.Database
-  let svc: SettingsService
+// The runtime here is sql.js, not better-sqlite3, so `better-sqlite3` is a
+// TYPE-only import. The adapter implements the `prepare`/`exec` subset the
+// services actually touch, not the whole better-sqlite3 surface, and no
+// runtime check could establish the rest — so this is a named unchecked cast
+// rather than a schema parse.
+async function service(): Promise<SettingsService> {
+  const adapter = await createTestDb()
+  const db = adapter as unknown as Database.Database
+  return new SettingsService(db)
+}
 
-  beforeEach(async () => {
-    db = (await createTestDb()) as unknown as Database.Database
-    svc = new SettingsService(db)
+describe('SettingsService allowlist', () => {
+  // The allowlist is what a client may write. The Omarchy shell plugin has no
+  // storage of its own — it persists its layout through these keys — so a key
+  // missing here does not fail loudly, it silently reverts the user's UI on
+  // every restart. Both of these shipped missing:
+  //
+  //   sidebar_collapsed       the sidebar reopened expanded every time
+  //   active_conversation_id  no conversation was selected on open, and
+  //                           ChatStore.send() drops a message (typed OR a
+  //                           finished voice transcript) with none active
+  it.each([
+    ['sidebar_collapsed', 'true'],
+    ['active_conversation_id', '14'],
+  ])("persists the UI-state key %s", async (key, value) => {
+    const s = await service()
+    s.set(key, value)
+    expect(s.getAll()[key]).toBe(value)
   })
 
-  afterEach(() => {
-    db.close()
+  it('rejects a key that is not on the allowlist', async () => {
+    const s = await service()
+    expect(() => s.set('definitely_not_a_setting', 'x')).toThrow(/Unknown setting key/)
   })
 
-  it('getLockedKeys is empty by default', () => {
-    expect(svc.getLockedKeys()).toEqual([])
-    expect(svc.isLocked('server_port')).toBe(false)
-  })
-
-  it('lockKey adds the key to the locked set', () => {
-    svc.lockKey('server_port')
-    expect(svc.isLocked('server_port')).toBe(true)
-    expect(svc.getLockedKeys()).toContain('server_port')
-  })
-
-  it('set throws when the key is locked', () => {
-    svc.lockKey('server_port')
-    expect(() => svc.set('server_port', '4242')).toThrow(
-      /Setting 'server_port' is locked by CLI override/,
-    )
-  })
-
-  it('set still works for non-locked keys when others are locked', () => {
-    svc.lockKey('server_port')
-    expect(() => svc.set('theme', 'light')).not.toThrow()
-    expect(svc.getAll().theme).toBe('light')
-  })
-
-  it('lockKey is idempotent and getLockedKeys is sorted', () => {
-    svc.lockKey('server_accessMode')
-    svc.lockKey('server_port')
-    svc.lockKey('server_port')
-    expect(svc.getLockedKeys()).toEqual(['server_accessMode', 'server_port'])
-  })
-
-  it('the lock-throw fires after the unknown-key check', () => {
-    svc.lockKey('not_a_real_key')
-    expect(() => svc.set('not_a_real_key', 'x')).toThrow(/Unknown setting key/)
+  // Empty means "forget it", not "store an empty string" — which is how the
+  // shell clears the active conversation when the last one is deleted.
+  it('deletes the row when the value is empty', async () => {
+    const s = await service()
+    s.set('active_conversation_id', '14')
+    s.set('active_conversation_id', '')
+    expect('active_conversation_id' in s.getAll()).toBe(false)
   })
 })

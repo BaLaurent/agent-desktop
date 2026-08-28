@@ -8,14 +8,11 @@ const log = createLogger('ipc')
 // Category C imports — Electron-only services that stay on ipcMain
 import { registerHandlers as systemHandlers } from './services/system'
 import { registerHandlers as whisperHandlers } from './services/whisper'
-import { registerHandlers as openscadHandlers } from './services/openscad'
 import { registerHandlers as quickChatHandlers } from './services/quickChat'
 import { registerHandlers as schedulerHandlers } from './services/scheduler'
 import { registerHandlers as ttsHandlers } from './services/tts'
-import { registerHandlers as piExtensionsHandlers } from './services/piExtensions'
 import { registerHandlers as commandsHandlers } from './services/commands'
 import { registerHandlers as updaterHandlers } from './services/updater'
-import { registerHandlers as jupyterHandlers } from './services/jupyter'
 import { registerHandlers as hotwordTrainerHandlers } from './services/hotwordTrainer'
 import { registerHandlers as themesHandlers, ensureThemeDir } from './services/themes'
 import { registerHandlers as filesHandlers } from './services/files'
@@ -100,14 +97,11 @@ export function bridgeDispatchToIpc(engine: AgentEngine, ipcMain: IpcMain): void
 
   systemHandlers(safeIpc, db)
   whisperHandlers(safeIpc, db)
-  openscadHandlers(safeIpc, db)
   quickChatHandlers(safeIpc, db)
   schedulerHandlers(safeIpc, db)
   ttsHandlers(safeIpc, db)
-  piExtensionsHandlers(safeIpc, db)
   commandsHandlers(safeIpc, db)
   updaterHandlers(safeIpc)
-  jupyterHandlers(safeIpc)
   hotwordTrainerHandlers(safeIpc, db)
   themesHandlers(safeIpc)
   filesHandlers(safeIpc, db)

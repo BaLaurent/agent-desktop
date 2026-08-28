@@ -74,4 +74,25 @@ export function registerHandlers(ipcMain: IpcMain, _db: Database.Database): void
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
   })
+
+  ipcMain.handle('system:saveFileDialog', async (event, defaultPath?: unknown, filters?: unknown) => {
+    const parent = event?.sender ? BrowserWindow.fromWebContents(event.sender) : null
+    const options: Electron.SaveDialogOptions = {
+      title: 'Save file',
+      defaultPath: typeof defaultPath === 'string' ? defaultPath : undefined,
+      filters: Array.isArray(filters)
+        ? filters.filter((f: unknown): f is { name: string; extensions: string[] } =>
+            !!f && typeof f === 'object' &&
+            typeof (f as any).name === 'string' &&
+            Array.isArray((f as any).extensions) &&
+            (f as any).extensions.every((e: unknown) => typeof e === 'string'),
+          )
+        : undefined,
+    }
+    const result = parent
+      ? await dialog.showSaveDialog(parent, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    return result.filePath
+  })
 }

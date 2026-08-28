@@ -11,8 +11,15 @@ vi.mock('../../core/utils/cert', () => ({
   ensureSelfSignedCert: vi.fn(),
 }))
 
+// Spy on the piUIChannel response route so we can prove the WS `respond`
+// frame reaches `respondPIUI` exactly when expected.
+const respondPIUIMock = vi.fn()
+vi.mock('../../core/services/pi/piUIChannel', () => ({
+  respondPIUI: (resp: unknown) => respondPIUIMock(resp),
+}))
+
 // Import AFTER mocks are declared (ES module hoisting handles ordering)
-import { startServer, stopServer, getServerStatus } from '../../core/services/webServer'
+import { startServer, stopServer, getServerStatus, isLoopbackAddress } from '../../core/services/webServer'
 import { DispatchRegistry } from '../../core/dispatch'
 import { ensureSelfSignedCert } from '../../core/utils/cert'
 import { createWebPasswordService } from '../../core/auth'
@@ -462,13 +469,6 @@ describe('webServer', () => {
       ws.close()
     })
 
-    it('blocks openscad:exportStl via WebSocket', async () => {
-      const { token } = await startServer(port)
-      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
-      const result = await invokeChannel(ws, token, 'openscad:exportStl', '12')
-      expect(result.error).toContain('Channel not available via WebSocket: openscad:exportStl')
-      ws.close()
-    })
 
     it('does not block a normal registered channel', async () => {
       testDispatch.handle('test:ping', async () => 'pong')
@@ -479,6 +479,165 @@ describe('webServer', () => {
       expect(result.error).toBeUndefined()
       expect(result.result).toBe('pong')
       ws.close()
+    })
+  })
+
+  describe('isLoopbackAddress (helper)', () => {
+    it('classifies 127.0.0.1 as loopback', () => {
+      expect(isLoopbackAddress('127.0.0.1')).toBe(true)
+    })
+    it('classifies ::1 as loopback', () => {
+      expect(isLoopbackAddress('::1')).toBe(true)
+    })
+    it('classifies the IPv4-mapped IPv6 form ::ffff:127.0.0.1 as loopback', () => {
+      expect(isLoopbackAddress('::ffff:127.0.0.1')).toBe(true)
+    })
+    it('rejects a private IPv4 address', () => {
+      expect(isLoopbackAddress('192.168.1.50')).toBe(false)
+      expect(isLoopbackAddress('10.0.0.3')).toBe(false)
+    })
+    it('rejects the IPv4-mapped IPv6 form of a private address', () => {
+      expect(isLoopbackAddress('::ffff:192.168.1.50')).toBe(false)
+    })
+    it('rejects undefined and empty inputs', () => {
+      expect(isLoopbackAddress(undefined)).toBe(false)
+      expect(isLoopbackAddress('')).toBe(false)
+    })
+  })
+
+  // Typed shape of one server frame — narrower than `unknown`, broader than
+  // `any`. Used by the respond and ws-local tests so the helpers stay free of `as any`.
+  type WsMsg = Record<string, unknown> & { type?: string }
+
+  describe('WS `respond` frame reaches respondPIUI', () => {
+    // Build a deferred that resolves the next time `respondPIUI` is invoked,
+    // so the test awaits the real side effect rather than a wall-clock wait.
+    function nextRespondInvocation(): { promise: Promise<unknown> } {
+      const { promise, resolve } = Promise.withResolvers<unknown>()
+      respondPIUIMock.mockImplementation((resp: unknown) => {
+        resolve(resp)
+      })
+      return { promise }
+    }
+
+    async function authAndSendRespond(token: string, respondPayload: object): Promise<WsMsg> {
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
+      const sent = await new Promise<WsMsg>((resolve, reject) => {
+        ws.on('open', () => ws.send(JSON.stringify({ type: 'auth', token })))
+        ws.on('message', (data) => {
+          const msg = JSON.parse(data.toString()) as WsMsg
+          if (msg.type === 'auth_result' && msg.success === true) {
+            ws.send(JSON.stringify(respondPayload))
+          }
+          if (msg.type === 'auth_result') resolve(msg)
+        })
+        ws.on('error', reject)
+      })
+      ws.close()
+      return sent
+    }
+
+    it('an authenticated client sending a `respond` frame invokes respondPIUI with the payload', async () => {
+      respondPIUIMock.mockReset()
+      const { token } = await startServer(port)
+      const waiter = nextRespondInvocation()
+
+      await authAndSendRespond(token, {
+        type: 'respond',
+        id: 'req-42',
+        value: 'user typed this',
+        confirmed: true,
+        cancelled: false,
+      })
+
+      const received = await waiter.promise
+      expect(received).toEqual({
+        id: 'req-42',
+        value: 'user typed this',
+        confirmed: true,
+        cancelled: false,
+      })
+      expect(respondPIUIMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('an UNauthenticated client sending a `respond` frame does NOT invoke respondPIUI', async () => {
+      respondPIUIMock.mockReset()
+      await startServer(port)
+
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
+      const authFrame = await new Promise<WsMsg>((resolve, reject) => {
+        ws.on('open', () => ws.send(JSON.stringify({
+          type: 'respond',
+          id: 'should-not-arrive',
+          value: 'sneaky',
+        })))
+        ws.on('message', (data) => {
+          const msg = JSON.parse(data.toString()) as WsMsg
+          // The server replies to a pre-auth `respond` with an auth_result
+          // carrying `Not authenticated` — that's the signal we're done.
+          if (msg.type === 'auth_result') resolve(msg)
+        })
+        ws.on('error', reject)
+      })
+      ws.close()
+
+      expect(authFrame.success).toBe(false)
+      expect(authFrame.error).toBe('Not authenticated')
+      expect(respondPIUIMock).not.toHaveBeenCalled()
+    })
+
+    it('a `respond` frame missing `id` is silently dropped', async () => {
+      respondPIUIMock.mockReset()
+      const { token } = await startServer(port)
+      await authAndSendRespond(token, { type: 'respond', value: 'no id' })
+      expect(respondPIUIMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('WS-local dispatch origin', () => {
+    async function invokeAs(token: string, channel: string, args: unknown[] = []): Promise<WsMsg> {
+      const ws = new WebSocket(`wss://127.0.0.1:${port}/ws`, { rejectUnauthorized: false })
+      try {
+        const result = await new Promise<WsMsg>((resolve, reject) => {
+          ws.on('open', () => ws.send(JSON.stringify({ type: 'auth', token })))
+          ws.on('message', (data) => {
+            const msg = JSON.parse(data.toString()) as WsMsg
+            if (msg.type === 'auth_result' && msg.success === true) {
+              ws.send(JSON.stringify({ type: 'invoke', id: 'loc', channel, args }))
+            }
+            if (msg.type === 'result') resolve(msg)
+          })
+          ws.on('error', reject)
+        })
+        return result
+      } finally {
+        ws.close()
+      }
+    }
+
+    it('allows a channel in LOCAL_WS_ALLOWED_CHANNELS for a loopback client', async () => {
+      testDispatch.handle('test:mcpAllowed', async () => 'allowed')
+      const { token } = await startServer(port, { dispatch: testDispatch })
+
+      const result = await invokeAs(token, 'mcp:testConnection', [{ name: 'fake', command: 'echo' }])
+
+      // Either the handler runs successfully or it returns a handler-internal
+      // error — but the gate MUST NOT refuse with the documented string.
+      const errorMsg = typeof result.error === 'string' ? result.error : ''
+      expect(errorMsg).not.toContain('Channel not available via WebSocket: mcp:testConnection')
+    })
+
+    it('still refuses a channel that is ELECTRON_ONLY but NOT in LOCAL_WS_ALLOWED', async () => {
+      // system:openExternal is ELECTRON_ONLY and not on the loopback exception list.
+      const { token } = await startServer(port)
+      const result = await invokeAs(token, 'system:openExternal')
+      expect(result.error).toContain('Channel not available via WebSocket: system:openExternal')
+    })
+
+    it('still refuses WS_BLOCKED channels for a loopback client (absolute block)', async () => {
+      const { token } = await startServer(port)
+      const result = await invokeAs(token, 'server:setPassword')
+      expect(result.error).toContain('Channel not available via WebSocket: server:setPassword')
     })
   })
 })

@@ -2,8 +2,21 @@
 
 ## [Unreleased]
 
+### New Features
+- **Native Omarchy front end** — the Omarchy plugin at `omarchy/plugins/agent-desktop/` is now a full QML application over the headless server, not just a quick-chat overlay. `SUPER + A` opens a real Hyprland toplevel with conversations, chat, settings, files, git, scheduler, notebook and OpenSCAD surfaces; `ALT + SPACE` still opens the quick-chat card, and both share one chat implementation. The React front stays in the repo as the cross-platform / remote-browser client — nothing was removed from it.
+  - The plugin's Node bridge is now a transparent channel proxy: one generic `invoke` op carries every one of the server's ~120 channels and forwards every push verbatim, so adding a surface needs no bridge change. It ships as a bundled artifact, so it runs from `~/.config/omarchy/plugins` without the repo's `node_modules`.
+  - The settings page is *generated* from `SETTING_DEFS` in `src/core/types/constants.ts` rather than hand-copied, so the QML and React settings pages cannot drift. CLI-pinned settings (`settings:getLocked`) now render disabled with the reason — something the React UI never showed.
+  - Theme, palette, typography and spacing come from the Omarchy shell singletons, so the window follows the active Omarchy theme. The renderer's CSS theme system is deliberately not ported.
+  - Web-UI escape hatches are gone: `SUPER + A` no longer launches a browser, and no code path in the plugin can open one.
+
 ### Bug Fixes
+- **`mcp:testConnection` is reachable from the local front again** — a new loopback-only dispatch origin (`ws-local`) lets a same-host client reach MCP management, git `fetch`/`checkout`, `files:prepareSession`, `files:openTerminalHere` and the storage purges, while a LAN browser still gets `Channel not available via WebSocket`. `WS_BLOCKED_CHANNELS` (e.g. `server:setPassword`) stays absolute for both. Verified live from both a loopback and a LAN socket.
+- **omp extension dialogs can be answered by a non-Electron client** — `emitPIUIRequest` already broadcast to WebSocket clients but the only reply path was Electron IPC, so a web or QML front could see an `editor` dialog and never answer it, hanging the turn until `cancelPendingPIUI`. The WS server now accepts a `respond` frame from an authenticated client.
+- **TTS speaking state reaches non-Electron clients** — `tts:stateChange` was broadcast from `src/main/services/tts.ts`, which the headless server never imports, so nothing registered the listener and the event was emitted to nobody: `tts:speak` worked and audio played while every web and QML client showed a permanently dark speaking indicator. The broadcast now happens in `src/core/handlers/tts.ts`, and the listener is a set rather than a single slot so the Electron window handler and the broadcast handler no longer silently replace each other depending on import order.
 - **Database durability hardened** — settings and message writes now flush to disk immediately when isolated (bursts still coalesce on a 500ms debounce), and every flush writes to a temp file renamed atomically over `agent.db`, so a crash or kill mid-flush can no longer truncate the database.
+
+### Internal
+- **`pi:listExtensions`, `jupyter:*` and `openscad:*` moved from `src/main/services/` into `src/core`** — they had no real Electron coupling beyond `sendToRenderer`, which is now `broadcast(...)`, so both fronts reach them through the same `engine.dispatch` mirror. `openscad:exportStl` takes an explicit `outputPath` instead of opening a save dialog inside the handler, which is what let it leave `WS_BLOCKED_CHANNELS`; the Electron renderer opens its own dialog first.
 
 ## [0.18.0] - 2026-06-15
 

@@ -1,12 +1,9 @@
-import { type IpcMain, BrowserWindow, dialog } from 'electron'
-import type Database from 'better-sqlite3'
 import { spawn } from 'child_process'
 import * as fs from 'fs/promises'
 import { constants as fsConstants } from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { getSetting } from '../utils/db'
-import { validateString } from '../utils/validate'
+import type Database from 'better-sqlite3'
 
 const MAX_OUTPUT_SIZE = 50 * 1024 * 1024 // 50MB
 const TIMEOUT_MS = 60_000
@@ -22,7 +19,18 @@ interface ValidateResult {
   version: string
 }
 
-async function findBinary(binaryPath: string): Promise<boolean> {
+/**
+ * Read a setting from the sql.js adapter. Mirrors the helper used by other
+ * core services so this module does not need to reach into main/.
+ */
+function getSetting(db: Database.Database, key: string): string {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined
+  return row?.value ?? ''
+}
+
+export async function findBinary(binaryPath: string): Promise<boolean> {
   if (path.isAbsolute(binaryPath)) {
     try {
       await fs.access(binaryPath, fsConstants.X_OK)
@@ -41,7 +49,7 @@ async function findBinary(binaryPath: string): Promise<boolean> {
   })
 }
 
-async function compile(db: Database.Database, scadFilePath: string): Promise<CompileResult> {
+export async function compile(db: Database.Database, scadFilePath: string): Promise<CompileResult> {
   const binaryPath = getSetting(db, 'openscad_binaryPath') || 'openscad'
   const tmpOutput = path.join(os.tmpdir(), `agent-openscad-${Date.now()}.3mf`)
 
@@ -99,7 +107,7 @@ async function compile(db: Database.Database, scadFilePath: string): Promise<Com
   }
 }
 
-async function validateConfig(db: Database.Database): Promise<ValidateResult> {
+export async function validateConfig(db: Database.Database): Promise<ValidateResult> {
   const binaryPath = getSetting(db, 'openscad_binaryPath') || 'openscad'
   const binaryFound = await findBinary(binaryPath)
 
@@ -133,7 +141,13 @@ async function validateConfig(db: Database.Database): Promise<ValidateResult> {
   return { binaryFound, binaryPath, version }
 }
 
-async function exportStl(db: Database.Database, scadFilePath: string, outputPath: string): Promise<void> {
+/**
+ * Export the .scad file to STL at the explicit destination.
+ * The caller is responsible for choosing the destination path (typically
+ * via an OS save dialog), so this handler is reachable over both the
+ * Electron IPC bus and the WebSocket bridge.
+ */
+export async function exportStl(db: Database.Database, scadFilePath: string, outputPath: string): Promise<void> {
   const binaryPath = getSetting(db, 'openscad_binaryPath') || 'openscad'
 
   await new Promise<void>((resolve, reject) => {
@@ -167,29 +181,3 @@ async function exportStl(db: Database.Database, scadFilePath: string, outputPath
     })
   })
 }
-
-export function registerHandlers(ipcMain: IpcMain, db: Database.Database): void {
-  ipcMain.handle('openscad:compile', async (_event, scadFilePath: string) => {
-    validateString(scadFilePath, 'scadFilePath')
-    return compile(db, scadFilePath)
-  })
-
-  ipcMain.handle('openscad:validateConfig', async () => {
-    return validateConfig(db)
-  })
-
-  ipcMain.handle('openscad:exportStl', async (event, scadFilePath: string) => {
-    validateString(scadFilePath, 'scadFilePath')
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const { canceled, filePath: outputPath } = await dialog.showSaveDialog(win!, {
-      defaultPath: scadFilePath.replace(/\.scad$/i, '.stl'),
-      filters: [{ name: 'STL Files', extensions: ['stl'] }],
-    })
-    if (canceled || !outputPath) return null
-    await exportStl(db, scadFilePath, outputPath)
-    return outputPath
-  })
-}
-
-// Exported for testing
-export { compile, validateConfig, findBinary, exportStl }

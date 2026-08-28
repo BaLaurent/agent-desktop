@@ -1,15 +1,18 @@
 import { spawn, type ChildProcess } from 'child_process'
 import * as path from 'path'
 import * as readline from 'readline'
-import { app, type IpcMain } from 'electron'
 import { findBinaryInPath } from '../utils/env'
 import { broadcast } from '../utils/broadcast'
-import { validateString } from '../utils/validate'
-import { sanitizeError } from '../utils/errors'
-import { getMainWindow } from '../mainContext'
-import { createLogger } from '../../core/utils/logger'
+import { createLogger } from '../utils/logger'
 
 const log = createLogger('jupyter')
+// Strip absolute filesystem paths from error messages before forwarding to
+// the renderer (mirrors sanitizeError in src/main/utils/errors.ts; inlined
+// here because the core service must not import from src/main).
+function stripPaths(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.replace(/\/(?:home|root|Users|tmp|var)\/[^\s:'"]+/g, '[path]')
+}
 
 // ─── Types ────────────────────────────────────────────
 
@@ -22,24 +25,26 @@ interface KernelProcess {
   requestCounter: number
 }
 
+export interface JupyterServiceOptions {
+  /**
+   * Filesystem path to the Python bridge script (`bridge.py`) that drives
+   * the Jupyter kernel protocol over stdio. The Electron main process
+   * resolves this against `app.getAppPath()` / `process.resourcesPath`;
+   * the headless server resolves it against its own install dir.
+   */
+  bridgeScriptPath: string
+}
+
 // ─── State ────────────────────────────────────────────
 
 const kernels = new Map<string, KernelProcess>()
 
 // ─── Helpers ──────────────────────────────────────────
 
-function getBridgeScriptPath(): string {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'jupyter', 'bridge.py')
-  }
-  return path.join(app.getAppPath(), 'resources', 'jupyter', 'bridge.py')
-}
-
 function sendToRenderer(event: string, data: unknown): void {
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send(event, data)
-  }
+  // Broadcasts to both the local Electron renderer (via the registered
+  // broadcast handler in main) and any headless/WS clients — the same dual
+  // fanout `sendChunk` uses for messages:stream.
   broadcast(event, data)
 }
 
@@ -50,7 +55,7 @@ function nextRequestId(kernel: KernelProcess): string {
 
 // ─── Kernel lifecycle ─────────────────────────────────
 
-function startKernel(filePath: string, kernelName?: string): { status: string } {
+function startKernel(opts: JupyterServiceOptions, filePath: string, kernelName?: string): { status: string } {
   if (kernels.has(filePath)) {
     const existing = kernels.get(filePath)!
     return { status: existing.status }
@@ -61,7 +66,7 @@ function startKernel(filePath: string, kernelName?: string): { status: string } 
     throw new Error('Python not found in PATH')
   }
 
-  const scriptPath = getBridgeScriptPath()
+  const scriptPath = opts.bridgeScriptPath
   const env: Record<string, string> = { ...process.env as Record<string, string> }
   if (kernelName) {
     env.JUPYTER_KERNEL_NAME = kernelName
@@ -146,7 +151,7 @@ function startKernel(filePath: string, kernelName?: string): { status: string } 
       id: null,
       type: 'error',
       ename: 'SpawnError',
-      evalue: sanitizeError(err),
+      evalue: stripPaths(err),
       traceback: [],
     })
   })
@@ -255,38 +260,26 @@ export function shutdownAllKernels(): void {
   }
 }
 
-// ─── IPC Registration ─────────────────────────────────
+// ─── Public surface (consumed by handlers/jupyter.ts) ──
 
-export function registerHandlers(ipcMain: IpcMain): void {
-  ipcMain.handle('jupyter:startKernel', (_e, filePath: unknown, kernelName?: unknown) => {
-    const fp = validateString(filePath, 'filePath')
-    const kn = kernelName != null ? validateString(kernelName, 'kernelName', 100) : undefined
-    return startKernel(fp, kn)
-  })
+export interface JupyterService {
+  startKernel: (filePath: string, kernelName?: string) => { status: string }
+  executeCell: (filePath: string, code: string) => string
+  interruptKernel: (filePath: string) => void
+  restartKernel: (filePath: string) => void
+  shutdownKernel: (filePath: string) => void
+  getStatus: (filePath: string) => string | null
+  detectJupyter: () => Promise<{ found: boolean; pythonPath: string | null; error?: string }>
+}
 
-  ipcMain.handle('jupyter:executeCell', (_e, filePath: unknown, code: unknown) => {
-    const fp = validateString(filePath, 'filePath')
-    const c = validateString(code, 'code', 10_000_000)
-    return executeCell(fp, c)
-  })
-
-  ipcMain.handle('jupyter:interruptKernel', (_e, filePath: unknown) => {
-    interruptKernel(validateString(filePath, 'filePath'))
-  })
-
-  ipcMain.handle('jupyter:restartKernel', (_e, filePath: unknown) => {
-    restartKernel(validateString(filePath, 'filePath'))
-  })
-
-  ipcMain.handle('jupyter:shutdownKernel', (_e, filePath: unknown) => {
-    shutdownKernel(validateString(filePath, 'filePath'))
-  })
-
-  ipcMain.handle('jupyter:getStatus', (_e, filePath: unknown) => {
-    return getStatus(validateString(filePath, 'filePath'))
-  })
-
-  ipcMain.handle('jupyter:detectJupyter', () => {
-    return detectJupyter()
-  })
+export function createJupyterService(opts: JupyterServiceOptions): JupyterService {
+  return {
+    startKernel: (filePath, kernelName) => startKernel(opts, filePath, kernelName),
+    executeCell,
+    interruptKernel,
+    restartKernel,
+    shutdownKernel,
+    getStatus,
+    detectJupyter,
+  }
 }
