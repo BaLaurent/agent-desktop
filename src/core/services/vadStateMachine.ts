@@ -1,6 +1,13 @@
 /**
  * Pure energy-based Voice Activity Detection state machine.
  *
+ * Shared by the renderer continuous-voice engine (src/renderer/services/continuousVoice/engine.ts)
+ * and the Omarchy plugin bridge (omarchy/plugins/agent-desktop/bridge/bridge.mjs). Both must agree
+ * on utterance boundaries: the gate correlates wake-word events against the [startedAt, endedAt]
+ * span this module returns, so a segmentation regression here would silently break intent-classify
+ * windows in both surfaces. Keeping it in src/core/services/ avoids importing renderer-only code
+ * (zustand, Web Audio, React) from the headless bridge bundle.
+ *
  * Feed it (rms, timestampMs) once per audio block; it returns the boundary event that block
  * triggered, if any. It owns NO Web Audio, NO timers, NO PCM — time is driven entirely by the
  * caller's timestamp argument, which makes it fully deterministic and unit-testable (a test can

@@ -1,9 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 
 import qs.Commons
+import qs.Ui
 
 import "../lib/streamParts.js" as SP
 import "../lib/palette.js" as Palette
@@ -58,6 +58,33 @@ Item {
   // with no listener attached is a no-op (see TestSpeakGateSignalFires).
   property bool speakEnabled: false
   signal speakRequested(var messageId, string text)
+
+  // ---- role offset ---------------------------------------------------
+  //
+  // Both roles used to draw the same full-width bar, and the only cue for
+  // whose turn it was were four points of wash alpha — a transcript read as
+  // one undifferentiated block of text. Each role now gives up a gutter on
+  // the OTHER side: the assistant keeps the left edge, the user hangs off the
+  // right, and the ragged edge answers "who said this" before any colour is
+  // read. Same asymmetry the Electron front draws with `justify-start` /
+  // `justify-end` (bubble/AssistantBubble.tsx:121, bubble/UserBubble.tsx:112).
+  //
+  // Proportional with a cap: 14% of a 1500 px window would throw away 210 px
+  // of a transcript that has code and tool output to fit, so the cap takes
+  // over; the quick overlay is narrow enough that 14% would crush the
+  // assistant's tool cards, so it offsets by 6% instead — Electron widens the
+  // same bubbles from 80% to 95% in its own compact mode.
+  readonly property real gutter:
+    Math.min(Math.round(root.width * (root.compact ? 0.06 : 0.14)), 120)
+  readonly property real bubbleWidth: Math.max(root.width - root.gutter, 0)
+
+  // One button vocabulary for the bubble action bar: caption-sized with tight
+  // padding, so five of them still fit above a two-word bubble.
+  component ActionButton: Button {
+    fontSize: Style.font.caption
+    horizontalPadding: Style.spacing.sm
+    verticalPadding: Style.spacing.xxs
+  }
   // The transcript is laid out BOTTOM-TO-TOP over a reversed model, so model
   // index 0 — the NEWEST row — sits at the bottom of the view.
   //
@@ -146,6 +173,10 @@ Item {
 
       anchors { left: rowLoader.parent ? rowLoader.parent.left : undefined; right: rowLoader.parent ? rowLoader.parent.right : undefined }
       width: ListView.view ? ListView.view.width : 0
+      // A hovered row's action bar hangs above its own bubble, over the row
+      // above it. Sibling delegates paint in an order the view owns, so
+      // without this the bar can end up UNDERNEATH that neighbour.
+      z: rowLoader.item && rowLoader.item.rowHovered === true ? 2 : 0
       sourceComponent: {
         var md = rowLoader.modelData
         if (!md) return null
@@ -173,6 +204,14 @@ Item {
 
           property var message: modelData ? modelData.message : null
 
+          readonly property bool isUser: !!msgCol.message && msgCol.message.role === "user"
+          readonly property bool isAssistant: !!msgCol.message && msgCol.message.role === "assistant"
+          readonly property bool isLast: !!msgCol.modelData && msgCol.modelData.isLast === true
+
+          // Read by the delegate Loader to lift a hovered row above its
+          // neighbour, because the action bar it reveals overhangs the row.
+          readonly property bool rowHovered: bubbleHover.hovered || barHover.hovered
+
           property var rehydrated: {
             if (!msgCol.message) return []
             var tcs = msgCol.message.tool_calls
@@ -181,18 +220,32 @@ Item {
             return parts
           }
 
-          // User / assistant bubble.
+          // User / assistant bubble, offset by role (see root.gutter).
           Rectangle {
-            visible: !!msgCol.message
-              && (msgCol.message.role === "user" || msgCol.message.role === "assistant")
-            anchors { left: msgCol.left; right: msgCol.right }
+            id: bubble
+            visible: msgCol.isUser || msgCol.isAssistant
+            anchors.left: msgCol.isUser ? undefined : msgCol.left
+            anchors.right: msgCol.isUser ? msgCol.right : undefined
+            // The user's bubble hugs its own text, so a two-word reply is a
+            // two-word bubble instead of an 86%-wide bar with one word in it.
+            // `implicitWidth` on a wrapping Text is the width it would take
+            // UNWRAPPED — independent of the width it is given — which is what
+            // makes both the hug and the cap well defined. The assistant's
+            // takes the full inset width: it carries tool cards and code
+            // blocks, which have nothing to hug.
+            width: msgCol.isUser
+              ? Math.min(root.bubbleWidth, userText.implicitWidth + 2 * Style.spacing.md)
+              : root.bubbleWidth
             height: contentCol.implicitHeight + 2 * Style.spacing.md
             // User bubble = level 1 wash, assistant bubble = level 2 wash: a
             // reader can still tell whose turn a bubble is at a glance, while
             // both wear the active theme.
-            color: msgCol.message && msgCol.message.role === "user"
+            color: msgCol.isUser
               ? Util.alpha(Color.foreground, Palette.surfaceAlpha(1))
               : Util.alpha(Color.foreground, Palette.surfaceAlpha(2))
+
+            // Hover source #1 — see actionBar for why there are two.
+            HoverHandler { id: bubbleHover }
 
             Column {
               id: contentCol
@@ -205,7 +258,8 @@ Item {
               spacing: Style.spacing.sm
 
               Text {
-                visible: msgCol.message && msgCol.message.role === "user"
+                id: userText
+                visible: msgCol.isUser
                 text: msgCol.message && msgCol.message.content ? msgCol.message.content : ""
                 wrapMode: Text.Wrap
                 font.family: Style.font.family
@@ -215,7 +269,7 @@ Item {
               }
 
               MarkdownBlock {
-                visible: msgCol.message && msgCol.message.role === "assistant"
+                visible: msgCol.isAssistant
                 text: msgCol.message && msgCol.message.content ? msgCol.message.content : ""
                 anchors { left: parent.left; right: parent.right }
               }
@@ -238,101 +292,148 @@ Item {
                   output: String(modelData.output || "")
                   summary: String(modelData.summary || "")
                   turnActive: false
-                  width: msgCol.width - 2 * Style.spacing.md
+                  // The bubble's inner width, not the row's: the bubble is
+                  // narrower than the row now, and a card sized to the row
+                  // would hang out of the right edge of its own bubble.
+                  width: contentCol.width
                 }
               }
             }
-          }
 
-          // Bubble action bar (edit/regenerate/fork) on the LAST message.
-          Row {
-            visible: msgCol.modelData
-              && msgCol.modelData.isLast
-              && root.onEdit !== null
-              && msgCol.message
-              && msgCol.message.role === "user"
-            spacing: Style.spacing.sm
-            Button {
-              text: "Edit"
-              visible: root.onEdit !== null
-              onClicked: if (root.onEdit) root.onEdit(msgCol.message)
-            }
-          }
-          Row {
-            visible: msgCol.modelData
-              && msgCol.modelData.isLast
-              && msgCol.message
-              && msgCol.message.role === "assistant"
-            spacing: Style.spacing.sm
-
-            // Clipboard sink for the Copy button. Same mechanism as
-            // components/CodeBlock.qml:57-65 — Qt Quick has no portable
-            // clipboard helper, so a hidden TextEdit IS the clipboard.
-            // `selectAll()` + `copy()` writes the selected text to the
-            // system clipboard; `text` is bound to the message body so
-            // `selectAll()` always copies the full content.
-            TextEdit {
-              id: copySink
-              visible: false
-              width: 0
-              height: 0
-              text: msgCol.message && msgCol.message.content
-                ? String(msgCol.message.content)
-                : ""
-            }
-
-            Button {
-              text: copyFeedback.running ? "copied!" : "Copy"
-              visible: true
-              // Replace the inline `visible: ...` of the Edit/Regenerate
-              // row above: this button is enabled whenever the action
-              // bar shows, because copying a transcript row never has a
-              // missing handler. The transient label swap is the
-              // codebase convention for "feedback that something fired"
-              // (see CodeBlock's copy label for the same intent).
-              Timer {
-                id: copyFeedback
-                interval: 1200
-                repeat: false
-                running: false
+            // Per-message action bar, revealed on hover.
+            //
+            // EVERY message gets one. The bar used to exist on the LAST row
+            // only, so copying, speaking or forking anything older was
+            // impossible — while the Electron front has had a per-bubble bar
+            // for its whole life, hover-gated exactly like this
+            // (bubble/UserBubble.tsx:113, bubble/actions/ActionBar.tsx:34).
+            //
+            // Overlaid, not stacked: a bar that takes layout space grows its
+            // row on hover, the row moves under the pointer, the pointer
+            // leaves it, the bar hides and the row shrinks back — a flicker
+            // loop. Anchored across the bubble's top edge it costs no height
+            // at all, and the transcript does not reflow when a pointer
+            // crosses it.
+            //
+            // Two hover sources OR'd, and they OVERLAP deliberately: the bar
+            // hangs above the bubble, so a pointer travelling up from the
+            // bubble to a button would leave `bubbleHover` before entering
+            // `barHover` if the two regions merely touched — the bar would
+            // vanish from under the pointer on its way to the click. The
+            // negative bottom margin sinks the bar into the bubble so the two
+            // regions always share a band.
+            Rectangle {
+              id: actionBar
+              z: 5
+              visible: msgCol.rowHovered
+              anchors {
+                bottom: bubble.top
+                bottomMargin: -Style.spacing.lg
+                right: bubble.right
+                rightMargin: Style.spacing.sm
               }
-              onClicked: {
-                copySink.selectAll()
-                copySink.copy()
-                copyFeedback.restart()
+              implicitWidth: actionRow.implicitWidth + 2 * Style.spacing.xs
+              implicitHeight: actionRow.implicitHeight + 2 * Style.spacing.xxs
+              radius: Style.cornerRadius
+              // A floating toolbar IS a popup surface, and wears the theme's
+              // popup tokens like the slash / mention lists do.
+              color: Color.popups.background
+              border { width: Style.normalBorderWidth; color: Color.popups.border }
+
+              // Hover source #2.
+              HoverHandler { id: barHover }
+
+              Row {
+                id: actionRow
+                anchors.centerIn: parent
+                spacing: Style.spacing.xs
+
+                // Clipboard sink for the Copy button. Same mechanism as
+                // components/CodeBlock.qml:57-65 — Qt Quick has no portable
+                // clipboard helper, so a hidden TextEdit IS the clipboard.
+                // `selectAll()` + `copy()` writes the selected text to the
+                // system clipboard; `text` is bound to the message body so
+                // `selectAll()` always copies the full content.
+                TextEdit {
+                  id: copySink
+                  visible: false
+                  width: 0
+                  height: 0
+                  text: msgCol.message && msgCol.message.content
+                    ? String(msgCol.message.content)
+                    : ""
+                }
+
+                ActionButton {
+                  // Copy needs no gate: copying a transcript row never has a
+                  // missing handler. The transient label swap is the codebase
+                  // convention for "feedback that something fired" (see
+                  // CodeBlock's copy label for the same intent).
+                  text: copyFeedback.running ? "copied!" : "Copy"
+                  tooltipText: "Copy this message"
+                  Timer {
+                    id: copyFeedback
+                    interval: 1200
+                    repeat: false
+                    running: false
+                  }
+                  onClicked: {
+                    copySink.selectAll()
+                    copySink.copy()
+                    copyFeedback.restart()
+                  }
+                }
+
+                // Speak-this-message. Same gating convention as onEdit /
+                // onRegenerate / onFork — a button whose action nobody
+                // handles must not be enabled, so visibility is driven by
+                // `speakEnabled` (the host flips it true once it has
+                // connected speakRequested to TtsStore.speakMessage). The
+                // signal is declared on the root with the exact shape the
+                // integration owner wires: `speakRequested(var messageId,
+                // string text)`. Assistant rows only: reading the user's own
+                // prompt back to them is what the Electron front refuses too
+                // (bubble/UserBubble.tsx:49).
+                ActionButton {
+                  text: "Speak"
+                  tooltipText: "Read this message aloud"
+                  visible: root.speakEnabled && msgCol.isAssistant
+                  onClicked: root.speakRequested(
+                    msgCol.message && msgCol.message.id !== undefined
+                      ? msgCol.message.id
+                      : null,
+                    msgCol.message && msgCol.message.content
+                      ? String(msgCol.message.content)
+                      : ""
+                  )
+                }
+
+                ActionButton {
+                  text: "Edit"
+                  tooltipText: "Load this message back into the composer"
+                  visible: root.onEdit !== null && msgCol.isUser
+                  onClicked: if (root.onEdit) root.onEdit(msgCol.message)
+                }
+
+                // Regenerate stays on the LAST assistant row: ChatStore
+                // regenerates the last turn, so offering it mid-transcript
+                // would silently redo a different message than the one under
+                // the pointer. Electron gates it the same way
+                // (bubble/actions/ActionBar.tsx:90).
+                ActionButton {
+                  text: "Regenerate"
+                  tooltipText: "Run the last turn again"
+                  visible: root.onRegenerate !== null && msgCol.isAssistant && msgCol.isLast
+                  onClicked: if (root.onRegenerate) root.onRegenerate(msgCol.message)
+                }
+
+                ActionButton {
+                  text: "Fork"
+                  tooltipText: "Start a new conversation from this message"
+                  visible: root.onFork !== null
+                  onClicked: if (root.onFork) root.onFork(msgCol.message)
+                }
               }
-            }
-
-            // Speak-this-message. Same gating convention as onEdit /
-            // onRegenerate / onFork — a button whose action nobody
-            // handles must not be enabled, so visibility is driven by
-            // `speakEnabled` (the host flips it true once it has
-            // connected speakRequested to TtsStore.speakMessage). The
-            // signal is declared on the root with the exact shape the
-            // integration owner wires: `speakRequested(var messageId,
-            // string text)`.
-            Button {
-              text: "Speak"
-              visible: root.speakEnabled
-              onClicked: root.speakRequested(
-                msgCol.message && msgCol.message.id !== undefined
-                  ? msgCol.message.id
-                  : null,
-                msgCol.message && msgCol.message.content
-                  ? String(msgCol.message.content)
-                  : ""
-              )
-            }
-
-            Button {
-              text: "Regenerate"
-              visible: root.onRegenerate !== null
-              onClicked: if (root.onRegenerate) root.onRegenerate(msgCol.message)
-            }
-            Button {
-              text: "Fork"
-              visible: root.onFork !== null
-              onClicked: if (root.onFork) root.onFork(msgCol.message)
             }
           }
         }
@@ -359,7 +460,12 @@ Item {
               id: partLoader
               required property var modelData
               anchors { left: partLoader.parent ? partLoader.parent.left : undefined; right: partLoader.parent ? partLoader.parent.right : undefined }
-              width: ListView.view ? ListView.view.width : 0
+              // The live stream gets the assistant's inset too, so a turn
+              // doesn't visibly jump sideways when it finishes streaming and
+              // becomes a persisted, offset bubble. `root.bubbleWidth`, not
+              // `ListView.view.width`: the attached property's propagation to
+              // a delegate-of-a-delegate is fragile.
+              width: root.bubbleWidth
 
               sourceComponent: {
                 var md = partLoader.modelData
@@ -407,7 +513,7 @@ Item {
                   output: String((partLoader.modelData && partLoader.modelData.output) || "")
                   summary: String((partLoader.modelData && partLoader.modelData.summary) || "")
                   turnActive: true
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
@@ -430,7 +536,7 @@ Item {
                       output: String(modelData.output || "")
                       summary: String(modelData.summary || "")
                       turnActive: true
-                      width: ListView.view ? ListView.view.width : 0
+                      width: root.bubbleWidth
                     }
                   }
                 }
@@ -440,7 +546,7 @@ Item {
                 ApprovalStrip {
                   approval: partLoader.modelData
                   store: root.store
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
@@ -448,7 +554,7 @@ Item {
                 AskUserStrip {
                   askUser: partLoader.modelData
                   store: root.store
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
@@ -456,41 +562,43 @@ Item {
                 PlanStrip {
                   approval: partLoader.modelData
                   store: root.store
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
                 id: mcpComp
                 McpStatusRow {
                   mcp: partLoader.modelData
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
                 id: sysComp
                 SystemMessageRow {
                   system: partLoader.modelData
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
                 id: taskNotifComp
                 TaskNotificationRow {
                   task: partLoader.modelData
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
               Component {
                 id: retryComp
                 RetryBanner {
                   retry: partLoader.modelData
-                  width: ListView.view ? ListView.view.width : 0
+                  width: root.bubbleWidth
                 }
               }
             }
           }
 
-          // Stop button while streaming.
+          // Stop button while streaming. Now the ui-kit Button — it was the
+          // last QtQuick.Controls Button left in the file, so the import went
+          // away with the action-bar rewrite.
           Row {
             visible: root.store && root.store.streaming
             spacing: Style.spacing.sm
@@ -507,7 +615,7 @@ Item {
         PlanStrip {
           approval: rowLoader.modelData ? rowLoader.modelData.approval : null
           store: root.store
-          width: ListView.view ? ListView.view.width : 0
+          width: root.bubbleWidth
         }
       }
     }

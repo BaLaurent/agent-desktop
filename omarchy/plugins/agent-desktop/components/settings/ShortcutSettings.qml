@@ -82,21 +82,70 @@ Item {
     }
 
     // Capture focus — receives keys while at least one row is recording.
+    //
+    // This needs ACTIVE focus, and a declarative `focus: true` does not give it
+    // here. `focus` only nominates the item within its own FocusScope; the
+    // window's active focus belongs to whoever last claimed it, and App.qml
+    // claims it explicitly for `windowBody` in `_tryFocus()`. MEASURED in the
+    // real shell: with only the binding, Record correctly flips to "Cancel" and
+    // then every keystroke goes nowhere — the exact symptom of the original bug,
+    // from a different cause.
+    //
+    // No offscreen test can see this. There is no App.qml competing for active
+    // focus in the harness, so the binding alone passes there and passed here
+    // while the page was broken live. That is why the grab is verified by a live
+    // A/B (record a shortcut, read the DB) and not by the suite.
+    //
+    // Both edges are imperative on purpose. `forceActiveFocus()` writes `focus`,
+    // which destroys any binding on it — so a binding for the "on" edge plus an
+    // imperative "on" write would leave nothing to hand the keyboard BACK when
+    // recording ends, and this 1px item would keep it for good.
     Item {
+      id: captureField
       width: parent.width
       height: 1
-      focus: root.store && root.store.recordingId >= 0
+
+      readonly property bool recording: root.store !== null
+                                        && root.store !== undefined
+                                        && root.store.recordingId >= 0
+
+      onRecordingChanged: {
+        if (!captureField.recording) { captureField.focus = false; return }
+        // Twice, and both are needed. Now, so a keystroke that arrives in the
+        // same event-loop pass as the state change is not dropped. And again on
+        // the next pass, because the click that started the recording is still
+        // being delivered and whatever the click path touches can take active
+        // focus back after this returns. forceActiveFocus() is idempotent, so
+        // the second call costs nothing when the first already stuck.
+        captureField.grab()
+        Qt.callLater(captureField.grab)
+      }
+
+      // Re-checks `recording` because the deferred call may land after the user
+      // has already pressed Cancel.
+      function grab() {
+        if (captureField.recording) captureField.forceActiveFocus()
+      }
+
+
       Keys.onPressed: function (event) {
         if (!root.store || root.store.recordingId < 0) return
+        // A QML KeyEvent carries an integer Qt.Key_* code, so Escape is
+        // Qt.Key_Escape — comparing against the string "Escape" (the DOM
+        // spelling) is never true and left Escape unable to cancel.
+        if (event.key === Qt.Key_Escape) {
+          root.store.stopRecording()
+          root.captured = ""
+          root.conflictId = -1
+          event.accepted = true
+          return
+        }
         var accel = root.store.formatKeybinding(event)
+        // "" means the press is not a committable combination yet — a bare
+        // modifier, or a key this front has no spelling for. Swallow it and
+        // keep listening rather than committing a placeholder.
         if (!accel) {
-          // Escape: cancel recording without committing.
-          if (event.key === "Escape") {
-            root.store.stopRecording()
-            root.captured = ""
-            root.conflictId = -1
-            event.accepted = true
-          }
+          event.accepted = true
           return
         }
         // Update the live capture and detect a conflict.
@@ -121,9 +170,19 @@ Item {
         width: parent.width
         spacing: Style.spacing.md
 
+        // Reserve room for the Record button with a FIXED fraction. Deriving
+        // the text budget from `recordButton.implicitWidth` — a sibling's
+        // implicit size, inside a Row whose own implicitWidth is computed FROM
+        // its children — spun the shell at 98% CPU from startup. Qt printed no
+        // binding-loop warning and the offscreen suite could not see it,
+        // because the test stub's implicitWidth is a constant while the real
+        // qs.Ui Button derives it from its content row.
+        readonly property real textBudget: width * 0.78
+
         Text {
-          width: parent.width * 0.4
+          width: rowItem.textBudget * 0.5
           anchors.verticalCenter: parent.verticalCenter
+          elide: Text.ElideRight
           text: rowItem.modelData ? root._actionLabel(rowItem.modelData.action) : ""
           color: Color.foreground
           font.family: Style.font.family
@@ -132,7 +191,7 @@ Item {
 
         // Live capture / current value
         Column {
-          width: parent.width * 0.4
+          width: rowItem.textBudget * 0.5
 
           Text {
             text: {
@@ -168,6 +227,8 @@ Item {
         }
 
         Button {
+          id: recordButton
+          anchors.verticalCenter: parent.verticalCenter
           text: root.store && root.store.recordingId === rowItem.modelData.id ? "Cancel" : "Record"
           bordered: true
           onClicked: {

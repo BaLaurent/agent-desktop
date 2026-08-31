@@ -6,7 +6,6 @@ import qs.Commons
 import qs.Ui
 
 import "settings" as S
-import "../lib/settingsRows.js" as SR
 import "../generated/settingDefs.js" as SD
 
 // The settings window entry point. Two regions: a sidebar rail with
@@ -66,24 +65,6 @@ Item {
   ]
 
   property string activeKey: "General"
-
-  // ---- derived state -------------------------------------------------
-
-  // Backend drives the SETTING_DEFS filter (lib/settingsRows.js).
-  function _backend() {
-    return settingsStore ? settingsStore.get("ai_sdkBackend", "") : ""
-  }
-
-  // Refreshed on every backend change. The page recomputes on demand;
-  // the AiModelSettings component also re-evaluates on its own when the
-  // dropdown is changed.
-  readonly property var visibleDefs: SR.rowsFor(SD.SETTING_DEFS, _backend())
-
-  function _refreshVisibleDefs() {
-    // Force-recompute the binding. SR.rowsFor is pure; the page calls
-    // this after every backend change so the Repeater re-evaluates.
-    return SR.rowsFor(SD.SETTING_DEFS, _backend())
-  }
 
   // ---- layout --------------------------------------------------------
 
@@ -215,8 +196,7 @@ Item {
     S.AiModelSettings {
       settingsStore: root.settingsStore
       rpc: root.rpc
-      settingDefs: root._refreshVisibleDefs()
-      backendDisplayNames: SD.BACKEND_DISPLAY_NAMES
+      settingDefs: SD.SETTING_DEFS
       Component.onCompleted: { refreshModels(); refreshSkills(); refreshPiExtensions(); refreshSkillsOverhead() }
     }
   }

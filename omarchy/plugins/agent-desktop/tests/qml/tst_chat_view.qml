@@ -340,9 +340,47 @@ Item {
       mlTeardown()
     }
 
-    // ---- Copy: the action bar exposes it on the assistant row ---------
+    // ---- the action bar is hover-gated, on EVERY row ------------------
+    //
+    // The bar used to be pinned to the LAST message: Copy/Speak/Fork were
+    // unreachable for anything older. It now floats over whichever row the
+    // pointer is on — the Electron front's per-bubble hover bar
+    // (bubble/UserBubble.tsx:113) — so with no hover, NO button is visible,
+    // and hovering any row reveals exactly that row's buttons.
 
-    function test_copy_button_visible_on_last_assistant_message() {
+    // Park the pointer over the middle of a bubble and let the hover land.
+    function _mlHover(l, bubble) {
+      var p = bubble.mapToItem(l, bubble.width / 2, bubble.height / 2)
+      mouseMove(l, p.x, p.y)
+      wait(50)
+    }
+
+    // How many of these buttons are currently visible.
+    function _mlVisible(btns) {
+      var n = 0
+      for (var i = 0; i < btns.length; i++) if (btns[i].visible) n++
+      return n
+    }
+
+    // A row's bubble from its clipboard sink: sink -> actionRow -> actionBar
+    // -> bubble.
+    function _mlBubbleFor(l, messageText) {
+      var sinks = mlFindSink(l, messageText)
+      return sinks.length === 1 ? sinks[0].parent.parent.parent : null
+    }
+
+    // A row's bubble from its visible user-text Text: text -> contentCol ->
+    // bubble. The hidden sink (a TextEdit, also matching "Text") is filtered
+    // out by visibility.
+    function _mlUserBubble(l, messageText) {
+      var texts = mlFindByTextAndKind(l, messageText, "Text")
+      for (var i = 0; i < texts.length; i++) {
+        if (texts[i].visible && texts[i].width > 0) return texts[i].parent.parent
+      }
+      return null
+    }
+
+    function test_action_bar_hidden_until_hover_then_visible_on_any_row() {
       var l = mlMakeList({})
       verify(l !== null, "MessageList built")
       l.speakEnabled = true
@@ -352,18 +390,69 @@ Item {
       ]
       wait(50)
       var copies = mlFindByTextAndKind(l, "Copy", "Button")
-      // One per rendered message row: the action bar Row mounts under
-      // msgCol once per message. The user row's Copy is invisible
-      // because its action-bar Row is gated on role==="assistant"; the
-      // assistant's Copy is visible.
-      verify(copies.length >= 1,
-        "at least one Copy button exists on a loaded transcript")
-      var visibleCopies = []
-      for (var i = 0; i < copies.length; i++) {
-        if (copies[i].visible) visibleCopies.push(copies[i])
-      }
-      compare(visibleCopies.length, 1,
-        "exactly ONE Copy button is visible: the assistant's, on the last row")
+      verify(copies.length >= 2,
+        "one Copy button per rendered message row: " + copies.length)
+      compare(_mlVisible(copies), 0,
+        "no hover anywhere: every action bar is hidden")
+
+      var asstBubble = _mlBubbleFor(l, "hello world")
+      var userBubble = _mlUserBubble(l, "hi")
+      verify(asstBubble !== null && userBubble !== null, "both bubbles found")
+
+      _mlHover(l, asstBubble)
+      compare(_mlVisible(mlFindByTextAndKind(l, "Copy", "Button")), 1,
+        "hovering the assistant row reveals its bar only")
+      _mlHover(l, userBubble)
+      compare(_mlVisible(mlFindByTextAndKind(l, "Copy", "Button")), 1,
+        "hovering the user row — NOT the last message — reveals its bar too")
+    }
+
+    // ---- role offset: user hugs the right edge, assistant the left ------
+
+    function test_bubbles_offset_by_role() {
+      var l = mlMakeList({})
+      mlFakeStore.messages = [
+        { id: 1, role: "user",      content: "hi" },
+        { id: 42, role: "assistant", content: "hello world" }
+      ]
+      wait(50)
+      var asstBubble = _mlBubbleFor(l, "hello world")
+      var userBubble = _mlUserBubble(l, "hi")
+      verify(asstBubble !== null && userBubble !== null, "both bubbles found")
+
+      compare(Math.round(asstBubble.width), Math.round(l.bubbleWidth),
+        "the assistant bubble spans the inset width")
+      compare(Math.round(asstBubble.mapToItem(l, 0, 0).x), 0,
+        "the assistant bubble keeps the left edge")
+      compare(Math.round(userBubble.mapToItem(l, userBubble.width, 0).x),
+        Math.round(l.width),
+        "the user bubble hangs off the right edge")
+      verify(userBubble.width < asstBubble.width * 0.5,
+        "a two-letter user message hugs its text, not the row: " + userBubble.width)
+    }
+
+    // ---- Regenerate stays gated to the LAST assistant row ---------------
+
+    function test_regenerate_only_on_last_assistant_row() {
+      var l = mlMakeList({ onRegenerate: function () {} })
+      mlFakeStore.messages = [
+        { id: 7,  role: "assistant", content: "old answer" },
+        { id: 1,  role: "user",      content: "hi" },
+        { id: 42, role: "assistant", content: "hello world" }
+      ]
+      wait(50)
+      var regens = function () { return mlFindByTextAndKind(l, "Regenerate", "Button") }
+
+      _mlHover(l, _mlBubbleFor(l, "old answer"))
+      compare(_mlVisible(regens()), 0,
+        "hovering an OLD assistant row shows no Regenerate — ChatStore "
+        + "regenerates the last turn, offering it here would redo the wrong one")
+      _mlHover(l, _mlBubbleFor(l, "hello world"))
+      compare(_mlVisible(regens()), 1,
+        "hovering the LAST assistant row shows Regenerate")
+      _mlHover(l, _mlUserBubble(l, "hi"))
+      compare(_mlVisible(regens()), 0,
+        "a user row never shows Regenerate")
     }
 
     // ---- Copy: click selects all the assistant's body text ------------
@@ -382,6 +471,8 @@ Item {
         { id: 42, role: "assistant", content: "hello world" }
       ]
       wait(50)
+      // The bar is hover-gated now: reveal the assistant row's bar first.
+      _mlHover(l, _mlBubbleFor(l, "hello world"))
       var copyBtn = mlFindByTextAndKind(l, "Copy", "Button")
       var visibleCopy = null
       for (var i = 0; i < copyBtn.length; i++) {
@@ -412,6 +503,7 @@ Item {
         { id: 42, role: "assistant", content: "hello world" }
       ]
       wait(50)
+      _mlHover(l, _mlBubbleFor(l, "hello world"))
       var copyBtn = mlFindByTextAndKind(l, "Copy", "Button")
       var visibleCopy = null
       for (var i = 0; i < copyBtn.length; i++) {
@@ -441,14 +533,19 @@ Item {
         { id: 42, role: "assistant", content: "hello world" }
       ]
       wait(50)
+      // Hover the assistant row so the bar is revealed — the gate under test
+      // is Speak's, not the bar's. Copy must show while Speak must not.
+      _mlHover(l, _mlBubbleFor(l, "hello world"))
+      compare(_mlVisible(mlFindByTextAndKind(l, "Copy", "Button")), 1,
+        "hover reveals the bar (Copy is visible)")
       var speaks = mlFindByTextAndKind(l, "Speak", "Button")
       var visibleSpeaks = []
       for (var i = 0; i < speaks.length; i++) {
         if (speaks[i].visible) visibleSpeaks.push(speaks[i])
       }
       compare(visibleSpeaks.length, 0,
-        "with speakEnabled=false, no Speak button is visible — the action bar " +
-        "shows Copy / Regenerate / Fork only")
+        "with speakEnabled=false, no Speak button is visible even on hover — " +
+        "the action bar shows Copy / Regenerate / Fork only")
     }
 
     // ---- Speak: clicking the visible button fires speakRequested ------
@@ -470,13 +567,14 @@ Item {
         { id: 42, role: "assistant", content: "hello world" }
       ]
       wait(50)
+      _mlHover(l, _mlBubbleFor(l, "hello world"))
       var speaks = mlFindByTextAndKind(l, "Speak", "Button")
       var visibleSpeak = null
       for (var i = 0; i < speaks.length; i++) {
         if (speaks[i].visible) { visibleSpeak = speaks[i]; break }
       }
       verify(visibleSpeak !== null,
-        "speakEnabled=true shows the Speak button on the last assistant row")
+        "speakEnabled=true shows the Speak button on the hovered assistant row")
       visibleSpeak.clicked()
       wait(10)
       compare(speakPayloads.length, 1,

@@ -6,7 +6,7 @@
  */
 
 import { useSettingsStore } from '../../stores/settingsStore'
-import { DEFAULT_VAD_CONFIG, type VadConfig } from './vadStateMachine'
+import { DEFAULT_VAD_CONFIG, type VadConfig } from '../../../core/services/vadStateMachine'
 import type { GateMode, VoiceGateConfig } from '../voiceGate'
 import type { HotwordConfig, HotwordBackendPref } from '../hotword'
 

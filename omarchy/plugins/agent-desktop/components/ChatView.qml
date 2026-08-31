@@ -43,6 +43,11 @@ Item {
   property var voiceStore: null
   property var ttsStore: null
 
+  // ContinuousVoiceStore. Nullable for the same reason; `ContinuousVoiceBar`
+  // hides itself when the setting is off, so a surface that never passes one
+  // simply has no control.
+  property var continuousVoiceStore: null
+
   // Optional helper from Main.
   property var onDismiss: null
 
@@ -65,6 +70,20 @@ Item {
     settingsStore ? settingsStore.get("ai_showThinking", "false") === "true" : false
   property string effectiveAgentName:
     settingsStore ? settingsStore.get("agent_name", "Agent") : "Agent"
+
+  // Can TTS actually speak? `tts:speakMessage` runs through `speakResponse`,
+  // which returns without a sound when the provider is off or the response
+  // mode is off — so a Speak button offered in either state is a control that
+  // cannot act. The Electron front gates its own button on exactly this pair
+  // (bubble/AssistantBubble.tsx:86).
+  property string effectiveTtsProvider:
+    settingsStore ? settingsStore.get("tts_provider", "off") : "off"
+  property string effectiveTtsResponseMode:
+    settingsStore ? settingsStore.get("tts_responseMode", "off") : "off"
+  readonly property bool ttsCanSpeak:
+    root.ttsStore !== null
+    && root.effectiveTtsProvider.length > 0 && root.effectiveTtsProvider !== "off"
+    && root.effectiveTtsResponseMode.length > 0 && root.effectiveTtsResponseMode !== "off"
 
   // The chat input instance, exposed as a property so the transcript
   // router can hand text to it without going through a signal that the
@@ -226,6 +245,17 @@ Item {
         conversationsStore: root.conversationsStore
       }
 
+      // Always-listening session control. Above the transcript and below the
+      // status line, which is where the React front puts it
+      // (pages/ChatView.tsx:238). It hides itself — and collapses to zero
+      // height — when `continuousVoice_enabled` is off.
+      ContinuousVoiceBar {
+        Layout.fillWidth: true
+        Layout.preferredHeight: implicitHeight
+        store: root.continuousVoiceStore
+        settingsStore: root.settingsStore
+      }
+
       // The transcript takes whatever is left between the header rows and the
       // composer. `Layout.bottomMargin` is the gap the old height expression
       // subtracted by hand.
@@ -249,10 +279,10 @@ Item {
         // Speak this message. `TtsStore.speakMessage` and the live
         // `tts:speakMessage` channel existed with no caller — the only TTS
         // affordance was a stop button for a state nothing could enter.
-        // `speakEnabled` is the leaf's own guard against a dead control: it
-        // stays false until a host actually connects the signal, which is
-        // here.
-        speakEnabled: root.ttsStore !== null
+        // `speakEnabled` is the leaf's own guard against a dead control: the
+        // host must both wire the signal (here) AND be in a state where the
+        // server will actually produce sound (see `ttsCanSpeak`).
+        speakEnabled: root.ttsCanSpeak
         onSpeakRequested: function (messageId, text) {
           if (!root.ttsStore || !root.conversationsStore) return
           var trimmed = String(text || "").trim()
@@ -290,9 +320,9 @@ Item {
 
       // Input area. Sized from the input's OWN content height, not a magic
       // constant: the previous `compact ? 80 : 120` under-allotted the real
-      // ChatInput (a 3-row textarea plus the mic/Send row measures well past
-      // 80 px), so in the quick overlay the input box drew past the bottom
-      // edge of the card.
+      // ChatInput (the composer row and its attachment chips measure well
+      // past 80 px), so in the quick overlay the input box drew past the
+      // bottom edge of the card.
       // The input area IS a Column — no wrapper Item.
       //
       // It used to be `Item { height: <hand-maintained sum of children> }`,

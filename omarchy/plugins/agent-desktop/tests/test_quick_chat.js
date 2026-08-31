@@ -186,4 +186,90 @@ assert.strictEqual(
   'id-less row skipped',
 )
 
+// ---- pickCreatedId: reply shapes and the voice title ------------------------
+//
+// The handler returns the Conversation ROW (`service.create` returns the
+// object), while the same call over this front's WebSocket has been measured
+// answering literally `null` with the row inserted anyway. Both are real.
+assert.strictEqual(
+  QC.pickCreatedId({ id: 42, title: 'Quick Chat' }, []),
+  42,
+  'an object reply is read for its id',
+)
+assert.strictEqual(QC.pickCreatedId({ id: 0 }, []), 0, 'an object with a zero id is not an id')
+assert.strictEqual(QC.pickCreatedId({ nope: 1 }, []), 0, 'an object with no id falls through')
+
+// The list fallback matches the title the caller ASKED FOR. A voice quick chat
+// is "Quick Chat (Voice)"; scanning for the hardcoded "Quick Chat" could never
+// find one, and instead returned the highest TEXT quick chat — which then got
+// pinned into the voice slot as though it were newly created.
+const mixedRows = [
+  { id: 3, title: 'Quick Chat' },
+  { id: 7, title: 'Quick Chat (Voice)' },
+  { id: 9, title: 'Quick Chat' },
+]
+assert.strictEqual(
+  QC.pickCreatedId(null, mixedRows, 'Quick Chat (Voice)'),
+  7,
+  'the voice title finds the voice row, not the highest text row',
+)
+assert.strictEqual(
+  QC.pickCreatedId(null, mixedRows, 'Quick Chat'),
+  9,
+  'the text title still takes the highest text row',
+)
+// Omitted title keeps the original two-argument behaviour.
+assert.strictEqual(QC.pickCreatedId(null, mixedRows), 9, 'default title is "Quick Chat"')
+assert.strictEqual(QC.pickCreatedId(null, mixedRows, ''), 9, 'an empty title falls back to the default')
+// A voice scan with no voice row present must return 0 rather than adopting a
+// text conversation.
+assert.strictEqual(
+  QC.pickCreatedId(null, [{ id: 9, title: 'Quick Chat' }], 'Quick Chat (Voice)'),
+  0,
+  'no voice row means no id — never adopt the text quick chat',
+)
+
+// ---- wantsHeadlessVoice ----------------------------------------------------
+//
+// The toggle this backs ("Headless voice mode (notifications only, no
+// overlay)") was persisted and read by NOTHING in the QML front, so turning it
+// on produced the ordinary quick-voice overlay. These pin the two halves of the
+// decision so a reader can never be dropped again without a red test.
+
+assert.strictEqual(
+  QC.wantsHeadlessVoice('voice', 'true'),
+  true,
+  'voice + true is the one headless case',
+)
+assert.strictEqual(
+  QC.wantsHeadlessVoice('voice', 'false'),
+  false,
+  'voice + false shows the overlay',
+)
+// Text mode can never be headless: there would be no input to type into.
+assert.strictEqual(
+  QC.wantsHeadlessVoice('text', 'true'),
+  false,
+  'text mode ignores the headless setting',
+)
+assert.strictEqual(
+  QC.wantsHeadlessVoice('quick', 'true'),
+  false,
+  'the bar widget "quick" summon is text mode, never headless',
+)
+assert.strictEqual(
+  QC.wantsHeadlessVoice('window', 'true'),
+  false,
+  'the app window is never headless',
+)
+// Anything that is not the exact string 'true' fails towards the visible
+// surface — a corrupt setting must not strand the user in a mode with no UI.
+assert.strictEqual(QC.wantsHeadlessVoice('voice', ''), false)
+assert.strictEqual(QC.wantsHeadlessVoice('voice', undefined), false)
+assert.strictEqual(QC.wantsHeadlessVoice('voice', null), false)
+assert.strictEqual(QC.wantsHeadlessVoice('voice', 'null'), false)
+assert.strictEqual(QC.wantsHeadlessVoice('voice', 'TRUE'), false)
+assert.strictEqual(QC.wantsHeadlessVoice('voice', true), true,
+  'a real boolean true stringifies to the accepted value')
+
 console.log('test_quick_chat: ok')

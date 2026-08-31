@@ -98,6 +98,49 @@ function clampNumber(value, def) {
   return v
 }
 
+// ---- option list normalization ---------------------------------------
+
+// Return `def.options` as a REAL JS array of { value, label }.
+//
+// Why this exists, and why nothing here may call `Array.isArray` on it:
+// a def handed to a Repeater delegate as `modelData` is a MARSHALLED COPY,
+// not the object the model holds. Measured offscreen against the real
+// component: for the same def, `visibleDefs[i] === modelData` is false, and
+// while `modelData.options.length` is 2 and `modelData.options[0].value`
+// reads back correctly, `Array.isArray(modelData.options)` is FALSE — the
+// copy carries a QML variant list, not a JS Array.
+//
+// That one guard is what made every `select` row on the AI page render an
+// empty dropdown under the red hint "Stored value 'claude-agent-sdk' is not
+// in the option list": `optionIndexFor` bailed on the isArray test and
+// returned -1 for a value that was sitting right there in the list, and the
+// row's own `Array.isArray` check handed the Dropdown zero options.
+//
+// So the list is duck-typed on `length`. A string also has `length`, so it is
+// excluded explicitly rather than being walked one character at a time.
+function optionCount(def) {
+  var raw = def ? def.options : null
+  if (!raw || typeof raw === 'string') return 0
+  var n = Number(raw.length)
+  return isFinite(n) && n > 0 ? n : 0
+}
+
+// The RENDERABLE list: plain { value, label } objects, entries without a
+// usable `value` dropped. A Dropdown must not be handed an option it cannot
+// select, so this filters — which is exactly why `optionIndexFor` below does
+// NOT go through it: dropping an entry would renumber the ones after it.
+function optionsOf(def) {
+  var n = optionCount(def)
+  var out = []
+  for (var i = 0; i < n; i++) {
+    var opt = def.options[i]
+    if (!opt || opt.value === undefined || opt.value === null) continue
+    var value = String(opt.value)
+    out.push({ value: value, label: opt.label === undefined || opt.label === null ? value : String(opt.label) })
+  }
+  return out
+}
+
 // ---- dropdown index for current value --------------------------------
 
 // Return the index in `def.options` whose `value` equals `currentValue`,
@@ -108,12 +151,16 @@ function clampNumber(value, def) {
 // Comparison is string-strict on the option's `value` field. The
 // stored setting is always a string (settings are a Record<string,
 // string>) so the comparison never coerces unexpectedly.
+//
+// The index is POSITIONAL in the raw list, so it stays valid for a caller
+// indexing `def.options` directly.
 function optionIndexFor(def, currentValue) {
-  if (!def || !Array.isArray(def.options) || def.options.length === 0) return -1
   if (currentValue === undefined || currentValue === null) return -1
+  var n = optionCount(def)
   var needle = String(currentValue)
-  for (var i = 0; i < def.options.length; i++) {
-    if (def.options[i] && def.options[i].value === needle) return i
+  for (var i = 0; i < n; i++) {
+    var opt = def.options[i]
+    if (opt && opt.value === needle) return i
   }
   return -1
 }

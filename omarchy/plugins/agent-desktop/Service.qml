@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import "stores"
 import "lib/notify.js" as Notify
+import "lib/quickChat.js" as QC
 
 // Service singleton. Three jobs, and nothing else:
 //
@@ -242,6 +243,18 @@ Item {
   function recStop() { write_({ op: "rec.stop" }) }
   function recCancel() { write_({ op: "rec.cancel" }) }
 
+  // Continuous capture. The same child-process argument as push-to-talk above:
+  // the bridge owns `pw-record`, so it owns the always-listening loop and the
+  // energy VAD that cuts it into utterances. QML never sees a PCM frame — only
+  // finished utterances, already framed as WAV.
+  //
+  // `cvPause` is half-duplex, not a stop: the recorder keeps running and the
+  // bridge drops what it hears, so the assistant's own TTS is not transcribed
+  // back as the user's next sentence.
+  function cvStart(config) { wantsBridge = true; ensureBridge(); write_({ op: "cv.start", config: config || ({}) }) }
+  function cvStop() { write_({ op: "cv.stop" }) }
+  function cvPause(paused) { write_({ op: "cv.pause", paused: paused === true }) }
+
   // `error` is non-empty only when the recorder stopped because it FAILED —
   // no capture device, no permission, a node that vanished. Carried on this
   // signal rather than a new one because it is the same fact ("capture is no
@@ -250,6 +263,11 @@ Item {
   // nothing on screen.
   signal recordingChanged(bool active, string error)
   signal audioReady(string b64)
+
+  // Continuous capture, mirroring the pair above: one signal for "is it
+  // running (and why did it stop)", one for each finished utterance.
+  signal cvStateChanged(bool active, string error)
+  signal utteranceCaptured(string b64, real startedAt, real endedAt)
 
   // Frames written before the child has actually started. `bridge.running` flips
   // synchronously but the process — and its stdin — appear a moment later, so a
@@ -334,6 +352,13 @@ Item {
     case "audio":
       audioReady(String(msg.b64 || ""))
       return
+    case "cv":
+      cvStateChanged(msg.active === true, msg.error ? String(msg.error) : "")
+      return
+    case "utterance":
+      utteranceCaptured(String(msg.b64 || ""),
+                        Number(msg.startedAt || 0), Number(msg.endedAt || 0))
+      return
     case "log":
       console.warn("agent-desktop bridge:", msg.level, msg.message)
       return
@@ -391,6 +416,20 @@ Item {
 
   readonly property alias voiceStore: voiceStoreImpl
   VoiceStore { id: voiceStoreImpl; rpc: root; settingsStore: settingsStoreImpl }
+
+  // Always-listening capture. Separate from VoiceStore on purpose: push-to-talk
+  // owns "the user is holding the key", this owns "the room is being listened
+  // to and a gate decides what counts". They share the microphone, so the
+  // bridge refuses to run both at once.
+  readonly property alias continuousVoiceStore: continuousVoiceStoreImpl
+  ContinuousVoiceStore {
+    id: continuousVoiceStoreImpl
+    rpc: root
+    settingsStore: settingsStoreImpl
+    // The gate's intent classifier is scoped to a conversation, and an
+    // utterance is sent to whichever one the chat store is on.
+    conversationId: Number(chatStoreImpl.conversationId || 0)
+  }
 
   readonly property alias ttsStore: ttsStoreImpl
   TtsStore { id: ttsStoreImpl; rpc: root }
@@ -510,6 +549,23 @@ Item {
       // (src/renderer/stores/chatStore.ts:865), and a chime while you are
       // looking at another window on the same workspace is exactly the point.
       root.playNotificationSound_(cfg, "success")
+      if (root.headlessTurnPending_) {
+        root.headlessTurnPending_ = false
+        // The answer to a headless dictation is the ONLY output that turn
+        // has, so the two gates below are both the wrong question for it:
+        // `notifyWhenHidden` asks "notify when the WINDOW is closed?" (there
+        // was no window), and `isPluginOpen` can be true for an app window
+        // the user opened in the meantime — which would silence the one
+        // notification the mode exists to deliver.
+        //
+        // `quickChat_responseNotification` is the setting that actually
+        // governs this ("Show desktop notification for responses"). It had no
+        // reader in this front either; this is it.
+        if (settingsStoreImpl.get("quickChat_responseNotification", "true") === "true") {
+          root.notify_("Agent Desktop", String(summaryText).slice(0, 400))
+        }
+        return
+      }
       if (String(root.setting("notifyWhenHidden", "On")) !== "On") return
       // Only when the user cannot already see the answer.
       if (root.shell && typeof root.shell.isPluginOpen === "function"
@@ -565,6 +621,59 @@ Item {
       }
     }
   }
+
+  // ---- continuous voice wiring ---------------------------------------------
+  //
+  // Three seams, each one concern, matching how the two turn-end handlers above
+  // are split rather than merged.
+
+  // 1. An utterance the gate accepted is a message. The store deliberately does
+  //    not know about ChatStore — it decides WHETHER to send, not where.
+  Connections {
+    target: continuousVoiceStoreImpl
+    function onUtteranceReady(text) {
+      var trimmed = String(text || "").trim()
+      if (trimmed.length === 0) return
+      chatStoreImpl.send(trimmed, [])
+    }
+  }
+
+  // 2. A finished exchange opens the follow-up window, so the next thing the
+  //    user says needs neither a repeated wake word nor another (paid) intent
+  //    classification. This is `createVoiceGate.notifyExchangeComplete()`.
+  Connections {
+    target: chatStoreImpl
+    function onTurnEnded(summaryText) {
+      continuousVoiceStoreImpl.notifyExchangeComplete()
+    }
+  }
+
+  // 3. Half duplex. Without it the assistant's own spoken answer is captured,
+  //    transcribed, and handed back to the gate as the user's next sentence —
+  //    the loop the Electron front avoids the same way
+  //    (useContinuousVoice.ts:134-139). Default ON: only the literal "false"
+  //    turns it off, matching `pauseDuringTts` in the renderer's config.ts.
+  Connections {
+    target: ttsStoreImpl
+    function onSpeakingChanged() {
+      if (!continuousVoiceStoreImpl.active) return
+      if (String(settingsStoreImpl.get("continuousVoice_pauseDuringTts", "true")) === "false") return
+      continuousVoiceStoreImpl.setPaused(ttsStoreImpl.speaking === true)
+    }
+  }
+
+  // Turning the feature off in Settings must also end a session that is already
+  // running — otherwise the microphone stays open with no control left on
+  // screen to close it.
+  Connections {
+    target: settingsStoreImpl
+    function onValuesChanged() {
+      if (!continuousVoiceStoreImpl.active) return
+      if (String(settingsStoreImpl.get("continuousVoice_enabled", "false")) === "true") return
+      continuousVoiceStoreImpl.stop()
+    }
+  }
+
   // The active conversation is the sidebar's to choose and the chat store's to
   // load. Keeping the hand-off here means neither store has to know the other.
   //
@@ -593,6 +702,184 @@ Item {
     filesStoreImpl.load(cwd)
   }
 
+  // ---- deferred quick-chat resolution --------------------------------------
+  //
+  // `ConversationsStore.ensureQuickChat(mode)` reads the pinned conversation id
+  // out of the settings map. Called before `settings:get` has landed it reads
+  // "" and creates a brand-new "Quick Chat" row — the trail of empty ones in
+  // the database is exactly that bug. So the rule is "settings first", and it
+  // has ONE implementation here rather than one per caller: App.qml's overlay
+  // summon and the headless voice session below both go through this.
+  property string pendingQuickChatMode_: ""
+  property int quickChatWaitTicks_: 0
+
+  function ensureQuickChatWhenReady(mode) {
+    root.pendingQuickChatMode_ = (mode === "voice") ? "voice" : "text"
+    root.quickChatWaitTicks_ = 0
+    // The settings map only loads once the bridge authenticates, so a summon
+    // is also what brings the connection up.
+    root.connectNow()
+    root.drainQuickChat_()
+  }
+
+  function drainQuickChat_() {
+    if (root.pendingQuickChatMode_.length === 0) return
+    if (settingsStoreImpl.loaded !== true) {
+      root.quickChatWaitTicks_ += 1
+      // 150 ms x 200 = 30 s. Bounded rather than a forever-spinning timer: a
+      // server that never comes up must stop costing ticks, and a pending mode
+      // draining half an hour later would create a quick chat nobody asked for.
+      if (root.quickChatWaitTicks_ > 200) root.pendingQuickChatMode_ = ""
+      return
+    }
+    var mode = root.pendingQuickChatMode_
+    root.pendingQuickChatMode_ = ""
+    conversationsStoreImpl.ensureQuickChat(mode)
+  }
+
+  Timer {
+    id: quickChatDrain
+    interval: 150
+    repeat: true
+    // Self-terminating: draining clears the mode, which stops the timer.
+    running: root.pendingQuickChatMode_.length > 0
+    onTriggered: root.drainQuickChat_()
+  }
+
+  // ---- headless voice ------------------------------------------------------
+  //
+  // `quickChat_voiceHeadless` promises "notifications only, no overlay". It had
+  // NO reader anywhere in this front: the settings page persisted the key and
+  // every voice summon still called `shell.summon`, so the toggle produced the
+  // ordinary quick-voice overlay and nothing else.
+  //
+  // A headless capture is a session, not a window, so it lives here and not in
+  // App.qml: the panel may not even be instantiated, and nothing about the
+  // flow needs a surface.
+  //
+  //   press 1     arm; capture opens the moment the connection is up
+  //   press 2     stop; VoiceStore transcribes and raises transcriptReady
+  //   transcript  sent to that conversation
+  //   turn end    the answer arrives as a desktop notification
+  //
+  // Every failure notifies. In a mode with no window, a swallowed error is
+  // indistinguishable from a dead keybinding.
+  //
+  // WHY THE DECISION IS DEFERRED. `openSurface` below does not read
+  // `quickChat_voiceHeadless` on the keypress, and that is the whole bug this
+  // feature was reported for. A headless summon is ALWAYS the cold path — by
+  // definition nothing else has opened the plugin — so at that instant the
+  // bridge child does not exist, `settings:get` has not run, and the settings
+  // map is EMPTY. Reading the key there returns the "false" fallback, the
+  // summon falls through to `shell.summon`, and the user gets the ordinary
+  // quick-voice overlay: measured on a freshly restarted shell, press 1 mapped
+  // the `agent-desktop-quickchat` layer and only press 2 — with settings now
+  // loaded — went headless. "Ça active uniquement le mode quick voice normal",
+  // exactly as reported.
+  //
+  // So a voice summon waits for the settings map, then decides once. By the
+  // time `toggleHeadlessVoice` runs, `settingsStore.loaded` is true — which
+  // also means the bridge authenticated, so `VoiceStore.start()` reaches a
+  // live child and `ensureQuickChat` reads a real pinned id instead of
+  // creating a stray "Quick Chat" on every summon.
+
+  property bool headlessVoice: false      // this session owns the live capture
+  property string headlessTranscript_: "" // transcribed, waiting for a conversation
+  property int headlessSendTicks_: 0
+  property bool headlessTurnPending_: false
+
+  function toggleHeadlessVoice() {
+    // "Is a capture live" is VOICESTORE's state, and it is read from there
+    // rather than mirrored into a second boolean here. A local copy is what
+    // desynced the toggle: a start that never reached the bridge left the flag
+    // saying "recording", and the next press then "stopped" a capture that had
+    // never begun — after which the key did the opposite thing every time.
+    if (voiceStoreImpl.recording || voiceStoreImpl.starting) {
+      voiceStoreImpl.stop()
+      return
+    }
+    root.headlessVoice = true
+    root.headlessTranscript_ = ""
+    root.headlessSendTicks_ = 0
+    root.ensureQuickChatWhenReady("voice")
+    voiceStoreImpl.start()
+    // The ONLY feedback this mode can give that the mic is live. Without it
+    // the shortcut is indistinguishable from one that does nothing.
+    root.notify_("Agent Desktop", "Listening… press the shortcut again to send.")
+  }
+
+  function headlessFlush_() {
+    if (root.headlessTranscript_.length === 0) return
+    if (Number(chatStoreImpl.conversationId || 0) > 0) {
+      var text = root.headlessTranscript_
+      root.headlessTranscript_ = ""
+      root.headlessTurnPending_ = true
+      chatStoreImpl.send(text, [])
+      return
+    }
+    root.headlessSendTicks_ += 1
+    if (root.headlessSendTicks_ < 40) return
+    // 8 s and still no conversation to send to — longer than a cold bridge
+    // spawn plus the create round trip. `ChatStore.send` would set an `error`
+    // string that no window is rendering, so say it out loud and hand the
+    // words back rather than dropping a dictation in silence.
+    var lost = root.headlessTranscript_
+    root.headlessTranscript_ = ""
+    root.notify_("Agent Desktop", "No quick-chat conversation — not sent: " + lost)
+  }
+
+  Timer {
+    id: headlessFlushTimer
+    interval: 200
+    repeat: true
+    running: root.headlessTranscript_.length > 0
+    onTriggered: root.headlessFlush_()
+  }
+
+  // The ONE subscriber to voice transcripts.
+  //
+  // App.qml used to subscribe directly. With a headless session in the picture
+  // that would be two subscribers to one signal, and QML does not order signal
+  // handlers — a transcript could be consumed by both (double send) or by
+  // neither. So the service routes: it keeps a headless transcript and re-emits
+  // everything else for whichever surface App has on screen.
+  signal voiceTranscriptForSurface(string text)
+
+  Connections {
+    target: voiceStoreImpl
+
+    function onTranscriptReady(text) {
+      if (!root.headlessVoice) {
+        root.voiceTranscriptForSurface(String(text || ""))
+        return
+      }
+      root.headlessVoice = false
+      var trimmed = String(text || "").trim()
+      if (trimmed.length === 0) {
+        // VoiceStore fires this on every successful transcribe including the
+        // documented empty "nothing to say" case.
+        root.notify_("Agent Desktop", "Nothing was heard — try again.")
+        return
+      }
+      root.headlessTranscript_ = trimmed
+      root.headlessSendTicks_ = 0
+      root.headlessFlush_()
+    }
+
+    // A capture that fails — no capture device, pw-record gone, whisper
+    // refusing the audio — sets `VoiceStore.error` and stops there. In the
+    // windowed flow ChatInput's status row renders it; headless has no row.
+    function onErrorChanged() {
+      if (!root.headlessVoice) return
+      var e = String(voiceStoreImpl.error || "")
+      // Cleared to "" on every successful start and transcribe; only a real
+      // failure carries text.
+      if (e.length === 0) return
+      root.headlessVoice = false
+      root.notify_("Agent Desktop", "Voice capture failed: " + e)
+    }
+  }
+
   // ---- IpcHandler: the channel Hyprland binds invoke ----------------------
 
   IpcHandler {
@@ -613,6 +900,15 @@ Item {
       if (!root.bridgeAlive) return "bridge-down"
       if (!root.serverUp) return "server-down"
       if (!root.connected) return "connecting"
+      // A headless capture has no window, so this string is the only way to
+      // observe it — from the bar tooltip, from `omarchy-shell agent-desktop
+      // status`, and from a test.
+      // "waking" is NOT "listening": a cold voice summon is still waiting for
+      // the settings map and the microphone is shut. Reporting the two as one
+      // string would make this readout claim a mic that is not open.
+      if (root.pendingVoiceSummon_) return "waking"
+      if (root.headlessVoice) return "listening"
+      if (root.headlessTranscript_.length > 0) return "transcribing"
       if (root.busy) return "working"
       return "idle"
     }
@@ -622,7 +918,62 @@ Item {
   // once it exists (Phase 2); until then the bar widget reads "idle".
   property bool busy: false
 
+  // A voice summon is pending while we wait for the settings map — see the
+  // long note above `headlessVoice` for why the decision cannot be taken on
+  // the keypress.
+  property bool pendingVoiceSummon_: false
+  property int voiceSummonTicks_: 0
+
   function openSurface(mode) {
+    // Only the voice summon consults a setting, so only it has to wait. Every
+    // other mode is a straight summon and stays instant.
+    if (mode !== "voice") { root.summon_(mode); return }
+    if (root.pendingVoiceSummon_) {
+      // Pressed again while still waiting for the server: cancel, rather than
+      // stack a second summon behind the first.
+      root.pendingVoiceSummon_ = false
+      return
+    }
+    root.pendingVoiceSummon_ = true
+    root.voiceSummonTicks_ = 0
+    root.connectNow()
+    root.resolveVoiceSummon_()
+  }
+
+  function resolveVoiceSummon_() {
+    if (!root.pendingVoiceSummon_) return
+    if (settingsStoreImpl.loaded !== true) {
+      root.voiceSummonTicks_ += 1
+      if (root.voiceSummonTicks_ <= 60) return  // 12 s, longer than a cold spawn
+      // The server never came up. Fall back to the OVERLAY rather than to
+      // headless: it is the mode with a window, so whatever is broken is at
+      // least visible instead of being a shortcut that does nothing.
+      root.pendingVoiceSummon_ = false
+      root.summon_("voice")
+      return
+    }
+    root.pendingVoiceSummon_ = false
+    // The single gate on `quickChat_voiceHeadless`, taken here rather than in
+    // App.qml because headless means "no window": the decision must precede
+    // anything that summons a panel.
+    if (QC.wantsHeadlessVoice("voice", settingsStoreImpl.get("quickChat_voiceHeadless", "false"))) {
+      root.toggleHeadlessVoice()
+      return
+    }
+    root.summon_("voice")
+  }
+
+  Timer {
+    id: voiceSummonWait
+    interval: 200
+    repeat: true
+    // Self-terminating: resolving clears the flag, which stops the timer. Warm
+    // (the usual case) it never runs at all — `openSurface` resolves inline.
+    running: root.pendingVoiceSummon_
+    onTriggered: root.resolveVoiceSummon_()
+  }
+
+  function summon_(mode) {
     if (shell && typeof shell.summon === "function")
       shell.summon(pluginId, JSON.stringify({ mode: mode }))
   }

@@ -373,6 +373,74 @@ Item {
         "voice mode with separate on must not touch the shared slot")
     }
 
+    // The whole reason no conversation could ever be created from this front.
+    //
+    // The server signature is `create(title?, folderId?)` and treats an ABSENT
+    // folderId as "use the default folder" — but an explicit null is a value
+    // and `validatePositiveInt` refuses it. Measured live:
+    //   ["Quick Chat (Voice)", null] -> "folderId must be a positive integer"
+    //   ["Quick Chat (Voice)"]       -> row inserted
+    // Both creation paths padded their arguments with null, so every create
+    // was refused — silently, because the quick-chat invoke had no error
+    // callback. These assert the ARGS, which is the part that was wrong.
+    function _argsFor(channel) {
+      for (var i = fakeRpc.calls.length - 1; i >= 0; i--) {
+        if (fakeRpc.calls[i].channel === channel) return fakeRpc.calls[i].args
+      }
+      return null
+    }
+
+    function test_create_omits_folder_id_rather_than_sending_null() {
+      store.create("Hello", null)
+      var args = _argsFor("conversations:create")
+      compare(args.length, 1, "no folder means a ONE-argument call, not [title, null]")
+      compare(args[0], "Hello")
+    }
+
+    function test_create_sends_a_positive_folder_id() {
+      store.create("Hello", 4)
+      var args = _argsFor("conversations:create")
+      compare(args.length, 2)
+      compare(args[1], 4)
+    }
+
+    function test_create_drops_a_non_positive_folder_id() {
+      store.create("Hello", 0)
+      compare(_argsFor("conversations:create").length, 1, "0 is not a folder id")
+      store.create("Hello", -3)
+      compare(_argsFor("conversations:create").length, 1, "a negative is not a folder id")
+    }
+
+    function test_create_sends_an_empty_title_not_null() {
+      store.create(null, null)
+      var args = _argsFor("conversations:create")
+      compare(args.length, 1)
+      compare(args[0], "", "an absent title is sent as '' — the server refuses a null")
+    }
+
+    function test_quick_chat_create_omits_folder_id() {
+      fakeSettingsStore.values = ({})
+      store.ensureQuickChat("voice")
+      var args = _argsFor("conversations:create")
+      compare(args.length, 1, "quick chat must not send a null folderId either")
+      compare(args[0], "Quick Chat (Voice)")
+    }
+
+    // A null create reply for a VOICE quick chat must resolve through the
+    // voice title. Scanning for "Quick Chat" found the highest TEXT row and
+    // pinned that into the voice slot as though it were newly created.
+    function test_voice_null_create_resolves_by_voice_title() {
+      fakeSettingsStore.values = ({ quickChat_separateVoiceConversation: "true" })
+      store.ensureQuickChat("voice")
+      fakeRpc.accept("conversations:create", null)
+      fakeRpc.accept("conversations:list", [
+        { id: 30, title: "Quick Chat", folder_id: null, message_count: 0, updated_at: "2026-01-01T00:00:00Z" },
+        { id: 31, title: "Quick Chat (Voice)", folder_id: null, message_count: 0, updated_at: "2026-01-01T00:00:00Z" },
+      ])
+      compare(store.activeId, 31, "the VOICE row is the one that was just created")
+      compare(fakeSettingsStore.values.quickChat_voiceConversationId, "31")
+    }
+
     // ----- tree -----
 
     function test_tree_groups_folders_then_uncategorized() {

@@ -26,9 +26,10 @@ Item {
 
   // Content-driven height, so a parent can size to the input instead of
   // guessing. `inputBox` is the only sized child and already derives its own
-  // implicitHeight from the textarea plus the mic/Send row; before this,
-  // ChatView allotted a hardcoded 80 px in the quick overlay and the input
-  // rendered straight through the bottom of the overlay card.
+  // implicitHeight from the composer line — the textarea and the + / mic /
+  // Send buttons on ONE row — plus the attachment chips above it; before
+  // this, ChatView allotted a hardcoded 80 px in the quick overlay and the
+  // input rendered straight through the bottom of the overlay card.
   //
   // Safe against a binding loop: inputBox.implicitHeight depends on the
   // textarea's own implicit size, never on root.height.
@@ -687,45 +688,14 @@ Item {
         }
       }
 
-
-
-      TextArea {
-        id: inputArea
-        // Declarative focus, matching the shell's own layer-surface pattern
-        // (plugins/menu/Menu.qml keyCatcher). An imperative
-        // forceActiveFocus() after map is refused on a layer surface — Qt
-        // never marks the window active — so the caret only ever landed when
-        // the user clicked. `focus: true` claims focus inside the window's
-        // root focus scope instead, which is what actually sticks.
-        focus: true
-        anchors { left: parent.left; right: parent.right }
-        placeholderText: root.disabled
-          ? "Sign in to start chatting..."
-          : "Message the agent… (@ to mention files, / for commands)"
-        text: root.content
-        onTextChanged: if (text !== root.content) root._onChange(text)
-        Keys.onPressed: function (event) { root._onKey(event) }
-        wrapMode: TextArea.Wrap
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-        color: Color.foreground
-      }
-
-
-      // Bottom row: voice status on the left, attach + mic + send on the right.
-      //
-      // Bottom row: voice status on the left, attach + mic + send on the right.
-      //
-      // A RowLayout, not a Row: pushing the button to the right needs a spacer
-      // that grows, and a `Row` child may not use a horizontal anchor at all —
-      // `anchors.right: parent.right` on the button made Qt disable the Row
-      // outright ("Row will not function"), which a QML test surfaced.
-      // Attach lives left of mic by request: the order is "attach, then
-      // dictate, then send" — the most destructive action sits at the far
-      // right, where a stray click is least likely to hit it.
+      // Status + edit strip, ABOVE the composer. It used to share the bottom
+      // row with the buttons; the composer is now a single line, so the strip
+      // stands on its own — and a Column skips invisible children, so with no
+      // edit in flight and nothing to report it costs zero height.
       RowLayout {
         anchors { left: parent.left; right: parent.right }
         spacing: Style.spacing.sm
+        visible: root.editingMessageId > 0 || statusText.visible
 
         // Editing must be unmistakable: without it, Enter silently replaces
         // an older message instead of sending a new one, and the user has no
@@ -748,6 +718,7 @@ Item {
           }
         }
         Text {
+          id: statusText
           // Precedence, worst first: an ERROR outranks everything, because a
           // message that went nowhere is the only state the user cannot infer
           // from the screen. Then dictation (the mic is hot and they need to
@@ -794,6 +765,46 @@ Item {
         }
 
         Item { Layout.fillWidth: true }
+      }
+
+      // The composer: the textarea and the + / mic / Send buttons on ONE
+      // line, like the Electron front (MessageInput.tsx:428 — `flex
+      // items-end`). The textarea takes all remaining width and the row
+      // grows with the draft; the buttons bottom-align so they don't drift
+      // as the draft wraps. The status / edit strip lives above (see there).
+      //
+      // A RowLayout, not a Row: the textarea needs `Layout.fillWidth` to
+      // stretch, and a `Row` child may not use a horizontal anchor at all —
+      // `anchors.right: parent.right` on a button once made Qt disable the
+      // Row outright ("Row will not function"), which a QML test surfaced.
+      // Attach lives left of mic by request: the order is "attach, then
+      // dictate, then send" — the most destructive action sits at the far
+      // right, where a stray click is least likely to hit it.
+      RowLayout {
+        anchors { left: parent.left; right: parent.right }
+        spacing: Style.spacing.sm
+
+        TextArea {
+          id: inputArea
+          Layout.fillWidth: true
+          // Declarative focus, matching the shell's own layer-surface pattern
+          // (plugins/menu/Menu.qml keyCatcher). An imperative
+          // forceActiveFocus() after map is refused on a layer surface — Qt
+          // never marks the window active — so the caret only ever landed when
+          // the user clicked. `focus: true` claims focus inside the window's
+          // root focus scope instead, which is what actually sticks.
+          focus: true
+          placeholderText: root.disabled
+            ? "Sign in to start chatting..."
+            : "Message the agent… (@ to mention files, / for commands)"
+          text: root.content
+          onTextChanged: if (text !== root.content) root._onChange(text)
+          Keys.onPressed: function (event) { root._onKey(event) }
+          wrapMode: TextArea.Wrap
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          color: Color.foreground
+        }
 
         // Attach affordance — a small button left of the mic. Pressing
         // it emits `attachRequested`; the parent (App.qml) opens the
@@ -801,7 +812,7 @@ Item {
         // `addAttachment()`. ChatInput is a leaf and CANNOT import
         // Qt.labs.platform to open the dialog itself (CONTRACTS.md §2).
         Button {
-          Layout.alignment: Qt.AlignVCenter
+          Layout.alignment: Qt.AlignBottom
           Layout.preferredWidth: Style.bar.sizeHorizontal
           text: "+"
           tooltipText: "Attach a file or image"
@@ -814,12 +825,12 @@ Item {
         // (press-and-hold on the mouse, toggle from the keyboard shortcut);
         // ChatInput never decides between them.
         MicButton {
-          Layout.alignment: Qt.AlignVCenter
+          Layout.alignment: Qt.AlignBottom
           visible: !!root.voiceStore
           store: root.voiceStore
         }
         Rectangle {
-          Layout.alignment: Qt.AlignVCenter
+          Layout.alignment: Qt.AlignBottom
           // implicitWidth/Height, not width/height: a RowLayout owns its
           // children's geometry and overwriting it is undefined behaviour.
           implicitWidth: sendLabel.implicitWidth + 2 * Style.spacing.md

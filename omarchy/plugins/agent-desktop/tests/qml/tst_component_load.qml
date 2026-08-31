@@ -36,6 +36,7 @@ Item {
     "../../components/ChatInput.qml",
     "../../components/ChatView.qml",
     "../../components/CodeBlock.qml",
+    "../../components/ContinuousVoiceBar.qml",
     "../../components/ConversationActionBar.qml",
     "../../components/ConversationRow.qml",
     "../../components/FileTree.qml",

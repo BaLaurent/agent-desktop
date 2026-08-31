@@ -88,18 +88,25 @@ Item {
   // is silently ignored, so we cannot rely on the target flipping null → store
   // to fire anything. The Timer is the second-best option: low cost, only
   // runs while the store is unwired, never after `_settingsReady` is true.)
-  // One-shot recovery probe. `Qt.callLater` re-schedules itself recursively
-  // until the store is loaded, then writes `sidebarCollapsed` from the
-  // persisted value. The probe only schedules the next call if the store
-  // is not yet loaded — once the value is set, the loop ends.
+  // Recovery probe for the persisted sidebar state.
   //
-  // Why `Qt.callLater` instead of a Timer or `Connections.onLoadedChanged`:
-  //   - Timer's `running` binding has subtle re-evaluation edge cases when
-  //     multiple properties flip in quick succession during plugin warm-up.
-  //   - `Connections.target` is a property, not a signal — `onTargetChanged`
-  //     is silently ignored. A late wire-up would therefore never trigger.
-  //   - `Qt.callLater` always fires on the next event-loop tick, regardless
-  //     of where the App item is in its lifecycle.
+  // THIS MUST NOT BUSY-WAIT. It used to re-arm itself with
+  // `Qt.callLater(root._probeSettings)` on every miss, and `Qt.callLater` runs
+  // on the very next event-loop pass — no delay. `manifest.keepLoaded` means
+  // this item exists from shell start, while `settingsTarget.loaded` only turns
+  // true once the bridge connects, which only happens once something opens the
+  // app. So on a shell where the user had not opened Agent Desktop, the probe
+  // re-armed thousands of times a second forever: measured, quickshell sat at
+  // 102.7% CPU with no window on screen, against 9.0% with the plugin disabled,
+  // and Hyprland burned 1h43m of CPU in 1h14m of wall clock servicing a client
+  // whose event loop never went idle. That is what froze the desktop.
+  //
+  // A Timer instead, exactly like `attachResolveProbe` below — whose comment
+  // already spells out this same trap for a condition that "can never resolve".
+  // 250 ms is four wakeups a second while the app has never been opened, versus
+  // an unthrottled spin, and it costs nothing once `_settingsReady` is true.
+  // Uncapped on purpose: unlike the attach probe, this one legitimately has to
+  // keep waiting until the user first opens the app, which may be hours.
   readonly property var settingsTarget: root.service && root.service.settingsStore
     ? root.service.settingsStore
     : null
@@ -111,35 +118,32 @@ Item {
   // and produced no message: there was no conversation to send to.
   //
   // `ConversationsStore.ensureQuickChat(mode)` resolves (or pins) the right
-  // one. It was fully implemented and unit-tested but had no production
-  // caller. It MUST run after settings load: it reads the pinned id out of
-  // `quickChat_conversationId`, and reading that before the store is loaded
-  // sees empty and creates a fresh "Quick Chat" every single time — which is
-  // exactly the trail of empty "Quick Chat" rows already in this database.
-  property string _pendingQuickChatMode: ""
-
-  function _resolveQuickChat() {
-    if (root._pendingQuickChatMode.length === 0) return
-    if (!root._settingsReady) return
-    if (!root.service || !root.service.conversationsStore) return
-    var mode = root._pendingQuickChatMode
-    root._pendingQuickChatMode = ""
-    root.service.conversationsStore.ensureQuickChat(mode)
-  }
+  // one — but resolving it is the SERVICE's job, not this window's. It must
+  // not run before the settings map lands (it reads the pinned id out of
+  // `quickChat_conversationId`, and an unloaded store answers "", which is
+  // what left the trail of empty "Quick Chat" rows in this database), and the
+  // headless voice session needs the identical resolution with no window in
+  // sight. One rule, one implementation: `Service.ensureQuickChatWhenReady`.
+  //
+  // What stays here is the sidebar restore, which really is this window's
+  // state and nobody else's.
 
   function _probeSettings() {
-    if (root._settingsReady) {
-      root._resolveQuickChat()
-      return
-    }
+    if (root._settingsReady) return
     if (root.settingsTarget && root.settingsTarget.loaded === true) {
       root._settingsReady = true
       root.sidebarCollapsed =
         root.settingsTarget.get("sidebar_collapsed", "false") === "true"
-      root._resolveQuickChat()
-      return
     }
-    Qt.callLater(root._probeSettings)
+    // No self-re-arm. `settingsProbe` owns the retry cadence.
+  }
+
+  Timer {
+    id: settingsProbe
+    interval: 250
+    repeat: true
+    running: !root._settingsReady
+    onTriggered: root._probeSettings()
   }
 
   // The single root-level `Component.onCompleted`. QML permits exactly one per
@@ -165,13 +169,12 @@ Item {
 
     var voiceRequest = Surface.isVoiceRequest(payload)
 
-    // Bind the overlay to a conversation before the user can type into it.
-    // Queued rather than called: settings may still be loading, and the probe
-    // above drains this the moment they land.
-    if (surface === "quick") {
-      root._pendingQuickChatMode = voiceRequest ? "voice" : "text"
-      root._resolveQuickChat()
-      if (root._pendingQuickChatMode.length > 0) Qt.callLater(root._probeSettings)
+    // Bind the overlay to a conversation before the user can type into it. The
+    // service defers it until the settings map has landed, so this is safe to
+    // call the instant the overlay is summoned.
+    if (surface === "quick" && service
+        && typeof service.ensureQuickChatWhenReady === "function") {
+      service.ensureQuickChatWhenReady(voiceRequest ? "voice" : "text")
     }
 
     // A `mode:voice` summon is the keyboard toggle: the same key that opens
@@ -184,7 +187,21 @@ Item {
     Qt.callLater(root.focusSurface)
   }
 
-  function dismiss() {
+  // The panel host's closer. `close` is not a taste choice: shell.qml's
+  // `hide()` calls `invokeIfLoaded(id, "close", null)` (shell.qml:489), and
+  // `invokeIfLoaded` silently returns when the plugin has no method of that
+  // name. This function was called `dismiss`, so every host-driven hide —
+  // `omarchy-shell shell toggle`, the `hide` IPC verb, the bar widget — landed
+  // on nothing: `opened` stayed true, so the next `toggle` took its
+  // isPluginOpen branch and hid a panel that was already down, and the
+  // keybinding did nothing at all while the window was open.
+  //
+  // The early return is what makes that host call safe: shell.hide() invokes
+  // close(), and close() calls shell.hide() so an in-app Escape keeps the
+  // shell's own openPanelIds honest. Without the guard those two would
+  // trampoline. With it the second entry returns immediately.
+  function close() {
+    if (!opened) return
     // A voice capture is owned by the bridge, not the surface — closing the
     // overlay mid-dictation must drop the audio, not just hide the panel.
     if (service && service.voiceStore
@@ -322,22 +339,22 @@ Item {
     function onAttachRequested() { root._handleAttachRequested() }
   }
 
-
-  // The ONE subscriber to voice transcripts.
+  // Voice transcripts reach the visible surface through the SERVICE, which is
+  // the single subscriber to `VoiceStore.transcriptReady`.
   //
-  // ChatView used to subscribe itself, and there are two of them — the window
-  // and the quick-chat overlay — so a single dictation was delivered twice and
-  // sent twice. Measured live: "Quelle heure il est." dispatched once
-  // (streaming=false) then queued again (streaming=true), and the agent
-  // answered both. Worse, ChatView's binder reconnected on every
-  // `voiceStore` change without ever disconnecting, so the count could grow.
-  //
-  // Routing belongs here: App.qml already resolves which surface is active
-  // (CONTRACTS.md §2), and the transcript must land where the user is looking.
+  // Two things forced that. ChatView used to subscribe itself, and there are
+  // two of them — the window and the quick-chat overlay — so one dictation was
+  // delivered twice and sent twice (measured live: "Quelle heure il est."
+  // dispatched once, then queued again, and the agent answered both). Moving
+  // the subscription here fixed that; then the headless voice session arrived,
+  // which also has to consume a transcript, and QML does not order signal
+  // handlers — two subscribers to one signal is a coin flip between a double
+  // send and none. So the service routes, and this handler only ever receives
+  // the transcripts a surface is supposed to see.
   Connections {
-    target: root.service ? root.service.voiceStore : null
+    target: root.service
     ignoreUnknownSignals: true
-    function onTranscriptReady(text) {
+    function onVoiceTranscriptForSurface(text) {
       var view = root._activeChatView()
       if (!view || typeof view.applyTranscript !== "function") return
       view.applyTranscript(text)
@@ -414,15 +431,37 @@ Item {
     implicitHeight: 800
     minimumSize: Qt.size(760, 520)
 
-    // `visible` is a one-way binding on purpose. An `onVisibleChanged` handler
-    // that called dismiss() when the window went invisible was tried and is
-    // wrong twice over: Quickshell emits visibleChanged while the backing window
-    // is still being brought up, so the handler dismissed the window on its own
-    // first show; and it is unnecessary, because Quickshell's FloatingWindow
-    // does not act on an xdg close request — measured with `hyprctl dispatch
-    // killactive`, the window stays mapped and `visible` stays true. So there is
-    // no imperative write to reconcile, and `opened` has exactly one writer.
+    // `visible` stays a one-way binding: an `onVisibleChanged` handler that
+    // called dismiss() when the window went invisible was tried and is wrong,
+    // because Quickshell emits visibleChanged twice while the backing window is
+    // still being brought up, so the handler dismissed the window on its own
+    // first show.
     //
+    // But the claim this used to rest on — that Quickshell's FloatingWindow
+    // does not act on an xdg close request — is false, and it cost the app its
+    // keyboard summon. Measured against Quickshell 0.3.1 + Hyprland 0.56 with
+    // `hl.dsp.window.close()` (SUPER+W, the ordinary close), the signal order is:
+    //
+    //   closed          visible=false opened=true
+    //   visibleChanged  visible=false opened=true
+    //
+    // Quickshell unmaps the window and writes `visible = false` from C++. A C++
+    // write does not tear down the QML binding, so `visible` is still bound to
+    // `opened && surface === "window"` — it is simply now false while `opened`
+    // is still true. Nothing re-evaluates it, because `open()` assigns
+    // `opened = true` to a property that is ALREADY true: no transition, no
+    // re-show. The window could never be summoned again for the rest of the
+    // shell session, and every SUPER+A after the first close did nothing at all.
+    //
+    // `closed` is the exact hook: measured, it fires once on a real close
+    // request and NOT on bring-up, and NOT when the binding hides the window
+    // programmatically (switching to the quick overlay, or close()). So it
+    // reconciles `opened` with reality without re-introducing the
+    // dismiss-on-own-first-show bug. close() rather than a bare
+    // `opened = false` because a real close must also drop an in-flight voice
+    // capture and tell the shell the panel is down — one close path, not two.
+    onClosed: root.close()
+
     // Focusing on show IS safe and necessary, for the same mapping-order
     // reason as the overlay below: open() runs focusSurface() before this
     // window exists, so the caret never landed in the chat input. This handler
@@ -622,6 +661,7 @@ Item {
             conversationsStore: root.service ? root.service.conversationsStore : null
             voiceStore: root.service ? root.service.voiceStore : null
             ttsStore: root.service ? root.service.ttsStore : null
+            continuousVoiceStore: root.service ? root.service.continuousVoiceStore : null
             // ChatView reads `voiceAutoSend` via serviceRpc.setting(); without
             // this wire the property is null and the setting silently falls
             // back to "On" — a quiet bug that surfaces when a user has set
@@ -629,18 +669,13 @@ Item {
             serviceRpc: root.service
             compact: false
             surface: "window"
-            // The app window had NO close path at all without this wire.
-            // Quickshell's FloatingWindow ignores an xdg close request (measured
-            // with `killactive` — see the comment on `appWindow`), and neither
-            // `omarchy-shell shell toggle agent-desktop` nor the `hide` IPC verb
-            // reaches `dismiss()`: toggle re-summons and `hide` only lowers the
-            // shell's panel wrapper, leaving `opened` true and the window mapped.
-            // So the only writer of `opened = false` is this callback, and the
-            // overlay was the only surface that passed it. Escape now closes the
-            // window exactly as it closes the overlay, via the same
-            // ChatInput.onDismiss path that already unwinds an edit and stops a
-            // running turn first.
-            onDismiss: root.dismiss
+            // Escape closes the window exactly as it closes the overlay, via
+            // the same ChatInput.onDismiss path that already unwinds an edit
+            // and stops a running turn first. It is no longer the ONLY writer
+            // of `opened = false`: the window's own `onClosed` covers a
+            // compositor close, and the host's hide now reaches close()
+            // because the function is named for the contract shell.qml calls.
+            onDismiss: root.close
           }
         }
 
@@ -775,7 +810,7 @@ Item {
       // Qt's onClicked already requires the press AND the release to land here,
       // so a click that began on the card — or one that was in flight against
       // whatever was on screen before this surface mapped — cannot dismiss.
-      MouseArea { anchors.fill: parent; onClicked: root.dismiss() }
+      MouseArea { anchors.fill: parent; onClicked: root.close() }
     }
 
     BorderSurface {
@@ -850,13 +885,14 @@ Item {
         conversationsStore: root.service ? root.service.conversationsStore : null
         voiceStore: root.service ? root.service.voiceStore : null
         serviceRpc: root.service
+        continuousVoiceStore: root.service ? root.service.continuousVoiceStore : null
         compact: true
         surface: "quick"
         // Escape in the overlay stops a running turn first and otherwise
-        // dismisses — root.dismiss() ALSO cancels any in-flight voice
+        // closes — root.close() ALSO cancels any in-flight voice
         // capture, so the user can back out of a dictation without sending
         // it.
-        onDismiss: root.dismiss
+        onDismiss: root.close
       }
     }
   }

@@ -1,4 +1,5 @@
 import QtQuick
+import "../lib/shortcutKeys.js" as ShortcutKeys
 
 // ShortcutsStore — the shortcuts:list / shortcuts:update surface.
 //
@@ -11,14 +12,15 @@ import QtQuick
 // the same spelling:
 //
 //   "Ctrl+N"             — single modifier + key
-//   "Ctrl+Shift+V"       — modifiers in Ctrl/Alt/Shift/Super order
+//   "Ctrl+Shift+V"       — modifiers in Ctrl/Super/Alt/Shift order
 //   "Alt+Space"          — literal "Space" for the space key
 //   "Alt+Shift+Space"
 //   "Super+A"
 //
 // The page captures a key combination by intercepting `Keys.onPressed` on
-// a focused Item, formatting the result with the same algorithm, and
-// calling `update(id, keybinding)` here. The store writes via
+// a focused Item and passing the event to `formatKeybinding` below, which
+// applies that same spelling, then calling `update(id, keybinding)` here.
+// The store writes via
 // `shortcuts:update(id, keybinding)`; the renderer achieves the same
 // through `shortcuts.update(id, accelerator)`.
 //
@@ -98,26 +100,21 @@ QtObject {
     })
   }
 
-  // Format a KeyboardEvent into the keybinding string the table stores.
-  // Modifiers are emitted in a fixed order (Ctrl/Super/Alt/Shift), then
-  // the key (literal "Space" for the spacebar; single chars are upper-
-  // cased; Escape/Enter/etc. stay spelled). Matches keyEventToAccelerator
-  // in src/renderer/components/settings/ShortcutSettings.tsx so the two
-  // surfaces produce interchangeable strings.
+  // Format a QML key event into the keybinding string the table stores.
+  //
+  // A QML `KeyEvent` is NOT a DOM `KeyboardEvent`: it has `modifiers` (a
+  // Qt.KeyboardModifiers bitmask) and an integer `key` (Qt.Key_*), and no
+  // `ctrlKey`/`altKey`/`shiftKey`/`metaKey` at all. Reading the DOM names off
+  // it — which this function did, copied from the React page — yields
+  // `undefined` for every modifier and stringifies the raw keycode, so
+  // Ctrl+Shift+V was persisted as "86". The spelling rule lives in
+  // lib/shortcutKeys.js so it can be held to the React page's spelling by test.
+  //
+  // Returns "" when the combination is not committable (Escape, a bare
+  // modifier, or a key with no spelling); the page reads that as "keep
+  // recording" and handles Escape as cancel.
   function formatKeybinding(event) {
     if (!event) return ""
-    var parts = []
-    if (event.ctrlKey) parts.push("Ctrl")
-    if (event.metaKey) parts.push("Super")
-    if (event.altKey) parts.push("Alt")
-    if (event.shiftKey) parts.push("Shift")
-    var key = event.key
-    if (key === "Control" || key === "Meta" || key === "Alt"
-        || key === "Shift" || key === "Super") return ""
-    if (key === "Escape") return ""
-    if (key === " " || key === "\u00A0") parts.push("Space")
-    else if (key && key.length === 1) parts.push(key.toUpperCase())
-    else if (key) parts.push(key)
-    return parts.join("+")
+    return ShortcutKeys.format(event.modifiers, event.key)
   }
 }

@@ -5,6 +5,8 @@ import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 
+import "../../lib/settingsRows.js" as SR
+
 // One row generated from a SETTING_DEFS entry. The page instantiates one
 // of these per def in the rowsFor() output. The kind of control
 // (dropdown / number / textarea / fallback text) is decided by
@@ -122,15 +124,13 @@ Item {
     id: dropdownComp
 
     Column {
-      property var optionsVal: root.def && Array.isArray(root.def.options) ? root.def.options : []
-      property int matchIdx: {
-        if (!root.def || !Array.isArray(root.def.options)) return -1
-        for (var i = 0; i < root.def.options.length; i++) {
-          if (root.def.options[i].value === root.currentValue) return i
-        }
-        return -1
-      }
-
+      // `SR.optionsOf`, NOT `Array.isArray(root.def.options)`: `def` arrives
+      // here through a Repeater's `modelData`, which is a marshalled copy
+      // whose options list is a QML variant list rather than a JS Array. The
+      // isArray test that used to be here answered false for every def and
+      // handed the Dropdown an empty option list — a select row that could
+      // not show, or offer, any of its own values.
+      property var optionsVal: SR.optionsOf(root.def)
       Dropdown {
         width: parent.width
         options: parent.optionsVal

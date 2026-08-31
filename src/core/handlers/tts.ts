@@ -416,6 +416,20 @@ export async function speakResponse(
         const summary = await generateSummary(clean, db, conversationId, aiSettings)
         await speak(summary, db)
       }
+    } else {
+      // An unrecognised mode used to fall off the end of this chain and return
+      // in SILENCE — no audio, no error, no log line. That is how the QML
+      // plugin's own option list ("first" / "all", values this function has no
+      // branch for) disabled text-to-speech completely: every Speak click and
+      // every turn-end auto-speak resolved successfully and played nothing, so
+      // the front end had nothing to report and the setting looked applied.
+      //
+      // Speaking the full text is the safe degradation for a mode we cannot
+      // interpret — the user asked for speech, and 'off' is already handled
+      // above — and the warning names the offending value so the WRITER gets
+      // fixed instead of the symptom.
+      log.warn('Unknown tts_responseMode, speaking full response', { mode })
+      await speak(clean, db)
     }
   } catch (err) {
     log.error('speakResponse failed', err)

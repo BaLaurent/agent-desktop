@@ -15,4 +15,4 @@ export {
   type ContinuousVoiceFlags,
   type EngineConfig,
 } from './config'
-export { createVadStateMachine, DEFAULT_VAD_CONFIG, type VadConfig, type VadEvent } from './vadStateMachine'
+

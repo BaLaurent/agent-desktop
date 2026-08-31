@@ -204,21 +204,41 @@ QtObject {
 
   // ---- mutations ----------------------------------------------------------
 
-  function create(title, folderId) {
-    var args = []
-    if (title !== undefined && title !== null && String(title).length > 0) args.push(String(title))
-    else args.push(null)
-    if (folderId !== undefined && folderId !== null) {
-      var f = Number(folderId)
-      if (isFinite(f) && f > 0) args.push(Math.floor(f))
-      else args.push(null)
-    } else {
-      args.push(null)
+  // Build the argument list for `conversations:create`.
+  //
+  // ABSENT, never null. The server signature is `create(title?, folderId?)`
+  // and it treats an UNDEFINED folderId as "use the default folder" — but an
+  // explicit null is a value, and `validatePositiveInt` refuses it. Measured
+  // live against the running server:
+  //     conversations:create ["Quick Chat (Voice)", null]
+  //       -> "Failed to create conversation: folderId must be a positive integer"
+  //     conversations:create ["Quick Chat (Voice)"]        -> row inserted
+  // Both creation paths in this store used to pad their arguments with null,
+  // so NO conversation could be created from this front at all: the sidebar's
+  // new-conversation button and every quick-chat resolution were refused, and
+  // the quick-chat one swallowed the refusal because its invoke carried no
+  // error callback. That is why this database has no "Quick Chat (Voice)" row
+  // despite the separate-voice setting being on.
+  //
+  // An empty title is fine to SEND (`validateString` accepts it) and the
+  // server substitutes its own default, so the title slot is always present
+  // and only the folder is conditional.
+  function _createArgs(title, folderId) {
+    var t = (title === undefined || title === null) ? "" : String(title)
+    var f = Number(folderId)
+    if (folderId !== undefined && folderId !== null && isFinite(f) && f > 0) {
+      return [t, Math.floor(f)]
     }
-    rpc.invoke("conversations:create", args, function (row) {
+    return [t]
+  }
+
+  function create(title, folderId) {
+    rpc.invoke("conversations:create", _createArgs(title, folderId), function (row) {
       // Server broadcasts conversations:refresh, so the list reload is
       // owned by the subscription. Just activate what came back.
       if (row && row.id) setActiveId(row.id)
+    }, function (err) {
+      store.error = "Could not create conversation: " + String(err)
     })
   }
 
@@ -474,14 +494,27 @@ QtObject {
 
   function _createQuickChatAndPin(mode, key, persistKey) {
     var title = (mode === "voice") ? "Quick Chat (Voice)" : "Quick Chat"
-    rpc.invoke("conversations:create", [title, null], function (created) {
+    rpc.invoke("conversations:create", _createArgs(title, null), function (created) {
       rpc.invoke("conversations:list", [], function (rows) {
-        var id = QC.pickCreatedId(created, rows)
+        // `title` is passed through: the list fallback matches on it, and a
+        // VOICE quick chat is titled "Quick Chat (Voice)". Without it the scan
+        // looked only for "Quick Chat" and so could never find the row it had
+        // just created — it would either find nothing or, worse, adopt the
+        // TEXT quick chat and pin that into the voice slot.
+        var id = QC.pickCreatedId(created, rows, title)
         if (id > 0) {
           setActiveId(id)
           persistKey(id)
+          return
         }
+        store.error = "Quick chat: created a conversation but could not find it."
+      }, function (err) {
+        store.error = "Quick chat: " + String(err)
       })
+    }, function (err) {
+      // NOT swallowed. An invoke with no error callback is how the null-folderId
+      // refusal above went unnoticed for the entire life of this front.
+      store.error = "Quick chat: could not create a conversation — " + String(err)
     })
   }
 }

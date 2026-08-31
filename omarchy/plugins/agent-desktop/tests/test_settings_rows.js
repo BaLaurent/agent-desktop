@@ -160,6 +160,61 @@ assert.strictEqual(
   'optionIndexFor skips options missing value'
 )
 
+// ---- the QML model boundary (regression) ------------------------------
+//
+// A def handed to a Repeater delegate as `modelData` is a MARSHALLED COPY,
+// and its options list is a QML variant list: `length` and `[i]` work,
+// `Array.isArray` is FALSE. Measured offscreen against the real
+// AiModelSettings component — `visibleDefs[i] === modelData` was false and
+// `Array.isArray(modelData.options)` was false for the very same def.
+//
+// Both functions used to gate on `Array.isArray`, so every `select` row on
+// the AI page rendered an EMPTY dropdown under a red "Stored value
+// 'claude-agent-sdk' is not in the option list" — for a value sitting right
+// there in the list. There is no way to build a real QML variant list in
+// node, so the shape is reproduced faithfully: array-LIKE, not an Array.
+const arrayLike = { 0: { value: 'claude-agent-sdk', label: 'Claude Agent SDK' }, 1: { value: 'pi', label: 'PI Coding Agent' }, length: 2 }
+assert.strictEqual(Array.isArray(arrayLike), false, 'the fixture must NOT be a real Array or it proves nothing')
+
+assert.strictEqual(
+  SR.optionIndexFor({ options: arrayLike }, 'claude-agent-sdk'), 0,
+  'optionIndexFor must match through an array-LIKE options list (the QML model boundary)'
+)
+assert.strictEqual(SR.optionIndexFor({ options: arrayLike }, 'pi'), 1)
+assert.strictEqual(SR.optionIndexFor({ options: arrayLike }, 'nope'), -1)
+
+deepEqual(
+  SR.optionsOf({ options: arrayLike }),
+  [{ value: 'claude-agent-sdk', label: 'Claude Agent SDK' }, { value: 'pi', label: 'PI Coding Agent' }],
+  'optionsOf rebuilds a real array of plain objects from an array-like'
+)
+
+// ---- optionsOf ---------------------------------------------------------
+
+// A real Array works identically — the boundary fix must not special-case it.
+deepEqual(
+  SR.optionsOf({ options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }),
+  [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }],
+)
+// A missing label falls back to the value, so a Dropdown never renders blank.
+deepEqual(SR.optionsOf({ options: [{ value: 'a' }] }), [{ value: 'a', label: 'a' }])
+// Entries with no usable value are dropped: a Dropdown must not offer an
+// option it cannot select.
+deepEqual(SR.optionsOf({ options: [{ label: 'broken' }, { value: 'b' }] }), [{ value: 'b', label: 'b' }])
+// …but optionIndexFor stays POSITIONAL in the raw list, so dropping that
+// entry here must not renumber the ones after it.
+assert.strictEqual(
+  SR.optionIndexFor({ options: [{ label: 'broken' }, { value: 'b' }] }, 'b'), 1,
+  'optionIndexFor indexes the RAW list, not the filtered one',
+)
+// Absent / empty / non-list options are all "no options".
+deepEqual(SR.optionsOf({}), [])
+deepEqual(SR.optionsOf(null), [])
+deepEqual(SR.optionsOf({ options: [] }), [])
+// A string has a `length` too — it must not be walked one character at a time.
+deepEqual(SR.optionsOf({ options: 'sonnet' }), [], 'a string options field yields no options')
+assert.strictEqual(SR.optionIndexFor({ options: 'sonnet' }, 's'), -1)
+
 // ---- sentinel flip (discrimination proof) ---------------------------
 
 // Pick a single expected value, flip it to a sentinel, watch the test fail,

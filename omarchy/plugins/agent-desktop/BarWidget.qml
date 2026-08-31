@@ -34,6 +34,9 @@ BarWidget {
     if (!service.bridgeAlive) return "bridge down"
     if (!service.serverUp) return "server down"
     if (!service.connected) return "connecting"
+    // Headless voice has no window by definition, so this tooltip is the only
+    // persistent on-screen sign that the mic is live.
+    if (service.headlessVoice) return "listening"
     if (service.busy) return "working"
     return "idle"
   }

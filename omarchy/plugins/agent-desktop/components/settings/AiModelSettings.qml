@@ -30,12 +30,22 @@ Item {
 
   required property var settingsStore
   required property var rpc
+  // The RAW SETTING_DEFS list, unfiltered. Which rows apply is a function of
+  // the LIVE backend, and only this component can recompute that when the
+  // backend changes under it — so the page hands over the whole list.
   required property var settingDefs
-  required property var backendDisplayNames
 
-  // All SETTING_DEFS rows that apply to the active backend. The page
-  // computes this with rowsFor(defs, backend) and assigns it here.
-  property var visibleDefs: []
+  // The rows that apply to the active backend. A BINDING, not a value the page
+  // pushes in: `sdkBackend()` reads `settingsStore.values`, so QML re-evaluates
+  // this the moment the Backend dropdown writes a new value and the claudeOnly
+  // / piOnly rows swap on the spot.
+  //
+  // This used to be `property var visibleDefs: []` with NO assignment anywhere
+  // — the page assigned `settingDefs`, which nothing read. The Repeater below
+  // therefore iterated an empty list forever, so all 19 def rows were missing
+  // from the page, the Backend selector among them: there was no way to change
+  // the backend from the UI at all.
+  readonly property var visibleDefs: SR.rowsFor(root.settingDefs, root.sdkBackend())
 
   // Live model list fetched from models:list; merged with the static
   // options so a missing key still shows in the dropdown.
@@ -115,11 +125,14 @@ Item {
     var seen = ({})
     for (var i = 0; i < root.visibleDefs.length; i++) {
       var def = root.visibleDefs[i]
-      if (def && def.key === "ai_model" && Array.isArray(def.options)) {
-        for (var j = 0; j < def.options.length; j++) {
-          var opt = def.options[j]
-          if (!seen[opt.value]) { out.push(opt); seen[opt.value] = true }
-        }
+      if (!def || def.key !== "ai_model") continue
+      // `SR.optionsOf` rather than a local `Array.isArray` walk: same reason
+      // as SettingDefRow. These defs are pristine JS objects today, but the
+      // shape rule belongs to settingsRows.js, not retyped per call site.
+      var staticOpts = SR.optionsOf(def)
+      for (var j = 0; j < staticOpts.length; j++) {
+        var opt = staticOpts[j]
+        if (!seen[opt.value]) { out.push(opt); seen[opt.value] = true }
       }
     }
     for (var k = 0; k < root.fetchedModels.length; k++) {

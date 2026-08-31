@@ -34,6 +34,10 @@ test-js:
 	node tests/test_csv.js
 	node tests/test_git_graph.js
 	node tests/test_palette.js
+	node tests/test_tts_vocabulary.js
+	node tests/test_voice_gate.js
+	node tests/test_bridge_vad.js
+	node tests/test_shortcut_keys.js
 
 # Window lifecycle, focus ownership and key routing cannot be tested without a
 # QML engine. Offscreen, so no compositor: the bugs this catches — a window that

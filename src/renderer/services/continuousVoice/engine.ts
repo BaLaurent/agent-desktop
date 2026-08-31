@@ -11,7 +11,7 @@
  * orchestrator stamps wake events with — so the gate's wake↔utterance correlation window is valid.
  */
 
-import { createVadStateMachine } from './vadStateMachine'
+import { createVadStateMachine } from '../../../core/services/vadStateMachine'
 import { transcribeAudioBuffer } from '../transcription/transcribeAudioBuffer'
 import type { EngineConfig } from './config'
 

@@ -18,6 +18,12 @@
 //                                                    answer a pi:uiRequest
 //     {"op":"rec.start"} / {"op":"rec.stop"} / {"op":"rec.cancel"}
 //                                                    push-to-talk capture
+//     {"op":"cv.start","config":{…}} / {"op":"cv.stop"}
+//                                                    continuous-voice capture
+//     {"op":"cv.pause","paused":<bool>}                  keep recorder running,
+//                                                    drop blocks; resets in-progress
+//                                                    utterance so half-duplex TTS
+//                                                    suspension can't leave one behind
 //
 //   bridge -> QML
 //     {"ev":"result","rid":<int>,"result":<any>}
@@ -27,6 +33,12 @@
 //     {"ev":"log","level":"warn"|"error","message":"<string>"}
 //     {"ev":"rec","active":<bool>}
 //     {"ev":"audio","b64":"<base64 wav>"}
+//     {"ev":"cv","active":<bool>}
+//     {"ev":"cv","active":false,"error":"<reason>"}      // spawn or unexpected exit
+//     {"ev":"utterance","b64":"<base64 wav>","startedAt":<ms>,"endedAt":<ms>}
+//                                                    one per finalized utterance;
+//                                                    tooShort utterances are dropped
+//                                                    silently (cough/click filter)
 //
 // Transport: wss://127.0.0.1:<port>/ws with rejectUnauthorized:false (the server
 // is HTTPS-only behind a self-signed EC cert). Auth handshake is
@@ -37,6 +49,8 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import WebSocket from 'ws'
+import { createCvSegmenter } from './cvSegmenter.mjs'
+import { wavHeader } from './wav.mjs'
 
 const sessionDir = process.env.XDG_RUNTIME_DIR || '/tmp'
 const sessionPath = join(sessionDir, 'agent-desktop', 'session.json')
@@ -64,6 +78,13 @@ let preAuthQueue = []
 let voiceProc = null
 let voiceChunks = []
 let voiceMaxTimer = null
+
+// Continuous-voice capture state. ONE pw-record child owns the mic while
+// `cvProc` is non-null. Mutual exclusion with push-to-talk is enforced in
+// `startRecording` / `startCv`.
+let cvProc = null
+let cvSegmenter = null
+let cvLastStderr = ''
 
 const readSession = () => {
   try {
@@ -214,27 +235,8 @@ const writeInvoke = (rid, channel, args) => {
 // lives here. Named ops rather than a generic handler table: this is the one
 // feature the bridge legitimately owns, because it owns a child process.
 
-// Canonical 44-byte RIFF/WAVE header for PCM s16 mono 16 kHz. Built from the
-// byte count rather than letting pw-record write it: a signal-terminated writer
-// can leave the size fields at zero, and a WAV needs a seekable sink that a raw
-// stdout pipe is not.
-const wavHeader = (dataLen) => {
-  const h = Buffer.alloc(44)
-  h.write('RIFF', 0)
-  h.writeUInt32LE(36 + dataLen, 4)
-  h.write('WAVE', 8)
-  h.write('fmt ', 12)
-  h.writeUInt32LE(16, 16)
-  h.writeUInt16LE(1, 20)
-  h.writeUInt16LE(1, 22)
-  h.writeUInt32LE(16000, 24)
-  h.writeUInt32LE(16000 * 2, 28)
-  h.writeUInt16LE(2, 32)
-  h.writeUInt16LE(16, 34)
-  h.write('data', 36)
-  h.writeUInt32LE(dataLen, 40)
-  return h
-}
+// The RIFF/WAVE framing is shared with the continuous-capture path — see
+// bridge/wav.mjs for why it is one module and not two copies.
 
 // voice:duck / voice:restore are server-side pactl/playerctl calls. Their
 // result is irrelevant and no QML rid is waiting on it, so the frame goes out
@@ -256,6 +258,13 @@ const clearVoiceTimer = () => {
 
 const startRecording = () => {
   if (voiceProc) { log('warn', 'already recording'); return }
+  if (cvProc) {
+    // Continuous capture already owns the mic — refuse rather than spawn a
+    // second recorder. The error matches the cv-side message so the front
+    // end sees the same shape regardless of which side tried first.
+    send({ ev: 'rec', active: false, error: 'continuous voice is running' })
+    return
+  }
   voiceChunks = []
   fireAndForget('voice:duck')
 
@@ -360,8 +369,125 @@ const cancelRecording = () => {
   fireAndForget('voice:restore')
   send({ ev: 'rec', active: false })
 }
+// ---- continuous-voice capture ---------------------------------------------
+//
+// The renderer captures via getUserMedia + ScriptProcessor; QML has no audio
+// input, so this side owns a long-lived pw-record child and segments the
+// stdout through the shared VAD (src/core/services/vadStateMachine.ts).
+// Segmentation lives in bridge/cvSegmenter.mjs so the bridge and the test
+// share the same code — the orchestrator MUST NOT duplicate it.
+//
+// Frame contract (bridge -> QML):
+//   {"ev":"cv","active":true}
+//   {"ev":"cv","active":false}                              // clean stop
+//   {"ev":"cv","active":false,"error":"<reason>"}           // spawn/exit failure
+//   {"ev":"utterance","b64":"<base64 wav>","startedAt":<ms>,"endedAt":<ms>}
 
-// ---- stdin ------------------------------------------------------------------
+const startCv = (config) => {
+  if (cvProc) {
+    log('warn', 'continuous capture already running')
+    return
+  }
+  if (voiceProc) {
+    send({ ev: 'cv', active: false, error: 'a push-to-talk capture is running' })
+    return
+  }
+
+  // Build the segmenter BEFORE spawning, so the first stdout bytes already
+  // have a destination. If spawn fails below we explicitly reset().
+  cvSegmenter = createCvSegmenter({
+    silenceThreshold: Number(config?.silenceThreshold) || 0.012,
+    silenceDurationMs: Number(config?.silenceDurationMs) || 900,
+    minUtteranceMs: Number(config?.minUtteranceMs) || 400,
+    onsetBlocks: Number(config?.onsetBlocks) || 3,
+    preSpeechPadMs: Number(config?.preSpeechPadMs) || 200,
+    onUtterance: (u) => send({ ev: 'utterance', b64: u.b64, startedAt: u.startedAt, endedAt: u.endedAt }),
+  })
+  cvLastStderr = ''
+
+  fireAndForget('voice:duck')
+
+  let proc
+  try {
+    proc = spawn('pw-record', [
+      '--rate', '16000',
+      '--channels', '1',
+      '--format', 's16',
+      '--container', 'raw',
+      '-'
+    ])
+  } catch (err) {
+    cvProc = null
+    cvSegmenter = null
+    log('error', `pw-record spawn failed: ${err.message}`)
+    fireAndForget('voice:restore')
+    send({ ev: 'cv', active: false, error: err.message || String(err) })
+    return
+  }
+  cvProc = proc
+
+  const liveProc = proc
+  proc.on('error', (err) => {
+    log('error', `pw-record (cv) failed: ${err.message}`)
+  })
+  proc.stdout.on('data', (chunk) => {
+    if (cvSegmenter) {
+      try {
+        for (const u of cvSegmenter.pushChunk(chunk)) {
+          // pushChunk already emits via the onUtterance callback; this
+        // catch is a defence-in-depth measure so a malformed chunk
+        // never crashes the bridge.
+        }
+      } catch (err) {
+        log('error', `cv segmentation failed: ${err.message}`)
+      }
+    }
+  })
+  proc.stderr.on('data', (chunk) => {
+    const text = chunk.toString().trim()
+    if (!text) return
+    cvLastStderr = text.split('\n').filter(Boolean).pop() || text
+    log('warn', `pw-record (cv): ${text}`)
+  })
+
+  // Same discipline as the push-to-talk path: a recorder that dies on its
+  // own used to leave the UI stuck in a fake "listening" state. Report it
+  // on the cv channel with the reason the recorder itself gave.
+  proc.on('exit', (code, signal) => {
+    if (cvProc !== liveProc) return
+    cvProc = null
+    if (cvSegmenter) { cvSegmenter.reset(); cvSegmenter = null }
+    fireAndForget('voice:restore')
+    send({
+      ev: 'cv',
+      active: false,
+      error: cvLastStderr
+        || `pw-record exited unexpectedly (${signal || 'code ' + code})`
+    })
+  })
+
+  send({ ev: 'cv', active: true })
+}
+
+const stopCv = () => {
+  if (!cvProc) {
+    send({ ev: 'cv', active: false })
+    return
+  }
+  const proc = cvProc
+  cvProc = null
+  if (cvSegmenter) { cvSegmenter.reset(); cvSegmenter = null }
+
+  try { proc.kill('SIGINT') } catch { /* already gone */ }
+  fireAndForget('voice:restore')
+  send({ ev: 'cv', active: false })
+}
+
+const pauseCv = (paused) => {
+  if (!cvSegmenter) return
+  if (paused) cvSegmenter.pause()
+  else cvSegmenter.resume()
+}
 
 const handleCommand = (cmd) => {
   switch (cmd.op) {
@@ -403,6 +529,9 @@ const handleCommand = (cmd) => {
     case 'rec.start': startRecording(); return
     case 'rec.stop': stopRecording(); return
     case 'rec.cancel': cancelRecording(); return
+    case 'cv.start': startCv(cmd.config || {}); return
+    case 'cv.stop': stopCv(); return
+    case 'cv.pause': pauseCv(Boolean(cmd.paused)); return
     default:
       log('warn', `unknown op: ${cmd && cmd.op}`)
   }

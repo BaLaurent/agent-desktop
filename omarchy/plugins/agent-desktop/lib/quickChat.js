@@ -43,12 +43,34 @@ function normalizeStoredId(raw) {
   return n > 0 ? Math.floor(n) : 0
 }
 
-// listResult is the value returned by conversations:list — an array of
-// Conversation rows.
-function pickCreatedId(createResult, listResult) {
+// Resolve the id of the quick chat that was just created.
+//
+// `createResult` is whatever `conversations:create` answered and `listResult`
+// is a subsequent `conversations:list`. `title` is the title the caller asked
+// for — "Quick Chat" for text mode, "Quick Chat (Voice)" for voice — and it
+// defaults to "Quick Chat" so an older two-argument call keeps its behaviour.
+//
+// Two reply shapes are accepted because two have been observed. The handler
+// returns the Conversation ROW (`service.create` returns the object), while
+// the same call over this front's WebSocket has been measured answering
+// literally `null` with the row nonetheless inserted. Neither is a bug we can
+// fix from here, so both are handled: the object's `id`, a bare numeric id,
+// and finally the list scan.
+//
+// The scan matches `title` rather than the hardcoded "Quick Chat" it used to.
+// A voice quick chat is titled "Quick Chat (Voice)", so the old scan could
+// never find one — it returned the highest TEXT quick chat instead, which
+// would then be pinned into the voice slot as if it were a new conversation.
+function pickCreatedId(createResult, listResult, title) {
+  var wanted = (title === undefined || title === null || String(title).length === 0)
+    ? 'Quick Chat'
+    : String(title)
+
   if (createResult !== null && createResult !== undefined && createResult !== 0) {
-    var fromCreate = Number(createResult)
-    if (isFinite(fromCreate) && fromCreate > 0) return Math.floor(fromCreate)
+    var direct = (typeof createResult === 'object')
+      ? Number(createResult.id)
+      : Number(createResult)
+    if (isFinite(direct) && direct > 0) return Math.floor(direct)
   }
 
   if (!Array.isArray(listResult)) return 0
@@ -56,10 +78,24 @@ function pickCreatedId(createResult, listResult) {
   var highest = 0
   for (var i = 0; i < listResult.length; i++) {
     var row = listResult[i]
-    if (!row || row.title !== 'Quick Chat') continue
+    if (!row || row.title !== wanted) continue
     var id = Number(row.id)
     if (!isFinite(id)) continue
     if (id > highest) highest = id
   }
   return highest > 0 ? Math.floor(highest) : 0
+}
+
+// Should a summon of `mode` run with NO window at all?
+//
+// `quickChat_voiceHeadless` promises "notifications only, no overlay". Only
+// voice mode can honour it — a headless TEXT quick chat has no input to type
+// into, so it would just be a summon that does nothing — and only the exact
+// string 'true' turns it on. Every other value (unset, 'false', the literal
+// 'null'/'undefined' an old renderer write leaves behind) means "show the
+// overlay", so a corrupt setting fails towards the visible surface rather than
+// towards a mode with no UI.
+function wantsHeadlessVoice(mode, headlessSetting) {
+  if (mode !== 'voice') return false
+  return String(headlessSetting) === 'true'
 }

@@ -60,23 +60,35 @@ QtObject {
   }
 
   // ---- speak / stop ---------------------------------------------------
+  //
+  // Every call carries an error sink. Without one a refusal is dropped on the
+  // floor: `tts:speakMessage` rejects a non-positive conversationId or
+  // messageId ("conversationId must be a positive integer"), and with no
+  // handler the button looked like it had worked while nothing was spoken and
+  // nothing was reported. `error` is what the settings page and the composer's
+  // status row already read.
 
   function speak(text) {
     if (!text || text.length === 0) return
-    rpc.invoke("tts:speak", [String(text)])
+    store.error = ""
+    rpc.invoke("tts:speak", [String(text)],
+      function () {},
+      function (err) { store.error = String(err) })
   }
 
   function speakMessage(text, conversationId, messageId) {
     if (!text || text.length === 0) return
+    store.error = ""
     rpc.invoke("tts:speakMessage", [
       String(text),
       Number(conversationId),
       Number(messageId)
-    ])
+    ], function () {}, function (err) { store.error = String(err) })
   }
 
   function stop() {
-    rpc.invoke("tts:stop", [])
+    rpc.invoke("tts:stop", [], function () {},
+      function (err) { store.error = String(err) })
   }
 
   // ---- settings-side helpers (consumed by VoiceSettings.qml) ----------
